@@ -1,0 +1,1031 @@
+﻿<!DOCTYPE html>
+<html lang="fa">
+<head>
+  <meta charset="UTF-8" />
+  <title>پنل مدیریت مؤسسه امام هادی</title>
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="studio_theme.css?v=290" />
+  <link rel="stylesheet" href="luxury_glass_v46.css?v=460" />
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+
+  <header class="titlebar">
+    <div class="title-drag-area pywebview-drag-region">
+      <div class="title-badge">
+        <span class="status-dot"></span>
+        <span>پنل مدیریت مؤسسه امام هادی</span>
+      </div>
+      <span class="version-pill">eHadiPanel Enterprise v47.0 Pro</span>
+    </div>
+    <div class="win-controls">
+      <button class="win-btn" onclick="pywebview.api.minimize()" title="کوچک‌نمایی">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <button class="win-btn" onclick="pywebview.api.toggle_maximize()" title="بزرگ‌نمایی">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+      </button>
+      <button class="win-btn close" onclick="pywebview.api.close()" title="بستن">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <aside class="sidebar" id="sidebar">
+      <div class="nav-indicator" id="navIndicator"></div>
+
+      <div class="brand">
+        <div class="brand-logo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+          </svg>
+        </div>
+        <div class="brand-text">
+          <h1>مؤسسه امام هادی</h1>
+          <p>سامانه هوشمند مدیریت و تحلیل</p>
+        </div>
+      </div>
+
+      <div class="nav-section-label">بخش‌های اصلی</div>
+      <nav class="nav-list">
+        <button class="nav-btn active" onclick="switchPage('dashboard', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/>
+            <rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/>
+          </svg>
+          <span>داشبورد مدیریتی</span>
+        </button>
+
+        <button class="nav-btn" onclick="switchPage('chat', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            <path d="M8 9h8"/><path d="M8 13h5"/>
+          </svg>
+          <span>دستیار هوشمند (AI)</span>
+        </button>
+
+        <button class="nav-btn" onclick="switchPage('docs', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+          </svg>
+          <span>مدیریت و پردازش اسناد</span>
+        </button>
+      </nav>
+
+      <div class="sidebar-spacer"></div>
+
+      <div class="sidebar-footer">
+        <button class="nav-btn" onclick="switchPage('settings', this)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.85 1 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <span>تنظیمات سیستم</span>
+        </button>
+
+        <div class="engine-status">
+          <span>هسته هوشمند</span>
+          <span class="engine-badge"><span class="engine-dot"></span>Gemini + DuckDB</span>
+        </div>
+      </div>
+    </aside>
+
+    <main class="content">
+      <!-- صفحه ۱: داشبورد مدیریتی -->
+      <section id="page-dashboard" class="page active">
+        <div class="page-header">
+          <div>
+            <h2>داشبورد مدیریتی</h2>
+            <p>نمای زنده از وضعیت اسناد آموزشی، جداول تحلیلی و قطعات نمایه‌سازی‌شده مؤسسه</p>
+          </div>
+          <div class="action-group">
+            <button class="ghost-btn" onclick="switchPageById('chat')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span>شروع تحلیل هوشمند</span>
+            </button>
+            <button class="primary-btn" onclick="switchPageById('docs')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              <span>مدیریت و افزودن اسناد</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="stats-grid">
+          <div class="glass-card spotlight-card stat-card">
+            <div class="stat-top">
+              <div class="stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              </div>
+              <span class="stat-pill">PDF / Office</span>
+            </div>
+            <div class="stat-label">اسناد پردازش‌شده</div>
+            <div class="stat-value" id="statFiles">0</div>
+          </div>
+
+          <div class="glass-card spotlight-card stat-card">
+            <div class="stat-top">
+              <div class="stat-icon indigo">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+              </div>
+              <span class="stat-pill">Excel / PPT / Access</span>
+            </div>
+            <div class="stat-label">جداول تحلیلی ثبت‌شده</div>
+            <div class="stat-value" id="statTables">0</div>
+          </div>
+
+          <div class="glass-card spotlight-card stat-card">
+            <div class="stat-top">
+              <div class="stat-icon emerald">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+              </div>
+              <span class="stat-pill">DuckDB</span>
+            </div>
+            <div class="stat-label">کل رکوردهای جدولی</div>
+            <div class="stat-value" id="statRows">0</div>
+          </div>
+
+          <div class="glass-card spotlight-card stat-card">
+            <div class="stat-top">
+              <div class="stat-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+              </div>
+              <span class="stat-pill">LanceDB</span>
+            </div>
+            <div class="stat-label">قطعات متنی نمایه‌شده</div>
+            <div class="stat-value" id="statChunks">0</div>
+          </div>
+        </div>
+
+        <div class="dash-split">
+          <div class="glass-card spotlight-card" style="display:flex; flex-direction:column; min-height:0;">
+            <div class="card-title">
+              <span>آخرین فایل‌های نمایه‌سازی‌شده</span>
+              <span class="stat-pill" id="dashFileBadge">0 فایل</span>
+            </div>
+            <div id="dashFilesContainer" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+              <div class="empty-state">
+                <p>هنوز فایلی پردازش نشده است. از بخش «مدیریت و پردازش اسناد» فایل‌های مؤسسه را اضافه و اسکن کنید.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card spotlight-card" style="display:flex; flex-direction:column;">
+            <div class="card-title"><span>وضعیت زیرسیستم‌ها</span></div>
+            <div class="pipeline-list">
+              <div class="pipeline-item"><span>موتور پردازش اسناد</span><span style="color:#34d399;">فعال</span></div>
+              <div class="pipeline-item"><span>دیتابیس تحلیلی DuckDB</span><span style="color:#34d399;">متصل</span></div>
+              <div class="pipeline-item"><span>دیتابیس اسناد LanceDB</span><span style="color:#34d399;">متصل</span></div>
+              <div class="pipeline-item"><span>موتور هوشمند Gemini</span><span id="aiStatusLabel" style="color:#38bdf8;">در حال بررسی...</span></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- صفحه ۲: دستیار هوشمند (پخش زنده Streaming) -->
+      <section id="page-chat" class="page">
+        <div class="page-header">
+          <div>
+            <h2>دستیار هوشمند تحلیلی (AI)</h2>
+            <p>تحلیل ترکیبی متون و جداول آماری با پخش زنده، اجرای واقعی SQL، استناد زنده و خروجی اکسل</p>
+          </div>
+          <div class="action-group" style="align-items:center;">
+            <div class="mode-tabs" id="modeTabs">
+              <button class="mode-tab active" data-mode="analyst" onclick="setChatMode('analyst', this)">تحلیلگر اجرایی</button>
+              <button class="mode-tab" data-mode="board_report" onclick="setChatMode('board_report', this)">گزارش هیئت‌مدیره</button>
+            </div>
+            <button class="ghost-btn" onclick="clearChat()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+              <span>پاکسازی گفت‌وگو</span>
+            </button>
+            <button class="ghost-btn" onclick="togglePreview()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+              <span>پیش‌نمایش منبع</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="chat-layout">
+          <div class="chat-main">
+            <div class="glass-card chat-stream" id="chatStream"></div>
+
+            <div class="quick-prompts">
+              <button class="prompt-chip" onclick="sendQuickPrompt('جدول ۱۰ دوره پرمخاطب مؤسسه را به ترتیب بیشترین تعداد شرکت‌کننده همراه با نام استاد تهیه کن')">۱۰ دوره پرمخاطب (SQL + اکسل)</button>
+              <button class="prompt-chip" onclick="sendQuickPrompt('مجموع شرکت‌کنندگان و تعداد دوره‌های هر کارگروه را محاسبه و مقایسه کن')">مقایسه آماری کارگروه‌ها</button>
+              <button class="prompt-chip" onclick="sendQuickPrompt('کدام اساتید بیشترین تعداد دوره و بیشترین مجموع شرکت‌کننده را داشته‌اند؟ در قالب جدول نشان بده')">رتبه‌بندی اساتید</button>
+              <button class="prompt-chip" onclick="sendQuickPrompt('خصوصیات دوره‌های کوتاه‌مدت مؤسسه امام هادی و کلان موضوعات آن چیست؟')">خصوصیات دوره‌های کوتاه‌مدت</button>
+            </div>
+
+            <div class="composer">
+              <input id="chatInput" type="text" placeholder="سوال مدیریتی یا آماری خود را بنویسید و Enter بزنید..." onkeydown="if(event.key==='Enter') sendMessage()" />
+              <button class="primary-btn" id="btnSend" onclick="sendMessage()">
+                <span>ارسال</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <aside class="glass-card preview-drawer" id="previewDrawer">
+            <div class="card-title" style="margin-bottom:4px;">
+              <span id="previewTitle">پیش‌نمایش زنده منبع</span>
+              <button class="win-btn" onclick="togglePreview()">✕</button>
+            </div>
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <div class="stat-pill" id="previewMeta" style="width:fit-content;">صفحه / اسلاید / جدول</div>
+              <button class="copy-mini-btn" id="btnOpenSourceFile" style="display:none;" onclick="openCurrentPreviewFile()">باز کردن فایل اصلی ↗</button>
+            </div>
+            <div class="preview-content-box" id="previewBody">روی کارت‌های منبع زیر پاسخ‌های هوش مصنوعی کلیک کنید تا متن دقیق همان اسلاید یا صفحه برای راستی‌آزمایی در اینجا باز شود.</div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- صفحه ۳: مدیریت اسناد -->
+      <section id="page-docs" class="page">
+        <div class="page-header">
+          <div>
+            <h2>مدیریت و پردازش اسناد</h2>
+            <p id="rawDocsPathLabel">پوشه اسناد خام: data\raw_docs</p>
+          </div>
+          <div class="action-group">
+            <button class="ghost-btn" onclick="openFolder()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>باز کردن پوشه</span>
+            </button>
+            <button class="ghost-btn" onclick="addFiles()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              <span>افزودن فایل</span>
+            </button>
+            <button class="primary-btn" id="btnScan" onclick="scanDocs()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+              <span>اسکن و پردازش خودکار</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="dropzone" class="glass-card spotlight-card dropzone" style="cursor:pointer;" onclick="addFiles()">
+          <div class="stat-icon" style="width:48px; height:48px; border-radius:14px;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <h3 style="font-size:14.5px;">فایل‌های مؤسسه را بکشید و اینجا رها کنید (یا کلیک کنید)</h3>
+          <p style="font-size:12px; color:var(--text-muted);">فایل‌ها در پوشه raw_docs ذخیره، جداول به DuckDB منتقل و متون در LanceDB نمایه‌سازی می‌شوند.</p>
+          <div class="format-badges">
+            <span class="fmt-badge">.PDF</span>
+            <span class="fmt-badge">.DOCX</span>
+            <span class="fmt-badge">.PPTX</span>
+            <span class="fmt-badge">.XLSX</span>
+            <span class="fmt-badge">.ACCDB</span>
+          </div>
+        </div>
+
+        <div class="glass-card spotlight-card" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+          <div class="card-title">
+            <span>فهرست اسناد موجود در پایگاه داده</span>
+            <span class="stat-pill" id="docsCountBadge">0 سند</span>
+          </div>
+          <div id="docsTableContainer" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+            <div class="empty-state">
+              <p>هیچ سندی هنوز ثبت نشده است.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- صفحه ۴: تنظیمات -->
+      <section id="page-settings" class="page">
+        <div class="page-header">
+          <div>
+            <h2>تنظیمات سیستم</h2>
+            <p>مدیریت کلید Gemini API و آزمایش زنده اتصال به مدل هوش مصنوعی</p>
+          </div>
+        </div>
+
+        <div class="glass-card spotlight-card" style="display:flex; flex-direction:column; gap:18px;">
+          <div class="form-group">
+            <label>کلید دسترسی Gemini API (از Google AI Studio)</label>
+            <input id="inputApiKey" class="glass-input" type="password" dir="ltr" placeholder="AIzaSy..." />
+          </div>
+          <div class="form-group">
+            <label>مدل هوش مصنوعی فعال</label>
+            <select id="inputModel" class="glass-select" dir="ltr">
+              <option value="gemini-3.8-flash">gemini-3.8-flash (جدیدترین و سریع‌ترین پیشنهادی)</option>
+              <option value="gemini-3.7-flash">gemini-3.7-flash</option>
+              <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+              <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (فوق‌سبک)</option>
+              <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+            </select>
+          </div>
+          <div class="action-group">
+            <button class="primary-btn" onclick="saveSettings()">ذخیره تنظیمات در فایل .env</button>
+            <button class="ghost-btn" id="btnTestApi" onclick="testApiConnection()">تست زنده اتصال به Gemini</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script>
+    const sidebar = document.getElementById('sidebar');
+    const indicator = document.getElementById('navIndicator');
+    let currentChatMode = 'analyst';
+    let currentPreviewFilePath = '';
+    const tableRegistry = {};
+    const citationRegistry = {};
+    const liveStreams = {};
+    let regCounter = 0;
+    let streamSeq = 0;
+
+    function moveIndicator(btn) {
+      if (!btn) return;
+      const sideRect = sidebar.getBoundingClientRect();
+      const btnRect = btn.getBoundingClientRect();
+      indicator.style.transform = `translateY(${btnRect.top - sideRect.top}px)`;
+    }
+
+    function switchPage(pageId, btn) {
+      document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById('page-' + pageId).classList.add('active');
+      btn.classList.add('active');
+      moveIndicator(btn);
+    }
+
+    function switchPageById(pageId) {
+      const btn = document.querySelector(`.nav-btn[onclick*="'${pageId}'"]`);
+      if (btn) switchPage(pageId, btn);
+    }
+
+    function setChatMode(mode, btn) {
+      currentChatMode = mode;
+      document.querySelectorAll('.mode-tab').forEach(b => b.classList.remove('active'));
+      if (btn) btn.classList.add('active');
+      const label = mode === 'board_report' ? 'گزارش رسمی هیئت‌مدیره' : 'تحلیلگر اجرایی';
+      showToast(`حالت پاسخ‌گویی روی «${label}» تنظیم شد.`);
+    }
+
+    document.querySelectorAll('.spotlight-card').forEach(card => {
+      card.addEventListener('mousemove', e => {
+        const rect = card.getBoundingClientRect();
+        card.style.setProperty('--x', (e.clientX - rect.left) + 'px');
+        card.style.setProperty('--y', (e.clientY - rect.top) + 'px');
+      });
+    });
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function inlineFormat(text) {
+      return text
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    }
+
+    function renderMarkdown(mdText) {
+      const lines = escapeHtml(mdText || '').split('\n');
+      const parts = [];
+      let i = 0;
+
+      while (i < lines.length) {
+        const line = lines[i].trim();
+
+        if (
+          line.startsWith('|') &&
+          i + 1 < lines.length &&
+          /^\|?[\s:-]+\|[\s|:-]*$/.test(lines[i + 1].trim())
+        ) {
+          const splitRow = r => r.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+          const headers = splitRow(line);
+          i += 2;
+          const rows = [];
+          while (i < lines.length && lines[i].trim().startsWith('|')) {
+            const cells = splitRow(lines[i].trim());
+            if (cells.length > 0) rows.push(cells);
+            i++;
+          }
+          const ths = headers.map(h => `<th>${inlineFormat(h)}</th>`).join('');
+          const trs = rows.map(r => `<tr>${r.map(c => `<td>${inlineFormat(c)}</td>`).join('')}</tr>`).join('');
+          parts.push(`<div class="ai-table-card"><div class="ai-table-scroll"><table class="glass-table"><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div></div>`);
+          continue;
+        }
+
+        if (/^-{3,}$/.test(line)) { parts.push('<hr class="md-hr" />'); i++; continue; }
+        if (line.startsWith('### ')) { parts.push(`<h4>${inlineFormat(line.slice(4))}</h4>`); i++; continue; }
+        if (line.startsWith('## ')) { parts.push(`<h3>${inlineFormat(line.slice(3))}</h3>`); i++; continue; }
+        if (line.startsWith('# ')) { parts.push(`<h3>${inlineFormat(line.slice(2))}</h3>`); i++; continue; }
+
+        if (/^[-*•]\s+/.test(line)) {
+          const items = [];
+          while (i < lines.length && /^[-*•]\s+/.test(lines[i].trim())) {
+            items.push(`<li>${inlineFormat(lines[i].trim().replace(/^[-*•]\s+/, ''))}</li>`);
+            i++;
+          }
+          parts.push(`<ul>${items.join('')}</ul>`);
+          continue;
+        }
+
+        if (/^\d+[.)]\s+/.test(line)) {
+          const items = [];
+          while (i < lines.length && /^\d+[.)]\s+/.test(lines[i].trim())) {
+            items.push(`<li>${inlineFormat(lines[i].trim().replace(/^\d+[.)]\s+/, ''))}</li>`);
+            i++;
+          }
+          parts.push(`<ol>${items.join('')}</ol>`);
+          continue;
+        }
+
+        if (line === '') { i++; continue; }
+        parts.push(`<p style="margin:5px 0;">${inlineFormat(line)}</p>`);
+        i++;
+      }
+      return parts.join('');
+    }
+
+    function renderWelcomeBubble() {
+      const stream = document.getElementById('chatStream');
+      stream.innerHTML = `
+        <div class="msg-bubble msg-ai">
+          <div class="msg-meta">
+            <span>دستیار ارشد هوش مصنوعی مؤسسه امام هادی</span>
+            <div class="tool-badges"><span class="tool-badge">پخش زنده + SQL + اسناد</span></div>
+          </div>
+          <div class="msg-body">
+            سلام! می‌توانید سوال‌های آماری (مثل جمع شرکت‌کنندگان، مقایسه کارگروه‌ها، رتبه‌بندی اساتید و دوره‌ها) یا گزارش‌های مدیریتی بخواهید تا با سرعت بالا، کوئری دقیق SQL، استناد به منبع و خروجی اکسل پاسخ دهم.
+          </div>
+        </div>
+      `;
+    }
+
+    function toggleSqlCard(cardId, btn) {
+      const el = document.getElementById(cardId);
+      if (!el) return;
+      const isCollapsed = el.classList.toggle('collapsed');
+      btn.textContent = isCollapsed ? 'نمایش داده‌های خام SQL' : 'جمع کردن جدول';
+    }
+
+    function appendMessageBubble(msg) {
+      if (window.__EH_SILKY_APPEND) return window.__EH_SILKY_APPEND(msg);
+      const stream = document.getElementById('chatStream');
+      const div = document.createElement('div');
+      const isUser = msg.role === 'user';
+      div.className = `msg-bubble ${isUser ? 'msg-user' : 'msg-ai'}`;
+
+      if (isUser) {
+        div.innerHTML = `
+          <div class="msg-meta" style="color:rgba(255,255,255,0.68);">
+            <span>شما</span>
+            <span>${escapeHtml(msg.created_at || '')}</span>
+          </div>
+          <div class="msg-body">${escapeHtml(msg.content)}</div>
+        `;
+      } else {
+        const toolsHtml = (msg.tools && msg.tools.length > 0)
+          ? `<div class="tool-badges">${msg.tools.map(t => `<span class="tool-badge">⚡ ${escapeHtml(t)}</span>`).join('')}</div>`
+          : '';
+
+        const copyId = `copy_${++regCounter}`;
+        window[copyId] = msg.content || '';
+
+        let tablesHtml = '';
+        const hasMdTable = /\n\|[^\n]+\|\n\|[\s:-]+\|/.test('\n' + (msg.content || ''));
+        if (msg.tables && msg.tables.length > 0) {
+          tablesHtml = msg.tables.map(tbl => {
+            const tid = `tbl_${++regCounter}`;
+            tableRegistry[tid] = tbl;
+            const cols = tbl.columns || [];
+            const rows = (tbl.rows || []).slice(0, 60);
+            const ths = cols.map(c => `<th>${escapeHtml(c)}</th>`).join('');
+            const trs = rows.map(r => `<tr>${r.map(v => `<td>${escapeHtml(v)}</td>`).join('')}</tr>`).join('');
+            const rowLabel = tbl.total_rows ? `${tbl.total_rows} ردیف` : `${rows.length} ردیف`;
+            const collapsedClass = hasMdTable ? 'collapsed' : '';
+            const toggleText = hasMdTable ? 'نمایش داده‌های خام SQL' : 'جمع کردن جدول';
+            return `
+              <div class="ai-table-card ${collapsedClass}" id="card_${tid}">
+                <div class="ai-table-head">
+                  <span class="ai-table-title">📊 ${escapeHtml(tbl.title || 'نتیجه تحلیل جدولی')} (${rowLabel})</span>
+                  <div style="display:flex; align-items:center; gap:8px;">
+                    <button class="toggle-table-btn" onclick="toggleSqlCard('card_${tid}', this)">${toggleText}</button>
+                    <button class="excel-btn" onclick="exportTable('${tid}')">خروجی اکسل (.xlsx)</button>
+                  </div>
+                </div>
+                <div class="ai-table-scroll">
+                  <table class="glass-table">
+                    <thead><tr>${ths}</tr></thead>
+                    <tbody>${trs}</tbody>
+                  </table>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+
+        let citationsHtml = '';
+        if (msg.citations && msg.citations.length > 0) {
+          const chips = msg.citations.map(c => {
+            const cid = `cite_${++regCounter}`;
+            citationRegistry[cid] = c;
+            return `<button class="cite-chip" onclick="openCitation('${cid}')">📄 ${escapeHtml(c.file_name)} — ${escapeHtml(c.location)}</button>`;
+          }).join('');
+          citationsHtml = `<div class="citation-row">${chips}</div>`;
+        }
+
+        div.innerHTML = `
+          <div class="msg-meta">
+            <span>دستیار هوشمند • ${escapeHtml(msg.created_at || '')}</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              ${toolsHtml}
+              <button class="copy-mini-btn" onclick="copyText('${copyId}')">کپی متن</button>
+            </div>
+          </div>
+          <div class="msg-body">${renderMarkdown(msg.content)}</div>
+          ${tablesHtml}
+          ${citationsHtml}
+        `;
+      }
+
+      stream.appendChild(div);
+      stream.scrollTop = stream.scrollHeight;
+    }
+
+    function scheduleStreamRender(st) {
+      if (st.rafPending) return;
+      st.rafPending = true;
+      requestAnimationFrame(() => {
+        st.rafPending = false;
+        if (st.finished) return;
+        st.bodyEl.innerHTML = renderMarkdown(st.rawText) + '<span class="stream-cursor"></span>';
+        const chatStream = document.getElementById('chatStream');
+        if (chatStream.scrollHeight - chatStream.scrollTop - chatStream.clientHeight < 160) {
+          chatStream.scrollTop = chatStream.scrollHeight;
+        }
+      });
+    }
+
+    window.__onAiStreamEvent = function (evt) {
+      if (window.__EH_SILKY_ON_EVENT) return window.__EH_SILKY_ON_EVENT(evt);
+      if (!evt || !evt.stream_id) return;
+      const st = liveStreams[evt.stream_id];
+      if (!st) return;
+
+      const chatStream = document.getElementById('chatStream');
+      if (evt.type === 'status') {
+        if (st.statusTextEl && !st.rawText) {
+          st.statusTextEl.textContent = (evt.data && evt.data.text) || 'در حال پردازش...';
+        }
+      } else if (evt.type === 'tool') {
+        const label = evt.data && evt.data.label;
+        if (label && st.toolsEl && !st.tools.includes(label)) {
+          st.tools.push(label);
+          const span = document.createElement('span');
+          span.className = 'tool-badge';
+          span.textContent = '⚡ ' + label;
+          st.toolsEl.appendChild(span);
+        }
+      } else if (evt.type === 'token') {
+        if (st.statusWrapEl) st.statusWrapEl.style.display = 'none';
+        st.rawText += (evt.data && evt.data.text) || '';
+        scheduleStreamRender(st);
+      } else if (evt.type === 'done') {
+        st.finished = true;
+        delete liveStreams[evt.stream_id];
+        st.bubbleEl.remove();
+
+        const msg = (evt.data && evt.data.message) || { role: 'assistant', content: st.rawText, tools: st.tools };
+        const elapsed = evt.data && evt.data.elapsed;
+        appendMessageBubble(msg);
+
+        if (elapsed) {
+          const lastMeta = chatStream.lastElementChild && chatStream.lastElementChild.querySelector('.msg-meta > span');
+          if (lastMeta) {
+            lastMeta.innerHTML += ` <span class="speed-pill">⚡ ${elapsed} ثانیه</span>`;
+          }
+        }
+        document.getElementById('btnSend').disabled = false;
+        document.getElementById('chatInput').focus();
+      } else if (evt.type === 'error') {
+        st.finished = true;
+        delete liveStreams[evt.stream_id];
+        if (st.statusWrapEl) st.statusWrapEl.style.display = 'none';
+        st.bodyEl.innerHTML = `<span style="color:#fca5a5;">${escapeHtml((evt.data && evt.data.error) || 'خطای نامشخص در ارتباط با Gemini')}</span>`;
+        document.getElementById('btnSend').disabled = false;
+        document.getElementById('chatInput').focus();
+      }
+    };
+
+    async function copyText(key) {
+      try {
+        await navigator.clipboard.writeText(window[key] || '');
+        showToast('متن پاسخ در حافظه کپی شد.');
+      } catch {
+        showToast('امکان کپی خودکار وجود ندارد؛ متن را دستی انتخاب کنید.');
+      }
+    }
+
+    async function openCitation(cid) {
+      const cite = citationRegistry[cid];
+      if (!cite) return;
+      document.getElementById('previewTitle').textContent = cite.file_name || 'پیش‌نمایش سند';
+      document.getElementById('previewMeta').textContent = cite.location || 'منبع';
+      document.getElementById('previewBody').textContent = 'در حال بارگذاری متن کامل منبع...';
+      document.getElementById('previewDrawer').classList.add('open');
+
+      currentPreviewFilePath = cite.file_path || '';
+      const openBtn = document.getElementById('btnOpenSourceFile');
+      openBtn.style.display = currentPreviewFilePath ? 'inline-block' : 'none';
+
+      try {
+        const res = await pywebview.api.get_chunk_preview(cite.chunk_id);
+        if (res && res.ok) {
+          document.getElementById('previewBody').textContent = res.content || cite.snippet || '';
+          if (res.file_path) {
+            currentPreviewFilePath = res.file_path;
+            openBtn.style.display = 'inline-block';
+          }
+        } else {
+          document.getElementById('previewBody').textContent = cite.snippet || 'متن کامل این بخش یافت نشد.';
+        }
+      } catch {
+        document.getElementById('previewBody').textContent = cite.snippet || '';
+      }
+    }
+
+    async function openCurrentPreviewFile() {
+      if (!currentPreviewFilePath) return;
+      const res = await pywebview.api.open_file_path(currentPreviewFilePath);
+      if (!res || !res.ok) showToast('خطا در باز کردن فایل: ' + ((res && res.error) || 'یافت نشد'));
+    }
+
+    async function exportTable(tid) {
+      const tbl = tableRegistry[tid];
+      if (!tbl) return;
+      try {
+        const res = await pywebview.api.export_table_excel(tbl);
+        if (res && res.cancelled) return;
+        if (res && res.ok) {
+          showToast(`فایل اکسل ذخیره شد: ${res.path}`);
+          await pywebview.api.open_file_path(res.path);
+        } else {
+          showToast('خطا در ذخیره اکسل: ' + ((res && res.error) || 'نامشخص'));
+        }
+      } catch (e) {
+        showToast('خطا در خروجی اکسل: ' + e);
+      }
+    }
+
+    function sendQuickPrompt(text) {
+      document.getElementById('chatInput').value = text;
+      sendMessage();
+    }
+
+    async function sendMessage() {
+      if (window.__EH_SILKY_SEND) return window.__EH_SILKY_SEND();
+      const input = document.getElementById('chatInput');
+      const btn = document.getElementById('btnSend');
+      const question = input.value.trim();
+      if (!question || btn.disabled) return;
+
+      const stream = document.getElementById('chatStream');
+      const nowTime = new Date().toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+      appendMessageBubble({ role: 'user', content: question, created_at: nowTime });
+
+      input.value = '';
+      btn.disabled = true;
+
+      const sid = `st_${Date.now()}_${++streamSeq}`;
+      const bubble = document.createElement('div');
+      bubble.className = 'msg-bubble msg-ai';
+      bubble.innerHTML = `
+        <div class="msg-meta">
+          <span>دستیار هوشمند • در حال پاسخ‌گویی زنده</span>
+          <div class="tool-badges"></div>
+        </div>
+        <div class="live-status-bar">
+          <div class="typing-dots"><span></span><span></span><span></span></div>
+          <span class="live-status-text">در حال تحلیل پرسش...</span>
+        </div>
+        <div class="msg-body"></div>
+      `;
+      stream.appendChild(bubble);
+      stream.scrollTop = stream.scrollHeight;
+
+      liveStreams[sid] = {
+        bubbleEl: bubble,
+        toolsEl: bubble.querySelector('.tool-badges'),
+        statusWrapEl: bubble.querySelector('.live-status-bar'),
+        statusTextEl: bubble.querySelector('.live-status-text'),
+        bodyEl: bubble.querySelector('.msg-body'),
+        rawText: '',
+        tools: [],
+        rafPending: false,
+        finished: false,
+      };
+
+      try {
+        await pywebview.api.ask_ai_stream(sid, question, currentChatMode);
+      } catch (e) {
+        delete liveStreams[sid];
+        bubble.remove();
+        btn.disabled = false;
+        showToast('خطا در ارسال پرسش: ' + e);
+      }
+    }
+
+    async function clearChat() {
+      await pywebview.api.clear_chat_history();
+      renderWelcomeBubble();
+      showToast('تاریخچه گفت‌وگو پاکسازی شد.');
+    }
+
+    function togglePreview() {
+      document.getElementById('previewDrawer').classList.toggle('open');
+    }
+
+    function renderFilesTable(files, compact = false) {
+      if (!files || files.length === 0) {
+        return `<div class="empty-state"><p>هنوز فایلی پردازش نشده است. فایل‌های PDF، Word، PowerPoint، Excel یا Access را اضافه و اسکن کنید.</p></div>`;
+      }
+      const rowsHtml = files.map(f => {
+        const badge = f.status === 'موفق'
+          ? `<span class="status-ok">موفق</span>`
+          : `<span class="status-err" title="${escapeHtml(f.message)}">خطا</span>`;
+        if (compact) {
+          return `<tr>
+            <td><strong>${escapeHtml(f.file_name)}</strong></td>
+            <td><span class="fmt-badge">${escapeHtml(f.file_type)}</span></td>
+            <td>${f.chunks_count} قطعه / ${f.rows_count} رکورد</td>
+            <td>${badge}</td>
+          </tr>`;
+        }
+        return `<tr>
+          <td><strong>${escapeHtml(f.file_name)}</strong></td>
+          <td><span class="fmt-badge">${escapeHtml(f.file_type)}</span></td>
+          <td>${f.chunks_count}</td>
+          <td>${f.tables_count} جدول (${f.rows_count} رکورد)</td>
+          <td>${escapeHtml(f.processed_at)}</td>
+          <td>${badge}</td>
+        </tr>`;
+      }).join('');
+
+      const headHtml = compact
+        ? `<tr><th>نام فایل</th><th>فرمت</th><th>داده‌های استخراج‌شده</th><th>وضعیت</th></tr>`
+        : `<tr><th>نام فایل</th><th>فرمت</th><th>قطعات متن</th><th>جداول و رکوردها</th><th>آخرین پردازش</th><th>وضعیت</th></tr>`;
+
+      return `<div class="table-wrap"><table class="glass-table"><thead>${headHtml}</thead><tbody>${rowsHtml}</tbody></table></div>`;
+    }
+
+    function applyDashboardData(data) {
+      if (!data) return;
+      document.getElementById('statFiles').textContent = data.total_files ?? 0;
+      document.getElementById('statTables').textContent = data.total_tables ?? 0;
+      document.getElementById('statRows').textContent = data.total_rows ?? 0;
+      document.getElementById('statChunks').textContent = data.total_chunks ?? 0;
+      document.getElementById('dashFileBadge').textContent = `${data.total_files ?? 0} فایل`;
+      document.getElementById('docsCountBadge').textContent = `${data.total_files ?? 0} سند`;
+      if (data.raw_docs_dir) {
+        document.getElementById('rawDocsPathLabel').textContent = `مسیر پوشه اسناد خام: ${data.raw_docs_dir}`;
+      }
+      document.getElementById('dashFilesContainer').innerHTML = renderFilesTable(data.files, true);
+      document.getElementById('docsTableContainer').innerHTML = renderFilesTable(data.files, false);
+    }
+
+    function updateAiStatusBadge(hasKey) {
+      const el = document.getElementById('aiStatusLabel');
+      if (!el) return;
+      if (hasKey) {
+        el.textContent = 'متصل و آماده';
+        el.style.color = '#34d399';
+      } else {
+        el.textContent = 'نیازمند کلید API';
+        el.style.color = '#fbbf24';
+      }
+    }
+
+    async function loadInitialData() {
+      try {
+        const data = await pywebview.api.get_dashboard_data();
+        applyDashboardData(data);
+
+        const settings = await pywebview.api.get_settings();
+        if (settings) {
+          document.getElementById('inputApiKey').value = settings.api_key || '';
+          const modelSel = document.getElementById('inputModel');
+          const m = settings.model || (modelSel.options[0] ? modelSel.options[0].value : 'gemini-2.5-flash');
+          if (![...modelSel.options].some(o => o.value === m)) {
+            const opt = document.createElement('option');
+            opt.value = m;
+            opt.textContent = m;
+            modelSel.appendChild(opt);
+          }
+          modelSel.value = m;
+          updateAiStatusBadge(Boolean(settings.api_key));
+        }
+
+        const history = await pywebview.api.get_chat_history();
+        const stream = document.getElementById('chatStream');
+        stream.innerHTML = '';
+        if (history && history.length > 0) {
+          history.forEach(msg => appendMessageBubble(msg));
+        } else {
+          renderWelcomeBubble();
+        }
+      } catch (e) {
+        console.error(e);
+        renderWelcomeBubble();
+      }
+    }
+
+    const ALLOWED_EXTS = ['.pdf', '.docx', '.pptx', '.xlsx', '.xls', '.accdb', '.mdb'];
+    const CHUNK_SIZE = 1024 * 1024;
+
+    async function scanDocs() {
+      const btn = document.getElementById('btnScan');
+      btn.disabled = true;
+      btn.querySelector('span').textContent = 'در حال پردازش...';
+      try {
+        const data = await pywebview.api.scan_documents();
+        applyDashboardData(data);
+        if (data.warnings && data.warnings.length > 0) {
+          showToast(`پردازش تمام شد با ${data.warnings.length} هشدار`);
+        } else {
+          showToast(`اسکن کامل شد: ${data.total_files} فایل، ${data.total_tables} جدول و ${data.total_chunks} قطعه متن ثبت شد.`);
+        }
+      } catch (e) {
+        showToast('خطا در پردازش اسناد: ' + e);
+      } finally {
+        btn.disabled = false;
+        btn.querySelector('span').textContent = 'اسکن و پردازش خودکار';
+      }
+    }
+
+    async function addFiles() {
+      try {
+        const res = await pywebview.api.add_files_dialog();
+        if (res && res.error) { showToast('خطا در انتخاب فایل: ' + res.error); return; }
+        if (res && res.copied > 0) {
+          showToast(`${res.copied} فایل اضافه شد؛ در حال پردازش خودکار...`);
+          await scanDocs();
+        }
+      } catch (e) {
+        showToast('خطا در افزودن فایل: ' + e);
+      }
+    }
+
+    async function uploadFileInChunks(file) {
+      const totalChunks = Math.max(1, Math.ceil(file.size / CHUNK_SIZE));
+      for (let i = 0; i < totalChunks; i++) {
+        const slice = file.slice(i * CHUNK_SIZE, Math.min(file.size, (i + 1) * CHUNK_SIZE));
+        const b64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const str = reader.result || '';
+            const idx = str.indexOf(',');
+            resolve(idx >= 0 ? str.slice(idx + 1) : '');
+          };
+          reader.onerror = () => reject(reader.error);
+          reader.readAsDataURL(slice);
+        });
+        const resp = await pywebview.api.save_dropped_chunk(file.name, b64, i === 0);
+        if (!resp || !resp.ok) throw new Error((resp && resp.error) || 'خطا در ذخیره فایل');
+      }
+    }
+
+    async function handleDroppedFiles(fileList) {
+      const files = Array.from(fileList || []);
+      const validFiles = files.filter(f => ALLOWED_EXTS.some(ext => f.name.toLowerCase().endsWith(ext)));
+      if (validFiles.length === 0) { showToast('فرمت فایل پشتیبانی نمی‌شود.'); return; }
+
+      const dz = document.getElementById('dropzone');
+      const titleEl = dz ? dz.querySelector('h3') : null;
+      const oldTitle = titleEl ? titleEl.textContent : '';
+      try {
+        let uploaded = 0;
+        for (const f of validFiles) {
+          if (titleEl) titleEl.textContent = `در حال انتقال «${f.name}»...`;
+          await uploadFileInChunks(f);
+          uploaded++;
+        }
+        showToast(`${uploaded} فایل دریافت شد؛ در حال استخراج متن و جداول...`);
+        await scanDocs();
+      } catch (e) {
+        showToast('خطا در دریافت فایل: ' + e);
+      } finally {
+        if (titleEl) titleEl.textContent = oldTitle;
+      }
+    }
+
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(evtName => {
+      window.addEventListener(evtName, e => { e.preventDefault(); e.stopPropagation(); });
+    });
+    const dzEl = document.getElementById('dropzone');
+    if (dzEl) {
+      ['dragenter', 'dragover'].forEach(evt => dzEl.addEventListener(evt, () => dzEl.classList.add('drag-over')));
+      ['dragleave', 'drop'].forEach(evt => dzEl.addEventListener(evt, () => dzEl.classList.remove('drag-over')));
+      dzEl.addEventListener('drop', e => handleDroppedFiles(e.dataTransfer.files));
+    }
+
+    async function openFolder() {
+      await pywebview.api.open_raw_docs_folder();
+    }
+
+    async function saveSettings() {
+      const key = document.getElementById('inputApiKey').value.trim();
+      const model = document.getElementById('inputModel').value || 'gemini-2.5-flash';
+      const res = await pywebview.api.save_settings(key, model);
+      if (res && res.ok) {
+        updateAiStatusBadge(Boolean(key));
+        showToast('تنظیمات با موفقیت در فایل .env ذخیره شد.');
+      } else {
+        showToast('خطا در ذخیره تنظیمات.');
+      }
+    }
+
+    async function testApiConnection() {
+      const btn = document.getElementById('btnTestApi');
+      const key = document.getElementById('inputApiKey').value.trim();
+      const model = document.getElementById('inputModel').value || 'gemini-2.5-flash';
+      btn.disabled = true;
+      btn.textContent = 'در حال بررسی اتصال...';
+      try {
+        const res = await pywebview.api.test_gemini_connection(key, model);
+        if (res && res.ok) {
+          showToast(res.message || 'اتصال به Gemini با موفقیت برقرار شد.');
+          await saveSettings();
+        } else {
+          showToast('اتصال برقرار نشد: ' + ((res && res.error) || 'خطای نامشخص'));
+        }
+      } catch (e) {
+        showToast('خطا در تست اتصال: ' + e);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'تست زنده اتصال به Gemini';
+      }
+    }
+
+    function showToast(msg) {
+      const container = document.getElementById('toastContainer');
+      const el = document.createElement('div');
+      el.className = 'toast';
+      el.textContent = msg;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateY(8px)';
+        el.style.transition = 'all 0.25s ease';
+        setTimeout(() => el.remove(), 260);
+      }, 3800);
+    }
+
+    window.addEventListener('load', () => moveIndicator(document.querySelector('.nav-btn.active')));
+    window.addEventListener('resize', () => moveIndicator(document.querySelector('.nav-btn.active')));
+    window.addEventListener('pywebviewready', loadInitialData);
+  </script>
+  <script src="silky_stream.js"></script>
+  <script src="bi_dashboard.js"></script>
+  <script src="report_studio.js"></script>
+
+
+
+
+  <script src="core/icons.js?v=70"></script>
+  <script src="core/charts.js?v=290"></script>
+  <script src="core/app_core.js?v=70"></script>
+  <script src="core/plugins.js?v=70"></script>
+  <script src="core/analytics_suite.js?v=290"></script>
+  <script src="core/voice_copilot.js?v=104"></script>
+  <script src="core/explorer_fix.js?v=102"></script>
+  <script src="core/modern_dropdown.js?v=110"></script>
+
+<script id="ehadiStartupReflow">
+(() => {
+  function settleLayout() {
+    document.body.getBoundingClientRect();
+    window.dispatchEvent(new Event('resize'));
+  }
+  window.addEventListener('DOMContentLoaded', () => {
+    setTimeout(settleLayout, 80);
+    setTimeout(settleLayout, 320);
+  });
+  window.addEventListener('pywebviewready', () => {
+    setTimeout(settleLayout, 120);
+    setTimeout(settleLayout, 450);
+  });
+})();
+</script>
+  <script src="core/executive_ux.js?v=420"></script>
+  <script src="core/diagnostics_ui.js?v=430"></script>
+  <script src="core/memory_ui.js?v=460"></script>
+</body>
+</html>
+
+
+

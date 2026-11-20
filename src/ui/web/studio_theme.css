@@ -1,0 +1,1043 @@
+/* ================= eHadiPanel v5.2 Pro — Modular Fluid SaaS (Dark & High-Contrast Light) ================= */
+:root {
+  --s-bg: #0a0b0f;
+  --s-sidebar: #0e1015;
+  --s-surface: #13161d;
+  --s-surface-2: #191d27;
+  --s-surface-hover: #222838;
+  --s-border: rgba(255, 255, 255, 0.08);
+  --s-border-strong: rgba(255, 255, 255, 0.16);
+  --s-text: #f4f5f7;
+  --s-text-secondary: #d1d5db;
+  --s-text-muted: #9ca3af;
+  --s-text-dim: #6b7280;
+  --s-accent: #10b981;
+  --s-accent-hover: #059669;
+  --s-accent-soft: rgba(16, 185, 129, 0.14);
+  --s-shadow: 0 1px 2px rgba(0, 0, 0, 0.32), 0 8px 20px -14px rgba(0, 0, 0, 0.55);
+  --s-radius: 12px;
+  --ease-spring: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* پالت تم روشن با کنتراست استاندارد و بازنویسی کامل متغیرهای پایه */
+body[data-studio-theme="light"] {
+  --s-bg: #f3f5f8;
+  --s-sidebar: #ffffff;
+  --s-surface: #ffffff;
+  --s-surface-2: #edf1f6;
+  --s-surface-hover: #e2e8f0;
+  --s-border: #dce3ec;
+  --s-border-strong: #c5d0de;
+  --s-text: #0f172a;
+  --s-text-secondary: #1e293b;
+  --s-text-muted: #475569;
+  --s-text-dim: #64748b;
+  --s-accent: #0b7a52;
+  --s-accent-hover: #086040;
+  --s-accent-soft: rgba(11, 122, 82, 0.10);
+  --s-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 4px 14px -6px rgba(15, 23, 42, 0.07);
+
+  /* همگام‌سازی خودکار با متغیرهای احتمالی پایه پروژه */
+  --bg: #f3f5f8;
+  --bg-dark: #f3f5f8;
+  --bg-main: #f3f5f8;
+  --surface: #ffffff;
+  --card-bg: #ffffff;
+  --glass-bg: #ffffff;
+  --glass-border: #dce3ec;
+  --border: #dce3ec;
+  --text: #0f172a;
+  --text-main: #0f172a;
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #475569;
+  --muted: #64748b;
+}
+
+html, body {
+  background: var(--s-bg) !important;
+  background-image: none !important;
+  color: var(--s-text) !important;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+  border: none !important;
+  margin: 0 !important;
+}
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--s-border-strong); border-radius: 99px; }
+
+.pro-svg-icon { flex-shrink: 0; display: inline-block; vertical-align: middle; }
+.pro-btn-ic { display: inline-flex !important; align-items: center !important; gap: 6px !important; }
+
+/* ================= اصلاح ۱۰۰٪ رنگ‌ها و کنتراست در تم روشن ================= */
+body[data-studio-theme="light"] .titlebar,
+body[data-studio-theme="light"] .title-bar,
+body[data-studio-theme="light"] .window-header {
+  background: #ffffff !important;
+  border-bottom: 1px solid var(--s-border) !important;
+  color: var(--s-text) !important;
+}
+body[data-studio-theme="light"] .titlebar *,
+body[data-studio-theme="light"] .title-bar * {
+  color: var(--s-text);
+}
+body[data-studio-theme="light"] .win-btn {
+  color: var(--s-text-muted) !important;
+  background: transparent !important;
+}
+body[data-studio-theme="light"] .win-btn:hover {
+  background: var(--s-surface-2) !important;
+  color: var(--s-text) !important;
+}
+body[data-studio-theme="light"] .version-badge,
+body[data-studio-theme="light"] .app-badge,
+body[data-studio-theme="light"] .title-badge {
+  background: var(--s-accent-soft) !important;
+  color: var(--s-accent) !important;
+  border: 1px solid rgba(11, 122, 82, 0.22) !important;
+}
+body[data-studio-theme="light"] h1,
+body[data-studio-theme="light"] h2,
+body[data-studio-theme="light"] h3,
+body[data-studio-theme="light"] h4,
+body[data-studio-theme="light"] .page-title,
+body[data-studio-theme="light"] .section-title,
+body[data-studio-theme="light"] .card-title,
+body[data-studio-theme="light"] .drop-title,
+body[data-studio-theme="light"] .dropzone h3,
+body[data-studio-theme="light"] .drop-zone h3,
+body[data-studio-theme="light"] strong,
+body[data-studio-theme="light"] label {
+  color: var(--s-text) !important;
+}
+body[data-studio-theme="light"] p,
+body[data-studio-theme="light"] .page-subtitle,
+body[data-studio-theme="light"] .subtitle,
+body[data-studio-theme="light"] .hint,
+body[data-studio-theme="light"] .muted,
+body[data-studio-theme="light"] .drop-sub,
+body[data-studio-theme="light"] .dropzone p,
+body[data-studio-theme="light"] .drop-zone p,
+body[data-studio-theme="light"] .path-text,
+body[data-studio-theme="light"] .msg-meta {
+  color: var(--s-text-muted) !important;
+}
+body[data-studio-theme="light"] .dropzone,
+body[data-studio-theme="light"] .drop-zone,
+body[data-studio-theme="light"] .upload-zone {
+  background: #f8fafc !important;
+  border: 1.5px dashed #cbd5e1 !important;
+  color: var(--s-text) !important;
+}
+body[data-studio-theme="light"] .dropzone:hover,
+body[data-studio-theme="light"] .drop-zone:hover,
+body[data-studio-theme="light"] .upload-zone:hover {
+  background: var(--s-accent-soft) !important;
+  border-color: var(--s-accent) !important;
+}
+body[data-studio-theme="light"] .fmt-pill,
+body[data-studio-theme="light"] .format-pill,
+body[data-studio-theme="light"] .ext-badge,
+body[data-studio-theme="light"] .doc-badge,
+body[data-studio-theme="light"] .badge:not(.status-ok):not(.badge-success),
+body[data-studio-theme="light"] .pill,
+body[data-studio-theme="light"] .chip,
+body[data-studio-theme="light"] .tag,
+body[data-studio-theme="light"] .quick-chip,
+body[data-studio-theme="light"] .suggestion-btn {
+  background: #eaf0f6 !important;
+  color: #1e293b !important;
+  border: 1px solid #d5dfe9 !important;
+}
+body[data-studio-theme="light"] .sidebar-footer > :not(.nav-btn) {
+  background: #f4f7fa !important;
+  border: 1px solid var(--s-border) !important;
+  color: var(--s-text) !important;
+}
+body[data-studio-theme="light"] .sidebar-footer > :not(.nav-btn) * {
+  color: var(--s-text-secondary) !important;
+}
+body[data-studio-theme="light"] .msg-ai,
+body[data-studio-theme="light"] .msg-ai * {
+  color: var(--s-text) !important;
+}
+body[data-studio-theme="light"] .msg-ai code {
+  background: #edf1f6 !important;
+  color: #0f172a !important;
+}
+body[data-studio-theme="light"] input::placeholder,
+body[data-studio-theme="light"] textarea::placeholder {
+  color: #64748b !important;
+}
+
+/* ================= دستگیره‌های ریسایز ۸ جهته ================= */
+.win-resize-handle { position: fixed; z-index: 99999; background: transparent; user-select: none; -webkit-app-region: no-drag; }
+.win-resize-n  { top: 0; left: 10px; right: 10px; height: 5px; cursor: ns-resize; }
+.win-resize-s  { bottom: 0; left: 10px; right: 10px; height: 6px; cursor: ns-resize; }
+.win-resize-e  { right: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+.win-resize-w  { left: 0; top: 10px; bottom: 10px; width: 6px; cursor: ew-resize; }
+.win-resize-ne { top: 0; right: 0; width: 12px; height: 12px; cursor: nesw-resize; }
+.win-resize-nw { top: 0; left: 0; width: 12px; height: 12px; cursor: nwse-resize; }
+.win-resize-se { bottom: 0; right: 0; width: 14px; height: 14px; cursor: nwse-resize; }
+.win-resize-sw { bottom: 0; left: 0; width: 14px; height: 14px; cursor: nesw-resize; }
+
+/* ================= سایدبار کاملاً روان ۶۰ فریم (بدون پرش و بدون بریدگی فوتر) ================= */
+.pro-smooth-shell {
+  display: flex !important;
+  flex-direction: row !important;
+}
+.pro-smooth-shell > main,
+.pro-smooth-shell > .main-content {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+}
+
+#sidebar, .sidebar {
+  width: 250px !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  flex: 0 0 auto !important;
+  box-sizing: border-box !important;
+  padding: 12px !important;
+  background: var(--s-sidebar) !important;
+  border-left: 1px solid var(--s-border) !important;
+  backdrop-filter: none !important;
+  box-shadow: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  will-change: width;
+  transition: width 0.34s var(--ease-spring) !important;
+}
+
+body.sidebar-collapsed #sidebar,
+body.sidebar-collapsed .sidebar {
+  width: 72px !important;
+}
+
+/* دکمه‌های منو: تراز مرکزی ریاضی در حالت ۷۲px بدون تغییر padding یا justify-content */
+#sidebar .nav-btn {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  width: 100% !important;
+  height: 42px !important;
+  padding: 0 14px !important;
+  gap: 11px !important;
+  box-sizing: border-box !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  border-radius: 10px !important;
+  color: var(--s-text-muted) !important;
+  transition: background 0.16s ease, color 0.16s ease !important;
+}
+#sidebar .nav-btn:hover { background: var(--s-surface-2) !important; color: var(--s-text) !important; }
+#sidebar .nav-btn.active { background: var(--s-accent-soft) !important; color: var(--s-accent) !important; font-weight: 700 !important; }
+#sidebar .nav-btn svg { flex-shrink: 0 !important; width: 20px !important; height: 20px !important; }
+
+#sidebar .pro-nav-lbl {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 0.2s ease, transform 0.26s var(--ease-spring);
+}
+body.sidebar-collapsed #sidebar .pro-nav-lbl {
+  opacity: 0 !important;
+  transform: translateX(8px);
+  pointer-events: none;
+}
+
+/* محو نرم عنوان بخش، سوییچر تم و باکس وضعیت Gemini/DuckDB در پایین سایدبار */
+#sidebar .nav-section-label,
+#sidebar .studio-logo-caption,
+#sidebar .studio-theme-switcher,
+#sidebar .sidebar-footer > :not(.nav-btn) {
+  overflow: hidden !important;
+  max-height: 150px;
+  opacity: 1;
+  transition: max-height 0.3s var(--ease-spring), opacity 0.18s ease, margin 0.28s ease, padding 0.28s ease, border-width 0.2s ease !important;
+}
+body.sidebar-collapsed #sidebar .nav-section-label,
+body.sidebar-collapsed #sidebar .studio-logo-caption,
+body.sidebar-collapsed #sidebar .studio-theme-switcher,
+body.sidebar-collapsed #sidebar .sidebar-footer > :not(.nav-btn) {
+  max-height: 0 !important;
+  opacity: 0 !important;
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border-width: 0 !important;
+  pointer-events: none !important;
+}
+body.sidebar-collapsed #sidebar #navIndicator { opacity: 0 !important; }
+
+/* بنر لوگوی آزاد PNG */
+.studio-logo-banner {
+  width: 100%; padding: 8px 4px 10px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 5px;
+  border-bottom: 1px solid var(--s-border); margin-bottom: 10px; overflow: hidden;
+}
+.studio-logo-banner img {
+  width: 100%; max-width: 168px; max-height: 68px; height: auto; object-fit: contain;
+  background: transparent !important; border: none !important;
+  transition: max-width 0.32s var(--ease-spring), max-height 0.32s var(--ease-spring);
+}
+body.sidebar-collapsed .studio-logo-banner { padding: 6px 0 8px; }
+body.sidebar-collapsed .studio-logo-banner img { max-width: 44px; max-height: 34px; }
+.studio-logo-caption { font-size: 10.5px; font-weight: 600; color: var(--s-text-dim); text-align: center; white-space: nowrap; }
+
+.studio-theme-switcher {
+  display: flex; gap: 3px; padding: 3px; margin: 0 0 12px;
+  border-radius: 9px; background: var(--s-surface-2); border: 1px solid var(--s-border);
+}
+.studio-theme-btn {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  border: none; background: transparent; color: var(--s-text-muted);
+  font-family: inherit; font-size: 11px; font-weight: 600; padding: 5px 8px; border-radius: 7px; cursor: pointer;
+}
+.studio-theme-btn.active { background: var(--s-surface); color: var(--s-text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+
+/* تولتیپ شناور جداگانه برای سایدبار جمع‌شده */
+.pro-floating-tooltip {
+  position: fixed;
+  z-index: 999995;
+  transform: translate(-100%, -50%) translateX(8px);
+  background: var(--s-surface);
+  color: var(--s-text);
+  border: 1px solid var(--s-border-strong);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
+  padding: 6px 12px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.14s ease, transform 0.18s var(--ease-spring);
+}
+.pro-floating-tooltip.visible {
+  opacity: 1;
+  transform: translate(-100%, -50%) translateX(0);
+}
+
+/* ================= نوار ابزار سریع SaaS ================= */
+.pro-topbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 14px; margin-bottom: 12px; border-radius: 11px;
+  background: var(--s-surface); border: 1px solid var(--s-border); box-shadow: var(--s-shadow); flex-shrink: 0;
+}
+.pro-topbar-right, .pro-topbar-left { display: flex; align-items: center; gap: 8px; }
+.pro-icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--s-border);
+  background: var(--s-surface-2); color: var(--s-text-muted); cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+.pro-icon-btn:hover { color: var(--s-text); border-color: var(--s-border-strong); background: var(--s-surface-hover); }
+.pro-icon-btn:active { transform: scale(0.93); }
+.pro-breadcrumb { font-size: 12.5px; font-weight: 700; color: var(--s-text); }
+.pro-cmd-trigger {
+  display: inline-flex; align-items: center; gap: 9px; padding: 5px 11px; border-radius: 8px;
+  border: 1px solid var(--s-border); background: var(--s-surface-2); color: var(--s-text-muted);
+  font-family: inherit; font-size: 11.5px; cursor: pointer;
+}
+.pro-cmd-trigger:hover { border-color: var(--s-border-strong); color: var(--s-text); }
+.pro-kbd {
+  font-family: ui-monospace, Consolas, monospace; font-size: 10px; padding: 1px 6px; border-radius: 5px;
+  background: var(--s-surface); border: 1px solid var(--s-border); color: var(--s-text-dim); direction: ltr;
+}
+
+/* ================= پاپ‌آپ‌ها با منوی دقیقاً سمت راست و آیکون فلت ================= */
+.pro-overlay-root {
+  position: fixed; inset: 0; z-index: 999900; direction: rtl !important;
+  background: rgba(5, 8, 16, 0.52); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.22s ease; will-change: opacity;
+}
+.pro-overlay-root.open { opacity: 1; pointer-events: auto; }
+.pro-modal-box {
+  direction: rtl !important; width: min(1040px, 93vw); height: min(85vh, 750px);
+  background: var(--s-surface); border: 1px solid var(--s-border-strong); border-radius: 16px;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.48); display: flex; flex-direction: column; overflow: hidden;
+  transform: scale(0.95) translateY(12px); opacity: 0;
+  transition: transform 0.28s var(--ease-spring), opacity 0.2s ease; will-change: transform, opacity;
+}
+.pro-overlay-root.open .pro-modal-box { transform: scale(1) translateY(0); opacity: 1; }
+.pro-modal-header {
+  direction: rtl !important; display: flex; align-items: center; justify-content: space-between;
+  padding: 13px 18px; background: var(--s-surface-2); border-bottom: 1px solid var(--s-border); flex-shrink: 0;
+}
+.pro-modal-title { display: flex; align-items: center; gap: 9px; font-size: 13.5px; font-weight: 800; color: var(--s-text); }
+.pro-modal-body { direction: rtl !important; flex: 1; display: flex !important; flex-direction: row !important; min-height: 0; overflow: hidden; }
+.pro-modal-nav {
+  order: 0 !important; width: 232px; flex-shrink: 0; background: var(--s-sidebar);
+  border-left: 1px solid var(--s-border); padding: 12px 10px;
+  display: flex; flex-direction: column; gap: 4px; overflow-y: auto; text-align: right;
+}
+.pro-cat-btn {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 12px; border-radius: 9px;
+  border: 1px solid transparent; background: transparent; color: var(--s-text-muted);
+  font-family: inherit; font-size: 12px; font-weight: 600; cursor: pointer; text-align: right;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pro-cat-btn:hover { background: var(--s-surface-2); color: var(--s-text); }
+.pro-cat-btn.active { background: var(--s-accent-soft); color: var(--s-accent); border-color: var(--s-accent); }
+.pro-modal-content { order: 1 !important; flex: 1; padding: 18px 22px; overflow-y: auto; background: var(--s-bg); text-align: right; }
+.pro-pane { display: none; flex-direction: column; gap: 14px; }
+.pro-pane.active { display: flex; animation: proFadeSlide 0.2s ease both; }
+@keyframes proFadeSlide { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+.pro-pane-title { font-size: 14px; font-weight: 800; color: var(--s-text); padding-bottom: 10px; border-bottom: 1px solid var(--s-border); }
+.pro-modal-footer {
+  direction: rtl !important; display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 18px; background: var(--s-surface-2); border-top: 1px solid var(--s-border); flex-shrink: 0;
+}
+
+/* تولید محتوای رسانه‌ای */
+.eitaa-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 16px; height: 100%; direction: rtl; }
+.eitaa-form { display: flex; flex-direction: column; gap: 10px; overflow-y: auto; padding-left: 6px; }
+.eitaa-field { display: flex; flex-direction: column; gap: 4px; }
+.eitaa-field.hidden-field { display: none !important; }
+.eitaa-field label { font-size: 11px; font-weight: 600; color: var(--s-text-muted); }
+.eitaa-mode-hint {
+  font-size: 11.5px; color: var(--s-text-muted); background: var(--s-surface);
+  border: 1px solid var(--s-border); border-right: 3px solid var(--s-accent);
+  padding: 8px 12px; border-radius: 9px;
+}
+.eitaa-preview-box { display: flex; flex-direction: column; gap: 10px; background: var(--s-surface); border: 1px solid var(--s-border); border-radius: 12px; padding: 14px; }
+.eitaa-preview-text {
+  flex: 1; min-height: 320px; width: 100%; resize: none; background: var(--s-surface-2);
+  border: 1px solid var(--s-border); border-radius: 10px; padding: 12px;
+  color: var(--s-text); font-family: inherit; font-size: 12.2px; line-height: 1.85; direction: rtl; text-align: right;
+}
+
+/* پالت دستورات سریع */
+.cmd-box { width: min(560px, 92vw); height: auto; max-height: 460px; }
+.cmd-input-wrap { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--s-border); }
+.cmd-input { flex: 1; border: none; outline: none; background: transparent; color: var(--s-text); font-family: inherit; font-size: 13.5px; }
+.cmd-list { max-height: 320px; overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 2px; }
+.cmd-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: 9px; border: none; background: transparent; color: var(--s-text); font-family: inherit; font-size: 12.5px; cursor: pointer; text-align: right; }
+.cmd-item:hover, .cmd-item.selected { background: var(--s-accent-soft); color: var(--s-accent); }
+
+/* کامپوننت‌های مشترک SaaS */
+.page.active { animation: proFadeSlide 0.22s ease both; }
+.glass-card { background: var(--s-surface) !important; border: 1px solid var(--s-border) !important; border-radius: var(--s-radius) !important; box-shadow: var(--s-shadow) !important; backdrop-filter: none !important; }
+.glass-card:hover { border-color: var(--s-border-strong) !important; }
+.card-title, .bi-hub-brand, .bi-kpi-val, .bi-bar-name, .bi-donut-num, .bi-legend-val { color: var(--s-text) !important; }
+.bi-hub-sub, .bi-kpi-label, .bi-kpi-sub, .bi-hint, .bi-donut-lbl, .bi-bar-teacher, .bi-cmp-head span { color: var(--s-text-muted) !important; }
+.primary-btn { background: var(--s-accent) !important; color: #fff !important; border: none !important; border-radius: 9px !important; font-weight: 600 !important; transition: background 0.15s ease, transform 0.12s ease !important; }
+.primary-btn:hover:not(:disabled) { background: var(--s-accent-hover) !important; }
+.primary-btn:active:not(:disabled) { transform: scale(0.96); }
+.ghost-btn, .copy-mini-btn, .toggle-table-btn { background: var(--s-surface-2) !important; border: 1px solid var(--s-border) !important; border-radius: 9px !important; color: var(--s-text) !important; font-weight: 500 !important; }
+.ghost-btn:hover:not(:disabled), .copy-mini-btn:hover { background: var(--s-surface-hover) !important; }
+.glass-input, .glass-select { background: var(--s-surface-2) !important; border: 1px solid var(--s-border) !important; border-radius: 9px !important; color: var(--s-text) !important; }
+.glass-input:focus, .glass-select:focus { outline: none !important; border-color: var(--s-accent) !important; box-shadow: 0 0 0 3px var(--s-accent-soft) !important; }
+.bi-lens-tabs { background: var(--s-surface-2) !important; border: 1px solid var(--s-border) !important; border-radius: 10px !important; }
+.bi-lens-tab { color: var(--s-text-muted) !important; border-radius: 7px !important; }
+.bi-lens-tab.active { background: var(--s-surface) !important; color: var(--s-text) !important; }
+.bi-legend-item, .bi-cmp-item, .font-manager-box { background: var(--s-surface-2) !important; color: var(--s-text) !important; border: 1px solid var(--s-border) !important; }
+.bi-legend-item.active, .bi-cmp-item.active { background: var(--s-accent-soft) !important; border-color: var(--s-accent) !important; }
+.glass-table th { background: var(--s-surface-2) !important; color: var(--s-text-muted) !important; border-bottom: 1px solid var(--s-border) !important; }
+.glass-table td { color: var(--s-text) !important; border-bottom: 1px solid var(--s-border) !important; }
+
+/* Toast */
+.pro-toast-stack { position: fixed; bottom: 18px; left: 18px; z-index: 999999; display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.pro-toast {
+  pointer-events: auto; display: flex; align-items: center; gap: 8px; min-width: 240px; max-width: 380px;
+  padding: 10px 14px; border-radius: 11px; background: var(--s-surface);
+  border: 1px solid var(--s-border-strong); border-right: 3px solid var(--s-accent);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.3); color: var(--s-text); font-size: 12px; font-weight: 600;
+  animation: toastIn 0.28s var(--ease-spring) both;
+}
+.pro-toast-ico { color: var(--s-accent); display: inline-flex; }
+.pro-toast.out { animation: toastOut 0.2s ease forwards; }
+@keyframes toastIn { from { opacity: 0; transform: translateX(-16px); } to { opacity: 1; transform: translateX(0); } }
+@keyframes toastOut { to { opacity: 0; transform: translateX(-14px); } }
+
+/* چت بدون پرش */
+#chatStream { overflow-anchor: none; scroll-behavior: auto; }
+.msg-ai { background: var(--s-surface) !important; border: 1px solid var(--s-border) !important; color: var(--s-text) !important; border-radius: 14px !important; contain: layout style; }
+.msg-user { background: var(--s-accent) !important; color: #fff !important; border: none !important; border-radius: 14px !important; }
+.msg-user .msg-body { color: #fff !important; }
+.sw-in, .block-in, .row-in, .extras-reveal { animation: pureFade 0.16s ease-out both !important; filter: none !important; transform: none !important; }
+@keyframes pureFade { from { opacity: 0; } to { opacity: 1; } }
+#page-dashboard.active > * { flex-shrink: 0; }
+#page-dashboard .dash-split { min-height: 270px; height: auto; margin-bottom: 20px; }
+
+
+/* ================= eHadiPanel v6.0 Pro — Executive Analytics, Drawer & Boardroom ================= */
+.eh-xl-modal { width: min(1180px, 95vw) !important; height: min(89vh, 820px) !important; }
+.eh-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px; margin-bottom: 14px; }
+.eh-filter-bar .glass-select { min-width: 170px; padding: 6px 10px; font-size: 12px; }
+
+.eh-kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.eh-kpi { padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }
+.eh-kpi-l { font-size: 11px; color: var(--s-text-muted); font-weight: 600; }
+.eh-kpi-v { font-size: 20px; font-weight: 800; color: var(--s-text); line-height: 1.25; }
+.eh-kpi-s { font-size: 10.5px; color: var(--s-text-dim); }
+
+.eh-chart-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.eh-chart-box { padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.eh-chart-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; color: var(--s-text); }
+.eh-chart-actions { display: flex; gap: 5px; }
+.eh-chart-stage { width: 100%; min-height: 140px; display: flex; align-items: center; justify-content: center; }
+.eh-chart-svg { width: 100%; height: auto; display: block; }
+.eh-empty-chart { padding: 28px 12px; text-align: center; font-size: 12px; color: var(--s-text-dim); }
+
+.eh-mini-btn {
+  display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 7px;
+  border: 1px solid var(--s-border); background: var(--s-surface-2); color: var(--s-text-muted);
+  font-family: inherit; font-size: 10.5px; font-weight: 600; cursor: pointer;
+}
+.eh-mini-btn:hover { color: var(--s-text); border-color: var(--s-border-strong); background: var(--s-surface-hover); }
+
+.eh-badge {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 9px; border-radius: 99px;
+  background: var(--s-accent-soft); color: var(--s-accent); font-size: 10.5px; font-weight: 700;
+}
+.eh-link-btn {
+  border: none; background: none; padding: 0; color: var(--s-accent); font-family: inherit;
+  font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px;
+}
+.eh-chk { display: flex; align-items: center; gap: 7px; cursor: pointer; color: var(--s-text); }
+.eh-dup-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px;
+  border-radius: 9px; background: var(--s-surface-2); border: 1px solid var(--s-border); font-size: 12px;
+}
+
+/* نوار پیشرفت و مراحل چرخه رویدادها */
+.eh-progress-track { width: 100%; height: 6px; border-radius: 99px; background: var(--s-surface-2); overflow: hidden; }
+.eh-progress-fill { height: 100%; border-radius: 99px; background: var(--s-accent); transition: width 0.3s var(--ease-spring); }
+.eh-stage-pill {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 8px;
+  border: 1px solid var(--s-border); background: var(--s-surface-2); color: var(--s-text-muted);
+  font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.eh-stage-pill.done { background: var(--s-accent-soft); border-color: var(--s-accent); color: var(--s-accent); }
+
+/* پرونده ۳۶۰ درجه کشویی (Slide-Over Drawer) */
+.eh-drawer-backdrop {
+  position: fixed; inset: 0; z-index: 999950; background: rgba(5, 8, 16, 0.48);
+  backdrop-filter: blur(4px); display: flex; justify-content: flex-end;
+  opacity: 0; pointer-events: none; transition: opacity 0.22s ease; direction: ltr;
+}
+.eh-drawer-backdrop.open { opacity: 1; pointer-events: auto; }
+.eh-drawer-panel {
+  direction: rtl; width: min(440px, 90vw); height: 100%; background: var(--s-surface);
+  border-right: 1px solid var(--s-border-strong); box-shadow: 12px 0 40px rgba(0, 0, 0, 0.4);
+  display: flex; flex-direction: column; transform: translateX(-100%);
+  transition: transform 0.3s var(--ease-spring);
+}
+.eh-drawer-backdrop.open .eh-drawer-panel { transform: translateX(0); }
+.eh-drawer-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; background: var(--s-surface-2); border-bottom: 1px solid var(--s-border); }
+.eh-drawer-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+
+/* حالت ارائه هیئت‌مدیره (Boardroom Mode) */
+.eh-boardroom-overlay {
+  position: fixed; inset: 0; z-index: 999980; background: var(--s-bg); color: var(--s-text);
+  display: flex; flex-direction: column; direction: rtl;
+}
+.eh-br-top { display: flex; align-items: center; justify-content: space-between; padding: 14px 24px; background: var(--s-surface); border-bottom: 1px solid var(--s-border); }
+.eh-br-stage { flex: 1; display: flex; align-items: center; justify-content: center; padding: 28px; }
+.eh-br-slide { width: 100%; max-width: 1060px; display: flex; flex-direction: column; align-items: center; gap: 26px; animation: proFadeSlide 0.28s ease both; }
+.eh-br-slide h2 { font-size: 22px; font-weight: 800; color: var(--s-text); margin: 0; text-align: center; }
+.eh-br-kpis { width: 100%; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.eh-br-kpis .eh-kpi { padding: 24px 18px; align-items: center; text-align: center; }
+.eh-br-kpis .eh-kpi-v { font-size: 32px; color: var(--s-accent); }
+
+
+/* ================= Voice Copilot Bar (v7.0 Pro) ================= */
+.eh-voice-bar {
+  position: fixed; bottom: 14px; right: 86px; z-index: 999850;
+  display: flex; align-items: center; gap: 12px; padding: 7px 14px;
+  border-radius: 999px; background: var(--s-surface); border: 1px solid var(--s-border-strong);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35); direction: rtl; font-size: 11.5px;
+}
+.eh-voice-status { display: flex; align-items: center; gap: 8px; color: var(--s-text-muted); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eh-voice-controls { display: flex; align-items: center; gap: 6px; }
+.eh-voice-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--s-accent); flex-shrink: 0; }
+.eh-voice-dot.recording { background: #ef4444; animation: pulseDot 1s infinite; }
+@keyframes pulseDot { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.45); opacity: 0.6; } }
+
+/* ================= Voice Controls in Topbar & Chat (v7.3) ================= */
+#ehVoiceCopilotBar { display: none !important; }
+.vc-top-group { display: inline-flex; align-items: center; gap: 6px; padding-left: 8px; border-left: 1px solid var(--s-border); }
+.vc-chat-inline { display: inline-flex; align-items: center; gap: 6px; margin-left: 6px; flex-shrink: 0; }
+.vc-pill-btn {
+  padding: 5px 10px; border-radius: 8px; border: 1px solid var(--s-border);
+  background: var(--s-surface-2); color: var(--s-text); font-family: inherit;
+  font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.vc-pill-btn:hover { border-color: var(--s-accent); color: var(--s-accent); }
+.pro-icon-btn.recording, .ghost-btn.recording {
+  background: #dc2626 !important; color: #ffffff !important; border-color: #dc2626 !important;
+}
+.pro-icon-btn.active, .ghost-btn.active {
+  border-color: var(--s-accent) !important; color: var(--s-accent) !important;
+}
+/* ================= Galaxy AI / Gemini Edge Glow + Particles + Left Floating Orb (v8.0) ================= */
+@property --ai-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes aiSpinAngle { to { --ai-angle: 360deg; } }
+
+.eh-ai-edge-overlay {
+  position: fixed; inset: 0; z-index: 999970; pointer-events: none;
+  opacity: 0; transition: opacity 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+  --ai-c1: #10b981; --ai-c2: #06b6d4; --ai-c3: #3b82f6; --ai-c4: #8b5cf6;
+  --ai-speed: 3.4s;
+}
+.eh-ai-edge-overlay.active { opacity: 1; }
+.eh-ai-edge-overlay[data-state="processing"] {
+  --ai-c1: #a855f7; --ai-c2: #ec4899; --ai-c3: #38bdf8; --ai-c4: #8b5cf6; --ai-speed: 1.8s;
+}
+.eh-ai-edge-overlay[data-state="speaking"] {
+  --ai-c1: #10b981; --ai-c2: #14b8a6; --ai-c3: #f59e0b; --ai-c4: #34d399; --ai-speed: 2.8s;
+}
+
+/* استروک دقیق گرادیانی دور هر ۴ ضلع پنجره */
+.eh-ai-edge-stroke {
+  position: absolute; inset: 0; padding: 3.5px; border-radius: 10px;
+  background: conic-gradient(from var(--ai-angle), var(--ai-c1), var(--ai-c2), var(--ai-c3), var(--ai-c4), var(--ai-c1));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: aiSpinAngle var(--ai-speed) linear infinite;
+}
+
+/* هاله نوری نرم داخلی شبیه Galaxy AI */
+.eh-ai-edge-glow {
+  position: absolute; inset: 0; padding: 18px; border-radius: 10px;
+  background: conic-gradient(from var(--ai-angle), var(--ai-c1), var(--ai-c2), var(--ai-c3), var(--ai-c4), var(--ai-c1));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  filter: blur(18px); opacity: 0.72;
+  animation: aiSpinAngle var(--ai-speed) linear infinite;
+}
+
+.eh-ai-particle-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* دکمه شناور همیشگی در گوشه پایین-چپ */
+.eh-voice-orb {
+  position: fixed; left: 22px; bottom: 24px; z-index: 999975;
+  width: 56px; height: 56px; border-radius: 50%; border: none; padding: 0;
+  background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: transform 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+  -webkit-app-region: no-drag;
+}
+.eh-voice-orb:hover { transform: scale(1.08) translateY(-2px); }
+.eh-voice-orb:active { transform: scale(0.95); }
+
+.eh-orb-ring {
+  position: absolute; inset: -3px; border-radius: 50%;
+  background: conic-gradient(from var(--ai-angle), #10b981, #06b6d4, #3b82f6, #8b5cf6, #10b981);
+  animation: aiSpinAngle 4s linear infinite;
+  opacity: 0.85; filter: blur(0.4px);
+}
+.eh-voice-orb.active .eh-orb-ring {
+  inset: -5px; animation-duration: 1.6s; filter: blur(2px); opacity: 1;
+}
+.eh-orb-core {
+  position: relative; z-index: 1; width: 50px; height: 50px; border-radius: 50%;
+  background: var(--s-surface); color: var(--s-text);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.eh-voice-orb.active .eh-orb-core {
+  background: linear-gradient(135deg, #10b981, #0ea5e9); color: #ffffff;
+}
+
+/* کپسول شناور زنده پایین-وسط */
+.eh-voice-hud {
+  position: fixed; left: 50%; bottom: 24px; z-index: 999976;
+  transform: translate(-50%, 24px) scale(0.96);
+  opacity: 0; pointer-events: none; direction: rtl;
+  display: flex; align-items: center; gap: 12px;
+  padding: 9px 14px; border-radius: 999px;
+  background: color-mix(in srgb, var(--s-surface) 88%, transparent);
+  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--s-border-strong);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.42);
+  transition: opacity 0.28s ease, transform 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+  max-width: min(740px, 84vw);
+}
+.eh-voice-hud.open { opacity: 1; pointer-events: auto; transform: translate(-50%, 0) scale(1); }
+
+.eh-hud-eq { display: inline-flex; align-items: center; gap: 3px; height: 18px; padding: 0 4px; }
+.eh-hud-eq span {
+  width: 3px; height: 6px; border-radius: 99px;
+  background: linear-gradient(180deg, #10b981, #38bdf8);
+  animation: eqWave 0.9s ease-in-out infinite;
+}
+.eh-hud-eq span:nth-child(2) { animation-delay: 0.15s; }
+.eh-hud-eq span:nth-child(3) { animation-delay: 0.3s; }
+.eh-hud-eq span:nth-child(4) { animation-delay: 0.45s; }
+.eh-hud-eq span:nth-child(5) { animation-delay: 0.6s; }
+.eh-voice-hud[data-state="idle"] .eh-hud-eq span { animation: none; height: 4px; opacity: 0.45; }
+@keyframes eqWave { 0%, 100% { height: 5px; } 50% { height: 18px; } }
+
+.eh-hud-text {
+  font-size: 12px; font-weight: 700; color: var(--s-text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 340px;
+}
+.eh-hud-actions { display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.eh-hud-chip {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 10px; border-radius: 999px;
+  border: 1px solid var(--s-border); background: var(--s-surface-2); color: var(--s-text);
+  font-family: inherit; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.eh-hud-chip:hover, .eh-hud-chip.active { border-color: var(--s-accent); color: var(--s-accent); }
+.eh-hud-stop {
+  width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--s-border);
+  background: var(--s-surface-2); color: var(--s-text-muted);
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.eh-hud-stop:hover { background: #dc2626; border-color: #dc2626; color: #ffffff; }
+/* ================= Unified Canvas Fluid Edge Aura & Left Orb (v8.5) ================= */
+.eh-ai-fluid-canvas {
+  position: fixed; inset: 0; width: 100vw; height: 100vh;
+  z-index: 999970; pointer-events: none; display: block;
+}
+.eh-voice-orb {
+  position: fixed; left: 22px; bottom: 24px; z-index: 999975;
+  width: 54px; height: 54px; border-radius: 50%; border: none; padding: 0;
+  background: transparent; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1); -webkit-app-region: no-drag;
+}
+.eh-voice-orb:hover { transform: scale(1.08) translateY(-2px); }
+.eh-voice-orb:active { transform: scale(0.94); }
+.eh-orb-glow {
+  position: absolute; inset: -4px; border-radius: 50%;
+  background: linear-gradient(135deg, #10b981, #06b6d4, #3b82f6, #8b5cf6);
+  opacity: 0.55; filter: blur(8px); transition: opacity 0.25s ease, transform 0.25s ease;
+}
+.eh-voice-orb.active .eh-orb-glow { opacity: 0.95; transform: scale(1.18); }
+.eh-orb-core {
+  position: relative; z-index: 1; width: 50px; height: 50px; border-radius: 50%;
+  background: var(--s-surface); color: var(--s-text);
+  border: 1.5px solid rgba(16, 185, 129, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
+}
+.eh-voice-orb.active .eh-orb-core {
+  background: linear-gradient(135deg, #10b981, #0ea5e9); color: #ffffff; border-color: transparent;
+}
+.eh-hud-text { max-width: 440px !important; white-space: normal !important; line-height: 1.5; }
+/* ================= Dynamic Island Top-Center HUD & Silky Orb (v9.5) ================= */
+.eh-voice-hud.eh-dynamic-island {
+  top: 44px !important;
+  bottom: auto !important;
+  transform: translate(-50%, -18px) scale(0.94) !important;
+  background: color-mix(in srgb, var(--s-surface) 84%, transparent) !important;
+  backdrop-filter: blur(26px) saturate(160%) !important;
+  -webkit-backdrop-filter: blur(26px) saturate(160%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+}
+.eh-voice-hud.eh-dynamic-island.open {
+  transform: translate(-50%, 0) scale(1) !important;
+}
+/* ================= Minimalist Ultra-Slow Ambient Aura (v10.0) ================= */
+.eh-ambient-aura {
+  position: fixed; inset: 0; z-index: 999970; pointer-events: none;
+  opacity: 0; border-radius: 10px;
+  box-shadow: inset 0 0 36px rgba(16, 185, 129, 0.25), inset 0 0 0 1.5px rgba(16, 185, 129, 0.5);
+  transition: opacity 0.65s ease, box-shadow 0.65s ease;
+}
+.eh-ambient-aura.active { opacity: 1; animation: ehSlowBreath 5.5s ease-in-out infinite; }
+.eh-ambient-aura[data-state="processing"] { box-shadow: inset 0 0 38px rgba(139, 92, 246, 0.3), inset 0 0 0 1.5px rgba(168, 85, 247, 0.55); }
+.eh-ambient-aura[data-state="speaking"] { box-shadow: inset 0 0 36px rgba(14, 165, 233, 0.25), inset 0 0 0 1.5px rgba(56, 189, 248, 0.5); }
+@keyframes ehSlowBreath { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+
+.eh-voice-orb.eh-orb-minimal { left: 20px !important; bottom: 84px !important; width: 48px !important; height: 48px !important; }
+.eh-voice-orb.eh-orb-minimal .eh-orb-core {
+  width: 46px !important; height: 46px !important;
+  border: 1.5px solid var(--s-border-strong) !important;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28) !important;
+}
+.eh-voice-orb.eh-orb-minimal.active .eh-orb-core { background: var(--s-accent) !important; color: #ffffff !important; border-color: transparent !important; }
+
+/* ================= v10.0 Pro Final Release Polish ================= */
+.eh-filter-bar {
+  display: grid !important;
+  grid-template-columns: 1fr 1.35fr 0.75fr auto !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 10px 14px !important;
+  margin-bottom: 14px !important;
+}
+.eh-filter-bar .glass-select {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  text-overflow: ellipsis !important;
+}
+
+
+
+/* ================= v10.2 Light Mode & Readability Fixes ================= */
+[data-studio-theme="light"] .kpi-val,
+[data-studio-theme="light"] .stat-val,
+[data-studio-theme="light"] .stat-value,
+[data-studio-theme="light"] .metric-value,
+[data-studio-theme="light"] .kpi-number,
+[data-studio-theme="light"] .kpi-card h2,
+[data-studio-theme="light"] .kpi-card .val,
+[data-studio-theme="light"] .stat-card .num,
+[data-studio-theme="light"] #kpiDocs,
+[data-studio-theme="light"] #kpiTables,
+[data-studio-theme="light"] #kpiRows,
+[data-studio-theme="light"] #kpiChunks {
+  color: #0f172a !important;
+  -webkit-text-fill-color: #0f172a !important;
+}
+
+[data-studio-theme="light"] .subsys-item,
+[data-studio-theme="light"] .subsystem-row,
+[data-studio-theme="light"] .status-item,
+[data-studio-theme="light"] .health-row,
+[data-studio-theme="light"] #subsystemsList > div,
+[data-studio-theme="light"] #systemStatusList > div {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+[data-studio-theme="light"] .titlebar-brand,
+[data-studio-theme="light"] .app-title-pill {
+  background: #eef2f6 !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+}
+
+/* === EHADI_LIGHT_PRO_V103_START === */
+/* سیستم رنگ‌بندی حرفه‌ای و یکپارچه تم روشن (eHadiPanel v10.3) */
+[data-studio-theme="light"] {
+  --s-bg: #f4f7fb !important;
+  --s-surface: #ffffff !important;
+  --s-surface-2: #f8fafc !important;
+  --s-surface-3: #f1f5f9 !important;
+  --s-border: #e2e8f0 !important;
+  --s-border-strong: #cbd5e1 !important;
+  --s-text: #0f172a !important;
+  --s-text-muted: #475569 !important;
+  --s-accent: #059669 !important;
+
+  /* بازنویسی متغیرهای احتمالی تم تیره در style.css اصلی */
+  --bg-dark: #f4f7fb !important;
+  --bg-card: #ffffff !important;
+  --bg-panel: #f8fafc !important;
+  --glass-bg: #ffffff !important;
+  --glass-border: #e2e8f0 !important;
+  --text-main: #0f172a !important;
+  --text-muted: #475569 !important;
+}
+
+/* ۱. بدنه جداول و کانتینر جدول (رفع کامل خاکستری کدر آخرین فایل‌ها) */
+[data-studio-theme="light"] table,
+[data-studio-theme="light"] .glass-table,
+[data-studio-theme="light"] .table-wrap,
+[data-studio-theme="light"] .table-container,
+[data-studio-theme="light"] .data-table-wrap,
+[data-studio-theme="light"] tbody {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #e2e8f0 !important;
+}
+
+[data-studio-theme="light"] thead,
+[data-studio-theme="light"] thead tr,
+[data-studio-theme="light"] th {
+  background: #f8fafc !important;
+  color: #475569 !important;
+  border-bottom: 1px solid #e2e8f0 !important;
+  font-weight: 700 !important;
+}
+
+[data-studio-theme="light"] tbody tr {
+  background: #ffffff !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  transition: background 0.15s ease;
+}
+
+[data-studio-theme="light"] tbody tr:hover {
+  background: #f8fafc !important;
+}
+
+[data-studio-theme="light"] td {
+  color: #0f172a !important;
+  border-color: #f1f5f9 !important;
+}
+
+/* ۲. ردیف‌های وضعیت زیرسیستم‌ها و آیتم‌های لیستی داخل کارت‌ها */
+[data-studio-theme="light"] .subsys-item,
+[data-studio-theme="light"] .subsystem-row,
+[data-studio-theme="light"] .subsystem-item,
+[data-studio-theme="light"] .status-row,
+[data-studio-theme="light"] .status-item,
+[data-studio-theme="light"] .health-row,
+[data-studio-theme="light"] .health-item,
+[data-studio-theme="light"] .sys-row,
+[data-studio-theme="light"] .list-item-row,
+[data-studio-theme="light"] #subsystemsList > div,
+[data-studio-theme="light"] #systemStatusList > div,
+[data-studio-theme="light"] [id*="subsys"] > div,
+[data-studio-theme="light"] [class*="subsys"] > div {
+  background: #f8fafc !important;
+  color: #0f172a !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: none !important;
+}
+
+/* ۳. برچسب‌های وضعیت (فعال / متصل / موفق) با کنتراست استاندارد */
+[data-studio-theme="light"] .badge-success,
+[data-studio-theme="light"] .status-ok,
+[data-studio-theme="light"] .status-active,
+[data-studio-theme="light"] .status-pill.ok,
+[data-studio-theme="light"] .pill-success,
+[data-studio-theme="light"] .tag-success,
+[data-studio-theme="light"] td .badge,
+[data-studio-theme="light"] [class*="status-ok"],
+[data-studio-theme="light"] [class*="badge-ok"] {
+  background: #ecfdf5 !important;
+  color: #047857 !important;
+  border: 1px solid #a7f3d0 !important;
+  font-weight: 700 !important;
+}
+
+/* متن‌های سبز فسفری داخل ردیف‌های زیرسیستم */
+[data-studio-theme="light"] [id*="subsys"] span[style*="color"],
+[data-studio-theme="light"] [class*="subsys"] span,
+[data-studio-theme="light"] .status-text-ok,
+[data-studio-theme="light"] .text-emerald,
+[data-studio-theme="light"] .text-success {
+  color: #047857 !important;
+  font-weight: 700 !important;
+}
+
+/* ۴. برچسب فرمت فایل (PPTX / PDF / XLSX) و بج‌های خنثی */
+[data-studio-theme="light"] .fmt-badge,
+[data-studio-theme="light"] .format-badge,
+[data-studio-theme="light"] .ext-badge,
+[data-studio-theme="light"] .type-badge,
+[data-studio-theme="light"] .badge-neutral,
+[data-studio-theme="light"] .pill-neutral,
+[data-studio-theme="light"] td code,
+[data-studio-theme="light"] td .tag {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+  border: 1px solid #cbd5e1 !important;
+  font-weight: 700 !important;
+}
+
+/* ۵. ورودی‌ها، سلکت‌ها، دکمه‌های ثانویه و مودال‌ها در تم روشن */
+[data-studio-theme="light"] input,
+[data-studio-theme="light"] textarea,
+[data-studio-theme="light"] select,
+[data-studio-theme="light"] .glass-input,
+[data-studio-theme="light"] .glass-select {
+  background: #ffffff !important;
+  color: #0f172a !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-studio-theme="light"] input::placeholder,
+[data-studio-theme="light"] textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+[data-studio-theme="light"] .ghost-btn,
+[data-studio-theme="light"] .secondary-btn {
+  background: #f8fafc !important;
+  color: #1e293b !important;
+  border: 1px solid #cbd5e1 !important;
+}
+
+[data-studio-theme="light"] .ghost-btn:hover,
+[data-studio-theme="light"] .secondary-btn:hover {
+  background: #f1f5f9 !important;
+  border-color: #94a3b8 !important;
+}
+
+[data-studio-theme="light"] .eh-modal-panel,
+[data-studio-theme="light"] .modal-content,
+[data-studio-theme="light"] .glass-card,
+[data-studio-theme="light"] .card {
+  background: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.04) !important;
+}
+
+/* ۶. اسکرول‌بار ظریف و مدرن برای تم روشن */
+[data-studio-theme="light"] ::-webkit-scrollbar-track {
+  background: #f1f5f9 !important;
+}
+[data-studio-theme="light"] ::-webkit-scrollbar-thumb {
+  background: #cbd5e1 !important;
+  border-radius: 99px;
+}
+[data-studio-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8 !important;
+}
+/* === EHADI_LIGHT_PRO_V103_END === */
+
+
+/* === EHADI_STARTUP_LAYOUT_FIX === */
+html, body {
+  overflow-x: hidden;
+}
+.sidebar, aside, [class*="sidebar"] {
+  will-change: transform, width;
+  transform: translateZ(0);
+}
+
+/* === EHADI_V11_MODERN_DROPDOWN === */
+.eh-native-hidden { position: absolute !important; opacity: 0 !important; pointer-events: none !important; width: 0 !important; height: 0 !important; }
+.eh-cselect { position: relative; display: inline-flex; width: 100%; max-width: 100%; }
+.eh-cselect-btn {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 12px; border-radius: 10px; border: 1px solid var(--s-border);
+  background: var(--s-surface-2); color: var(--s-text); font-family: inherit; font-size: 12px;
+  font-weight: 600; cursor: pointer; text-align: right; transition: border-color 0.16s ease, background 0.16s ease;
+}
+.eh-cselect-btn:hover, .eh-cselect-btn.open { border-color: var(--s-accent); background: var(--s-surface-hover); }
+.eh-cselect-lbl { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.eh-cselect-chev { display: inline-flex; color: var(--s-text-muted); transition: transform 0.2s ease; flex-shrink: 0; }
+.eh-cselect-btn.open .eh-cselect-chev { transform: rotate(180deg); color: var(--s-accent); }
+
+.eh-cselect-menu {
+  position: fixed; z-index: 999999; direction: rtl; max-height: 270px; overflow-y: auto;
+  padding: 6px; border-radius: 12px; background: var(--s-surface);
+  border: 1px solid var(--s-border-strong); box-shadow: 0 18px 42px rgba(0, 0, 0, 0.38);
+  opacity: 0; transform: translateY(-6px) scale(0.98);
+  transition: opacity 0.15s ease, transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.eh-cselect-menu.open { opacity: 1; transform: translateY(0) scale(1); }
+.eh-cselect-item {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 11px; border: none; border-radius: 8px; background: transparent;
+  color: var(--s-text); font-family: inherit; font-size: 12px; text-align: right; cursor: pointer;
+  transition: background 0.13s ease, color 0.13s ease;
+}
+.eh-cselect-item:hover { background: var(--s-accent-soft); color: var(--s-accent); }
+.eh-cselect-item.selected { background: var(--s-accent-soft); color: var(--s-accent); font-weight: 700; }
+.eh-cselect-check { font-weight: 800; font-size: 12px; }
+
+.eh-radar-grid { display: grid; grid-template-columns: 1.15fr 1fr; gap: 14px; margin-bottom: 14px; }
+.eh-radar-card { padding: 14px 16px !important; }
+.eh-radar-list { display: flex; flex-direction: column; gap: 7px; }
+.eh-radar-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 11px; border-radius: 9px; background: var(--s-surface-2);
+  border: 1px solid var(--s-border); font-size: 11.8px; color: var(--s-text);
+}
+.eh-radar-row.done span { text-decoration: line-through; opacity: 0.55; }
+@media (max-width: 1050px) { .eh-radar-grid { grid-template-columns: 1fr; } }

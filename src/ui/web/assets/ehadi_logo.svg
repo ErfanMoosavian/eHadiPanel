@@ -1,0 +1,13 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" fill="none">
+  <defs>
+    <linearGradient id="ehLogoG" x1="6" y1="6" x2="58" y2="58" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#047857"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="16" fill="url(#ehLogoG)"/>
+  <rect x="14" y="14" width="16" height="16" rx="4.5" fill="#FFFFFF" fill-opacity="0.96"/>
+  <rect x="34" y="14" width="16" height="10" rx="4.5" fill="#FFFFFF" fill-opacity="0.62"/>
+  <rect x="34" y="28" width="16" height="22" rx="4.5" fill="#FFFFFF" fill-opacity="0.96"/>
+  <rect x="14" y="34" width="16" height="16" rx="4.5" fill="#FFFFFF" fill-opacity="0.62"/>
+</svg>

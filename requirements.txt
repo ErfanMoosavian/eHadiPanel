@@ -1,0 +1,12 @@
+﻿google-genai
+python-dotenv
+pymupdf
+python-docx
+python-pptx
+pandas
+openpyxl
+pyodbc
+lancedb
+duckdb
+PySide6
+PySide6-Fluent-Widgets
