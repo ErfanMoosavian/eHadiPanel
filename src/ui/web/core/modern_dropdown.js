@@ -16,7 +16,14 @@
     sel.classList.add('eh-native-hidden');
 
     const wrap = document.createElement('div');
-    wrap.className = 'eh-cselect';
+    wrap.className = 'eh-cselect eh-cselect-wrap';
+    if (sel.classList.contains('bi-select') || sel.closest('.bi-toolbar')) {
+      wrap.classList.add('eh-bi-cselect');
+      if (sel.id) wrap.classList.add('eh-sel-' + sel.id);
+    }
+    if (sel.id === 'selEitaaTpl' || sel.closest('#ehEitaaTplBar')) {
+      wrap.classList.add('eh-eitaa-cselect');
+    }
     if (sel.style.minWidth) wrap.style.minWidth = sel.style.minWidth;
 
     const trigger = document.createElement('button');
@@ -66,14 +73,25 @@
         menu.appendChild(item);
       });
 
+      // Prevent wheel/scroll/mousedown inside menu from bubbling up and closing it
+      menu.addEventListener('click', (ev) => ev.stopPropagation());
+      menu.addEventListener('mousedown', (ev) => ev.stopPropagation());
+      menu.addEventListener('wheel', (ev) => ev.stopPropagation(), { passive: true });
       document.body.appendChild(menu);
+
       const r = trigger.getBoundingClientRect();
-      const menuW = Math.max(r.width, 195);
-      const spaceBelow = window.innerHeight - r.bottom;
-      const topPos = spaceBelow < 230 && r.top > 230 ? Math.max(12, r.top - Math.min(260, menu.scrollHeight) - 6) : r.bottom + 6;
+      const menuW = Math.min(Math.max(r.width, 220), Math.min(540, window.innerWidth - 24));
+      const spaceBelow = window.innerHeight - r.bottom - 14;
+      const spaceAbove = r.top - 14;
+      const openAbove = spaceBelow < 210 && spaceAbove > spaceBelow;
+      const maxH = Math.max(140, Math.min(320, openAbove ? spaceAbove : spaceBelow));
+      menu.style.width = `${menuW}px`;
+      menu.style.maxHeight = `${maxH}px`;
+
+      const actualH = Math.min(maxH, menu.scrollHeight || maxH);
+      const topPos = openAbove ? Math.max(10, r.top - actualH - 6) : (r.bottom + 6);
       const leftPos = Math.min(window.innerWidth - menuW - 12, Math.max(12, r.right - menuW));
 
-      menu.style.width = `${menuW}px`;
       menu.style.top = `${topPos}px`;
       menu.style.left = `${leftPos}px`;
       trigger.classList.add('open');
@@ -85,10 +103,16 @@
   function scanSelects(root = document) {
     root.querySelectorAll('select.glass-select, select.bi-select').forEach(enhanceSelect);
   }
+  window.__ehScanSelects = scanSelects;
 
   document.addEventListener('click', closePortal);
   window.addEventListener('resize', closePortal);
-  window.addEventListener('scroll', closePortal, true);
+  window.addEventListener('scroll', (e) => {
+    if (activePortal && activePortal.menu && (e.target === activePortal.menu || activePortal.menu.contains(e.target))) {
+      return;
+    }
+    closePortal();
+  }, true);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePortal(); });
 
   new MutationObserver(() => scanSelects()).observe(document.documentElement, { childList: true, subtree: true });

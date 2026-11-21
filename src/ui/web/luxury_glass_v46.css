@@ -2494,3 +2494,1506 @@ body[data-studio-theme="light"] .eh-mem-del-btn { color: #b91c1c; }
   color: #fbbf24;
 }
 body[data-studio-theme="light"] .eh-mem-caution { color: #b45309; }
+
+
+/* ============================================================================
+   eHadiPanel Enterprise v48.0 Pro — Modern Assistant Chat, Full Text Selection,
+   RTL Sidebar Alignment Fix, Collapsible Citations & 4-Tab Entity Brain UI
+   ============================================================================ */
+
+/* 1. SIDEBAR RTL ALIGNMENT FIX (All buttons including AI / Entity Brain strictly right-aligned) */
+#sidebar, .sidebar {
+  direction: rtl !important;
+  text-align: right !important;
+}
+#sidebar .nav-btn,
+#sidebar .sidebar-footer .nav-btn,
+.eh-diag-sb-btn,
+.eh-mem-sb-btn {
+  direction: rtl !important;
+  text-align: right !important;
+  justify-content: flex-start !important;
+  align-items: center !important;
+}
+#sidebar .nav-btn span,
+#sidebar .sidebar-footer .nav-btn span,
+.eh-diag-sb-btn .eh-diag-sb-lbl,
+.eh-mem-sb-btn .eh-diag-sb-lbl {
+  text-align: right !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.eh-mem-sb-btn .eh-mem-badge {
+  margin-inline-start: auto !important;
+  margin-inline-end: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+/* 2. FULL TEXT SELECTION IN CHAT (Messages, KPIs, Tables, Citations) */
+#chatStream,
+.eh-v42-feed,
+.eh-v42-user,
+.eh-v42-user *,
+.eh-v42-ai,
+.eh-v42-ai .msg-body,
+.eh-v42-ai .msg-body *,
+.eh-v48-kpi-strip,
+.eh-v48-kpi-strip *,
+.eh-v48-cite-drawer,
+.eh-v48-cite-drawer *,
+.ai-table-card table,
+.ai-table-card table * {
+  user-select: text !important;
+  -webkit-user-select: text !important;
+}
+.eh-v42-ai button,
+.eh-v42-user button,
+.eh-v48-chat-controls,
+.eh-v48-chat-controls *,
+.eh-v48-action-bar button {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+#chatStream ::selection {
+  background: rgba(56, 189, 248, 0.35) !important;
+  color: inherit !important;
+}
+
+/* 3. MODERN ASSISTANT CHAT REDESIGN (Distinct Blue User Bubble vs Minimal AI Response) */
+.eh-v42-feed {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 14px !important;
+  padding: 14px 18px !important;
+}
+
+/* User message: compact soft-blue bubble on right */
+.eh-v42-user {
+  align-self: flex-start !important; /* In RTL flex-column, flex-start = RIGHT edge */
+  width: fit-content !important;
+  min-width: 72px !important;
+  max-width: min(74%, 640px) !important;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  border: 1px solid rgba(147, 197, 253, 0.35) !important;
+  border-radius: 18px 4px 18px 18px !important;
+  padding: 10px 15px 8px !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 22px -12px rgba(37, 99, 235, 0.65) !important;
+  margin: 4px 0 0 0 !important;
+}
+body[data-studio-theme="light"] .eh-v42-user {
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%) !important;
+  border-color: rgba(37, 99, 235, 0.45) !important;
+  color: #ffffff !important;
+}
+.eh-v42-user .msg-body {
+  font-size: 13px !important;
+  line-height: 1.7 !important;
+  color: #ffffff !important;
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+}
+.eh-v48-user-time {
+  font-size: 10px !important;
+  color: rgba(255, 255, 255, 0.68) !important;
+  margin-top: 3px !important;
+  text-align: left !important;
+}
+
+/* AI response: Modern Assistant Minimal Style (No heavy box, thin vertical accent bar, generous clarity) */
+.eh-v42-ai {
+  align-self: stretch !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  background: rgba(255, 255, 255, 0.018) !important;
+  border: none !important;
+  border-right: 2.5px solid rgba(var(--lg-accent-rgb), 0.72) !important;
+  border-radius: 2px 10px 10px 2px !important;
+  padding: 6px 15px 10px 8px !important;
+  box-shadow: none !important;
+  gap: 6px !important;
+  margin: 0 0 6px 0 !important;
+}
+body[data-studio-theme="light"] .eh-v42-ai {
+  background: rgba(15, 23, 42, 0.018) !important;
+  border: none !important;
+  border-right: 2.5px solid rgba(var(--lg-accent-rgb), 0.85) !important;
+  box-shadow: none !important;
+  color: #0f172a !important;
+}
+.eh-v42-ai .eh-v42-ai-meta {
+  border-bottom: none !important;
+  padding: 0 !important;
+  margin: 0 0 2px 0 !important;
+  font-size: 11px !important;
+  opacity: 0.78 !important;
+}
+.eh-v48-ai-ico {
+  color: var(--lg-accent);
+  margin-left: 4px;
+  font-size: 12px;
+}
+.eh-v42-ai .msg-body {
+  font-size: 13.2px !important;
+  line-height: 1.78 !important;
+}
+.eh-v42-ai .msg-body p {
+  margin: 4px 0 !important;
+}
+.eh-v42-ai .msg-body ul,
+.eh-v42-ai .msg-body ol {
+  margin: 4px 0 6px !important;
+  padding-right: 18px !important;
+}
+
+/* Compact KPI chips strip inside AI response */
+.eh-v48-kpi-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 4px 0 6px;
+}
+.eh-v48-kpi-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: 9px;
+  background: rgba(var(--lg-accent-rgb), 0.11);
+  border: 1px solid rgba(var(--lg-accent-rgb), 0.28);
+}
+.eh-v48-kpi-l {
+  font-size: 10.8px;
+  color: var(--s-text-muted);
+}
+.eh-v48-kpi-v {
+  font-size: 12.2px;
+  font-weight: 800;
+  color: var(--lg-pill-color);
+  font-variant-numeric: tabular-nums;
+}
+body[data-studio-theme="light"] .eh-v48-kpi-v { color: var(--lg-pill-light); }
+
+/* Bottom slim action bar: Copy + Collapsible Citations Toggle + Subtle Scope Pill */
+.eh-v48-action-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin-top: 6px;
+}
+.eh-v48-scope-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.2px;
+  font-weight: 700;
+  margin-inline-start: auto;
+}
+.eh-v48-scope-pill.scope-inst {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.30);
+  color: #34d399;
+}
+.eh-v48-scope-pill.scope-free {
+  background: rgba(148, 163, 184, 0.12);
+  border: 1px solid rgba(148, 163, 184, 0.26);
+  color: var(--s-text-muted);
+}
+body[data-studio-theme="light"] .eh-v48-scope-pill.scope-inst { color: #047857; }
+
+/* Collapsible citations toggle & drawer directly underneath message */
+.eh-v48-cite-toggle {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+  padding: 3px 9px !important;
+  border-radius: 8px !important;
+  font-size: 10.8px !important;
+  font-weight: 700 !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  color: var(--s-text-muted) !important;
+  cursor: pointer !important;
+}
+.eh-v48-cite-toggle.open {
+  border-color: rgba(var(--lg-accent-rgb), 0.45) !important;
+  color: var(--lg-pill-color) !important;
+}
+.eh-v48-cite-drawer {
+  display: none;
+  margin-top: 6px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  max-height: 175px;
+  overflow-y: auto;
+}
+body[data-studio-theme="light"] .eh-v48-cite-drawer {
+  background: rgba(241, 245, 249, 0.90);
+  border-color: rgba(15, 23, 42, 0.10);
+}
+.eh-v48-cite-drawer.open { display: block; }
+.eh-v48-trans-note {
+  font-size: 11px;
+  color: var(--lg-pill-color);
+  margin-bottom: 6px;
+  line-height: 1.6;
+}
+body[data-studio-theme="light"] .eh-v48-trans-note { color: var(--lg-pill-light); }
+.eh-v48-cite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.eh-v48-cite-item {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  width: 100% !important;
+  text-align: right !important;
+  padding: 4px 8px !important;
+  border-radius: 7px !important;
+  font-size: 11px !important;
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  color: var(--s-text) !important;
+  cursor: pointer;
+}
+.eh-v48-cite-item.is-static { cursor: default; }
+.eh-v48-cite-item small {
+  color: var(--s-text-muted);
+  font-size: 10.4px;
+}
+body.eh-v48-hide-cites .eh-v48-cite-toggle,
+body.eh-v48-hide-cites .eh-v48-cite-drawer {
+  display: none !important;
+}
+
+/* 4. CHAT CONTROLS BAR (Route Selector + Length Selector + Cite Pref) */
+.eh-v48-chat-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 10px;
+  margin-bottom: 6px;
+  border-radius: 11px;
+  background: rgba(15, 23, 42, 0.36);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+body[data-studio-theme="light"] .eh-v48-chat-controls {
+  background: rgba(241, 245, 249, 0.85);
+  border-color: rgba(15, 23, 42, 0.08);
+}
+.eh-v48-ctrl-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.eh-v48-ctrl-lbl {
+  font-size: 10.8px;
+  font-weight: 700;
+  color: var(--s-text-muted);
+  margin-left: 3px;
+}
+.eh-v48-pill {
+  height: 25px;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: transparent;
+  color: var(--s-text-muted);
+  font-family: inherit;
+  font-size: 10.8px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.eh-v48-pill:hover {
+  border-color: rgba(var(--lg-accent-rgb), 0.45);
+  color: var(--s-text);
+}
+.eh-v48-pill.active {
+  background: rgba(var(--lg-accent-rgb), 0.22);
+  border-color: rgba(var(--lg-accent-rgb), 0.58);
+  color: var(--lg-pill-color);
+}
+body[data-studio-theme="light"] .eh-v48-pill {
+  border-color: rgba(15, 23, 42, 0.12);
+  color: #475569;
+}
+body[data-studio-theme="light"] .eh-v48-pill.active {
+  background: rgba(var(--lg-accent-rgb), 0.16);
+  color: var(--lg-pill-light);
+}
+
+/* 5. 4-TAB SMART ENTITY BRAIN MODAL ENHANCEMENTS */
+.eh-mem-modal { width: min(760px, 95vw) !important; }
+.eh-mem-section-card {
+  padding: 11px 13px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+body[data-studio-theme="light"] .eh-mem-section-card {
+  background: rgba(15, 23, 42, 0.025);
+  border-color: rgba(15, 23, 42, 0.09);
+}
+.eh-mem-sec-title {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--s-text);
+  margin-bottom: 8px;
+}
+.eh-mem-sec-head-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.eh-mem-mini-lbl {
+  display: block;
+  font-size: 11px;
+  color: var(--s-text-muted);
+  margin-bottom: 5px;
+}
+.eh-mem-policy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+.eh-mem-seg-group {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.eh-mem-seg {
+  height: 30px;
+  padding: 0 11px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--s-text-muted);
+  font-family: inherit;
+  font-size: 11.2px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.eh-mem-seg.active {
+  background: rgba(var(--lg-accent-rgb), 0.24);
+  border-color: var(--lg-accent);
+  color: var(--lg-pill-color);
+}
+.eh-mem-select {
+  height: 34px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(15, 23, 42, 0.72);
+  color: var(--s-text);
+  font-family: inherit;
+  font-size: 11.5px;
+}
+body[data-studio-theme="light"] .eh-mem-select {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.16);
+}
+.eh-mem-alias-grid {
+  display: grid !important;
+  grid-template-columns: 130px 1fr 1fr auto;
+  gap: 7px;
+  align-items: center;
+}
+.eh-mem-ov-form {
+  display: grid !important;
+  grid-template-columns: 1fr 150px auto;
+  gap: 7px;
+}
+.eh-mem-inline-btns {
+  display: inline-flex;
+  gap: 6px;
+}
+.eh-mem-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.eh-mem-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-size: 11.2px;
+  font-weight: 700;
+  background: rgba(var(--lg-accent-rgb), 0.16);
+  border: 1px solid rgba(var(--lg-accent-rgb), 0.40);
+  color: var(--lg-pill-color);
+}
+.eh-mem-tag-x {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0 2px;
+}
+.eh-mem-textarea {
+  width: 100%;
+  border-radius: 9px;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 23, 42, 0.45);
+  color: var(--s-text);
+  font-family: inherit;
+  font-size: 11.5px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+body[data-studio-theme="light"] .eh-mem-textarea {
+  background: #ffffff;
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.15);
+}
+.eh-mem-muted-note { font-size: 11.2px; color: var(--s-text-muted); }
+.eh-mem-type-pill.pill-danger {
+  background: rgba(239, 68, 68, 0.16) !important;
+  border-color: rgba(239, 68, 68, 0.42) !important;
+  color: #f87171 !important;
+}
+.eh-mem-time-pill {
+  font-size: 10.2px;
+  color: var(--s-text-muted);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 7px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.eh-mem-rule-row.is-undone { opacity: 0.55; }
+.eh-mem-undone-lbl { font-size: 10.5px; color: #34d399; font-weight: 700; }
+
+
+/* ============================================================================
+   eHadiPanel Enterprise v48.0 Pro — Hotfix 3 UI Precision Patch
+   1) Zero-Jump Single-Row BI Toolbar (Workgroups, Finance & Table Explorer)
+   2) Scrollable, Non-Crushed Global Custom Dropdowns (.eh-cselect-menu)
+   3) Media Studio Modal Overflow & Template Bar Alignment Fix
+   ============================================================================ */
+
+/* 1. BI TOOLBAR — Single-Row Locked Layout with ZERO Resize Jump */
+.bi-toolbar {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  flex-wrap: wrap !important;
+  gap: 8px 10px !important;
+  padding: 10px 14px !important;
+  overflow: visible !important;
+  box-sizing: border-box !important;
+}
+.bi-toolbar > .bi-toolbar-controls:first-child {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex: 1 1 480px !important;
+  min-width: 0 !important;
+  gap: 8px !important;
+  flex-wrap: nowrap !important;
+}
+.bi-toolbar > .bi-toolbar-controls:last-child {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex: 0 0 auto !important;
+  gap: 8px !important;
+  flex-wrap: nowrap !important;
+}
+.bi-toolbar .eh-cselect,
+.bi-toolbar .eh-cselect-wrap,
+.eh-bi-cselect {
+  width: 235px !important;
+  min-width: 150px !important;
+  max-width: 265px !important;
+  flex: 0 1 235px !important;
+}
+.bi-toolbar .eh-sel-eduWgSel {
+  width: 255px !important;
+  min-width: 210px !important;
+  max-width: 270px !important;
+  flex: 0 0 255px !important;
+}
+.bi-toolbar .eh-sel-uniTblSel {
+  width: 275px !important;
+  min-width: 195px !important;
+  max-width: 320px !important;
+  flex: 1 1 260px !important;
+}
+.bi-toolbar .eh-sel-uniGrpSel,
+.bi-toolbar .eh-sel-uniMetSel {
+  width: 165px !important;
+  min-width: 125px !important;
+  max-width: 195px !important;
+  flex: 0 1 165px !important;
+}
+.bi-toolbar .eh-sel-uniAggSel {
+  width: 118px !important;
+  min-width: 105px !important;
+  max-width: 130px !important;
+  flex: 0 0 118px !important;
+}
+.bi-toolbar .bi-search {
+  flex: 1 1 180px !important;
+  min-width: 140px !important;
+  height: 36px !important;
+  padding: 0 12px !important;
+  box-sizing: border-box !important;
+}
+.bi-toolbar .bi-mini-btn,
+.bi-toolbar .excel-btn {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  height: 36px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* 2. GLOBAL CUSTOM DROPDOWN MENUS — Smooth Scrollable, Zero Crushing */
+.eh-cselect-menu,
+.eh-select-menu-fixed {
+  display: block !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  max-width: min(540px, 92vw) !important;
+  padding: 6px !important;
+  box-sizing: border-box !important;
+}
+.eh-cselect-menu .eh-cselect-item {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  min-height: 35px !important;
+  height: auto !important;
+  padding: 7px 11px !important;
+  margin-bottom: 2px !important;
+  gap: 10px !important;
+  box-sizing: border-box !important;
+  text-align: right !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+}
+.eh-cselect-menu .eh-cselect-item > span:first-child {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  text-align: right !important;
+}
+.eh-cselect-menu .eh-cselect-check {
+  flex-shrink: 0 !important;
+  margin-inline-start: 6px !important;
+}
+
+/* 3. MEDIA STUDIO MODAL — Zero Horizontal Scroll, Zero Clipped Form, Clean Template Bar */
+.pro-modal-body {
+  min-width: 0 !important;
+}
+.pro-modal-content {
+  min-width: 0 !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+#proModal_media_studio .pro-modal-content {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 12px !important;
+  padding: 16px 18px !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+#ehEitaaTplBar {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+  padding: 10px 14px !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+  overflow: visible !important;
+}
+#ehEitaaTplBar > div {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  flex-wrap: wrap !important;
+}
+#ehEitaaTplBar > div > div {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-wrap: nowrap !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+}
+#ehEitaaTplBar .eh-cselect,
+#ehEitaaTplBar .eh-cselect-wrap,
+#ehEitaaTplBar .eh-eitaa-cselect,
+#ehEitaaTplBar select {
+  width: 215px !important;
+  min-width: 160px !important;
+  max-width: 240px !important;
+  flex: 0 1 215px !important;
+}
+#btnSaveEitaaTpl {
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+  width: auto !important;
+  height: 36px !important;
+  padding: 0 14px !important;
+  margin: 0 !important;
+}
+.eitaa-grid {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.12fr) minmax(0, 1fr) !important;
+  gap: 14px !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  height: auto !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  box-sizing: border-box !important;
+}
+.eitaa-form,
+.eitaa-preview-box,
+.eitaa-field {
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.eitaa-form .glass-input,
+.eitaa-form textarea,
+.eitaa-form .eh-cselect,
+.eitaa-preview-text {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+
+/* ============================================================================
+   eHadiPanel Enterprise v48.0 Pro — Hotfix 4 Light Mode & Chat Table Header Polish
+   1) Subsystems Card ("وضعیت زیرسیستم‌ها"): Remove unwanted inner boxes & fix text colors
+   2) Titlebar App Name (".title-badge"): Remove border/box in Light Mode (match Dark Mode)
+   3) Chat Table Cards & Headers (".ai-table-card" / ".ai-table-head"): Crisp Light Mode UI
+   ============================================================================ */
+
+/* 1. SUBSYSTEMS CARD IN LIGHT MODE — Kill studio_theme.css [class*="subsys"] wildcard boxes */
+body[data-studio-theme="light"] .eh-subsys-card > div,
+body[data-studio-theme="light"] .eh-subsys-hdr,
+body[data-studio-theme="light"] .eh-subsys-hdr > div,
+body[data-studio-theme="light"] .eh-subsys-hdr-title,
+body[data-studio-theme="light"] .eh-subsys-wrapper,
+body[data-studio-theme="light"] .eh-subsys-item > div,
+body[data-studio-theme="light"] .eh-ss-main,
+body[data-studio-theme="light"] .eh-ss-meta {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+}
+body[data-studio-theme="light"] .eh-subsys-hdr {
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08) !important;
+  padding: 0 0 10px 0 !important;
+  margin-bottom: 12px !important;
+}
+body[data-studio-theme="light"] .eh-subsys-item {
+  background: rgba(255, 255, 255, 0.90) !important;
+  border: 1px solid rgba(15, 23, 42, 0.08) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 3px 10px -6px rgba(15, 23, 42, 0.08) !important;
+}
+body[data-studio-theme="light"] .eh-subsys-item:hover {
+  background: rgba(var(--lg-accent-rgb), 0.07) !important;
+  border-color: rgba(var(--lg-accent-rgb), 0.30) !important;
+}
+body[data-studio-theme="light"] .eh-subsys-hdr-title > span:not(.eh-subsys-hdr-ico),
+body[data-studio-theme="light"] .eh-subsys-card .eh-ss-name {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+}
+body[data-studio-theme="light"] .eh-subsys-card .eh-ss-sub {
+  color: #64748b !important;
+  font-weight: 500 !important;
+}
+body[data-studio-theme="light"] .eh-subsys-card .eh-ss-ico,
+body[data-studio-theme="light"] .eh-subsys-card .eh-subsys-hdr-ico {
+  background: rgba(var(--lg-accent-rgb), 0.11) !important;
+  border: 1px solid rgba(var(--lg-accent-rgb), 0.24) !important;
+  color: var(--lg-pill-light) !important;
+  border-radius: 9px !important;
+}
+body[data-studio-theme="light"] .eh-subsys-card .eh-ss-badge,
+body[data-studio-theme="light"] .eh-subsys-card .eh-ss-badge span {
+  color: #047857 !important;
+}
+.eh-ss-badge #aiStatusLabel {
+  color: inherit !important;
+}
+
+/* 2. TITLEBAR APP TITLE IN LIGHT MODE — Clean & Borderless (Matches Dark Mode) */
+body[data-studio-theme="light"] .titlebar .title-badge,
+body[data-studio-theme="light"] .titlebar-brand,
+body[data-studio-theme="light"] .title-badge {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  color: #0f172a !important;
+}
+body[data-studio-theme="light"] .title-badge .eh-tb-brand-text {
+  color: #0f172a !important;
+}
+
+/* 3. CHAT RESULT TABLE CARDS & HEADERS — Crisp Light & Dark Mode Contrast */
+.ai-table-card {
+  margin-top: 10px !important;
+  border-radius: 12px !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  background: rgba(11, 18, 32, 0.65) !important;
+  overflow: hidden !important;
+}
+.ai-table-head {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  padding: 9px 14px !important;
+  background: rgba(30, 41, 59, 0.55) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+.ai-table-title {
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  color: #e2e8f0 !important;
+}
+
+body[data-studio-theme="light"] .ai-table-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.11) !important;
+  box-shadow: 0 4px 14px -8px rgba(15, 23, 42, 0.10) !important;
+}
+body[data-studio-theme="light"] .ai-table-head {
+  background: linear-gradient(90deg, rgba(var(--lg-accent-rgb), 0.09), #f8fafc) !important;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.09) !important;
+}
+body[data-studio-theme="light"] .ai-table-title {
+  color: #0f172a !important;
+  font-weight: 800 !important;
+}
+body[data-studio-theme="light"] .ai-table-head .toggle-table-btn {
+  background: #ffffff !important;
+  border: 1px solid rgba(15, 23, 42, 0.14) !important;
+  color: #334155 !important;
+}
+body[data-studio-theme="light"] .ai-table-head .toggle-table-btn:hover {
+  background: rgba(var(--lg-accent-rgb), 0.10) !important;
+  border-color: rgba(var(--lg-accent-rgb), 0.42) !important;
+  color: var(--lg-pill-light) !important;
+}
+body[data-studio-theme="light"] .ai-table-head .excel-btn {
+  background: rgba(5, 150, 105, 0.10) !important;
+  border: 1px solid rgba(5, 150, 105, 0.32) !important;
+  color: #047857 !important;
+}
+body[data-studio-theme="light"] .ai-table-head .excel-btn:hover {
+  background: rgba(5, 150, 105, 0.18) !important;
+  border-color: rgba(5, 150, 105, 0.48) !important;
+}
+body[data-studio-theme="light"] .ai-table-card.collapsed .ai-table-head {
+  border-bottom: none !important;
+}
+
+
+/* ============================================================================
+   eHadiPanel Enterprise v48.0 Pro — Hotfix 5 Boardroom Presentation Polish
+   - Dignified numbered badges (no competition medals)
+   - Clear RTL slide counter & prev/next buttons
+   - Balanced text-size KPI variant for top workgroup cards
+   ============================================================================ */
+.eh-br-rank-badge {
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
+  background: var(--lg-soft);
+  border: 1px solid rgba(var(--lg-accent-rgb), 0.30);
+  color: var(--lg-pill-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+body[data-studio-theme="light"] .eh-br-rank-badge {
+  color: var(--lg-pill-light);
+  background: rgba(var(--lg-accent-rgb), 0.10);
+  border-color: rgba(var(--lg-accent-rgb), 0.24);
+}
+.eh-br-kpi-num.eh-br-kpi-text {
+  font-size: 22px !important;
+  line-height: 1.45 !important;
+  font-weight: 800 !important;
+}
+.eh-br-counter {
+  font-size: 12.2px;
+  font-weight: 800;
+  min-width: 92px;
+  text-align: center;
+  color: var(--s-text);
+  direction: rtl;
+  white-space: nowrap;
+}
+.eh-br-nav-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--s-text);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+body[data-studio-theme="light"] .eh-br-nav-btn {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.04);
+  color: #0f172a;
+}
+.eh-br-nav-btn:hover:not(:disabled) {
+  background: rgba(var(--lg-accent-rgb), 0.16);
+  border-color: rgba(var(--lg-accent-rgb), 0.45);
+  color: var(--lg-pill-color);
+}
+body[data-studio-theme="light"] .eh-br-nav-btn:hover:not(:disabled) {
+  color: var(--lg-pill-light);
+}
+.eh-br-nav-btn:disabled {
+  opacity: 0.35;
+  cursor: default !important;
+}
+
+
+/* ============================================================================
+   eHadiPanel Enterprise v48.0 Pro — Hotfix 6 Precision Polish
+   1) Zero-Jump BI Workgroup Dropdown (Identical Pre-Wrap & Post-Wrap Geometry)
+   2) Sleek Media Studio Header Pills (Proper RTL/LTR Isolation)
+   3) Standard, Balanced Settings Modal ("تنظیمات سامانه") Layout
+   ============================================================================ */
+
+/* 1. ZERO-JUMP BI WORKGROUP SELECT (Native + Custom Wrapper Identical 260px Width) */
+.bi-toolbar select#eduWgSel,
+.bi-toolbar .eh-sel-eduWgSel,
+.bi-toolbar .eh-bi-wg-select {
+  width: 260px !important;
+  min-width: 260px !important;
+  max-width: 260px !important;
+  flex: 0 0 260px !important;
+  transition: none !important;
+}
+.bi-toolbar .eh-sel-eduWgSel .eh-cselect-btn {
+  transition: border-color 0.16s ease, background 0.16s ease !important;
+}
+
+/* 2. SLEEK MEDIA STUDIO MODAL HEADER */
+.eh-media-hdr-title {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  flex-wrap: wrap !important;
+}
+.eh-modal-title-ico {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(var(--lg-accent-rgb), 0.14);
+  border: 1px solid rgba(var(--lg-accent-rgb), 0.28);
+  color: var(--lg-pill-color);
+  flex-shrink: 0;
+}
+body[data-studio-theme="light"] .eh-modal-title-ico {
+  color: var(--lg-pill-light);
+}
+.eh-modal-sub-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--s-text-muted);
+}
+body[data-studio-theme="light"] .eh-modal-sub-pill {
+  background: rgba(15, 23, 42, 0.05);
+  border-color: rgba(15, 23, 42, 0.10);
+  color: #475569;
+}
+.eh-modal-handle-pill {
+  direction: ltr !important;
+  unicode-bidi: isolate !important;
+  display: inline-flex;
+  align-items: center;
+  font-size: 11.2px;
+  font-weight: 700;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgba(var(--lg-accent-rgb), 0.12);
+  border: 1px solid rgba(var(--lg-accent-rgb), 0.30);
+  color: var(--lg-pill-color);
+  letter-spacing: 0.2px;
+}
+body[data-studio-theme="light"] .eh-modal-handle-pill {
+  color: var(--lg-pill-light);
+}
+
+/* 3. STANDARD, CLEAN SETTINGS MODAL ("تنظیمات سامانه") */
+#prefsSlotAI .page-header {
+  display: none !important;
+}
+#prefsSlotAI .glass-card {
+  width: 100% !important;
+  max-width: 100% !important;
+  padding: 18px 20px !important;
+  border-radius: 14px !important;
+  background: var(--s-surface-2) !important;
+  border: 1px solid var(--s-border) !important;
+  box-shadow: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 16px !important;
+  box-sizing: border-box !important;
+}
+body[data-studio-theme="light"] #prefsSlotAI .glass-card {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.09) !important;
+  box-shadow: 0 4px 16px -10px rgba(15, 23, 42, 0.08) !important;
+}
+#prefsSlotAI .form-group {
+  width: 100% !important;
+  max-width: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 7px !important;
+}
+#prefsSlotAI .form-group label {
+  font-size: 12.2px !important;
+  font-weight: 700 !important;
+  color: var(--s-text) !important;
+  text-align: right !important;
+}
+#prefsSlotAI #inputApiKey {
+  height: 38px !important;
+  padding: 0 13px !important;
+  font-size: 12.5px !important;
+  border-radius: 10px !important;
+  box-sizing: border-box !important;
+}
+#prefsSlotAI #btnToggleApiEye {
+  height: 38px !important;
+  padding: 0 14px !important;
+  border-radius: 10px !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+#prefsSlotAI .eh-cselect,
+#prefsSlotAI .eh-cselect-wrap {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+#prefsSlotAI .eh-cselect-btn {
+  height: 38px !important;
+  border-radius: 10px !important;
+}
+#prefsSlotAI .action-group {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  padding-top: 12px !important;
+  margin-top: 2px !important;
+  border-top: 1px solid var(--s-border) !important;
+  flex-wrap: wrap !important;
+}
+#prefsSlotAI .action-group .primary-btn,
+#prefsSlotAI .action-group .ghost-btn {
+  height: 38px !important;
+  padding: 0 18px !important;
+  border-radius: 10px !important;
+  font-size: 12.2px !important;
+  font-weight: 700 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+
+/* ============================================================================
+   eHadiPanel Enterprise v48.0 Pro — Master UI Polish Layer
+   1) Zero Translucent Hover Box Behind All 4 Subsystem Tiles (Dark & Light)
+   2) Unified Sleek Hover Stroke & Glow for Sidebar Footer Buttons (Dark & Light)
+   3) Frosted-Glass Modern Global Tooltips (#ehGlassTooltip)
+   4) Readable Persian Audit Log Rows (.eh-audit-row / .eh-audit-ts)
+   ============================================================================ */
+
+/* 1. SUBSYSTEMS WRAPPER — Strictly Transparent on Hover in Both Themes */
+.eh-subsys-wrapper,
+.eh-subsys-wrapper:hover,
+.eh-subsys-card .pipeline-list,
+.eh-subsys-card .pipeline-list:hover,
+body[data-studio-theme="light"] .eh-subsys-wrapper,
+body[data-studio-theme="light"] .eh-subsys-wrapper:hover,
+body[data-studio-theme="light"] .eh-subsys-card .pipeline-list,
+body[data-studio-theme="light"] .eh-subsys-card .pipeline-list:hover {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
+/* 2. SIDEBAR FOOTER BUTTONS ("هسته هوشمند و حافظه" & "سلامت سامانه") — Match .nav-btn:hover Stroke & Feel in BOTH Themes */
+#sidebar .eh-diag-sb-btn,
+#sidebar .eh-mem-sb-btn {
+  transition: transform 0.22s var(--lg-smooth), color 0.18s ease, background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease !important;
+}
+#sidebar .eh-diag-sb-btn:hover,
+#sidebar .eh-mem-sb-btn:hover {
+  background: linear-gradient(90deg, rgba(var(--lg-accent-rgb), 0.17), rgba(var(--lg-accent-2-rgb), 0.08)) !important;
+  border-color: rgba(var(--lg-accent-rgb), 0.45) !important;
+  color: var(--lg-pill-color) !important;
+  transform: translateX(-3px) !important;
+  box-shadow: 0 5px 18px -5px rgba(var(--lg-accent-rgb), 0.34) !important;
+}
+body[data-studio-theme="light"] #sidebar .eh-diag-sb-btn,
+body[data-studio-theme="light"] #sidebar .eh-mem-sb-btn {
+  background: rgba(15, 23, 42, 0.035) !important;
+  border: 1px solid rgba(15, 23, 42, 0.10) !important;
+  color: #334155 !important;
+}
+body[data-studio-theme="light"] #sidebar .eh-diag-sb-btn:hover,
+body[data-studio-theme="light"] #sidebar .eh-mem-sb-btn:hover {
+  background: linear-gradient(90deg, rgba(var(--lg-accent-rgb), 0.14), rgba(var(--lg-accent-2-rgb), 0.06)) !important;
+  border-color: rgba(var(--lg-accent-rgb), 0.48) !important;
+  color: var(--lg-pill-light) !important;
+  transform: translateX(-3px) !important;
+  box-shadow: 0 5px 16px -6px rgba(var(--lg-accent-rgb), 0.28) !important;
+}
+body[data-studio-theme="light"] #sidebar .eh-mem-sb-ico {
+  color: var(--lg-pill-light) !important;
+}
+#sidebar .eh-mem-sb-btn:hover .eh-mem-sb-ico {
+  transform: scale(1.15);
+  transition: transform 0.2s var(--lg-spring);
+}
+
+/* 3. FROSTED-GLASS MODERN TOOLTIPS (#ehGlassTooltip) */
+.eh-glass-tooltip {
+  position: fixed !important;
+  z-index: 9999999 !important;
+  pointer-events: none !important;
+  display: none;
+  max-width: min(320px, 84vw);
+  padding: 6px 11px;
+  border-radius: 10px;
+  direction: rtl;
+  text-align: right;
+  font-size: 11.4px;
+  font-weight: 600;
+  line-height: 1.55;
+  color: #f8fafc;
+  background: rgba(11, 18, 34, 0.90);
+  backdrop-filter: blur(18px) saturate(180%);
+  -webkit-backdrop-filter: blur(18px) saturate(180%);
+  border: 1px solid rgba(var(--lg-accent-rgb), 0.36);
+  box-shadow: 0 12px 30px -8px rgba(0, 0, 0, 0.58), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  opacity: 0;
+  transform: translateY(4px) scale(0.97);
+  transition: opacity 0.15s ease, transform 0.18s cubic-bezier(0.22, 1, 0.36, 1);
+  word-break: break-word;
+}
+.eh-glass-tooltip[data-pos="bottom"] {
+  transform: translateY(-4px) scale(0.97);
+}
+.eh-glass-tooltip[data-pos="left"] {
+  transform: translateX(4px) scale(0.97);
+}
+.eh-glass-tooltip.visible {
+  opacity: 1;
+  transform: translate(0, 0) scale(1);
+}
+body[data-studio-theme="light"] .eh-glass-tooltip {
+  background: rgba(255, 255, 255, 0.94);
+  color: #0f172a;
+  border: 1px solid rgba(var(--lg-accent-rgb), 0.32);
+  box-shadow: 0 12px 28px -10px rgba(15, 23, 42, 0.22), 0 2px 6px -2px rgba(15, 23, 42, 0.08);
+}
+
+/* 4. HUMAN-READABLE PERSIAN AUDIT LOG ROWS */
+.eh-audit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.032);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  transition: border-color 0.18s ease, background 0.18s ease;
+}
+.eh-audit-row:hover {
+  border-color: rgba(var(--lg-accent-rgb), 0.30);
+  background: rgba(var(--lg-accent-rgb), 0.06);
+}
+body[data-studio-theme="light"] .eh-audit-row {
+  background: #ffffff;
+  border-color: rgba(15, 23, 42, 0.08);
+}
+body[data-studio-theme="light"] .eh-audit-row:hover {
+  background: rgba(var(--lg-accent-rgb), 0.05);
+  border-color: rgba(var(--lg-accent-rgb), 0.28);
+}
+.eh-audit-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.eh-audit-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.eh-audit-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10.2px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.eh-audit-badge.kind-accent {
+  background: rgba(var(--lg-accent-rgb), 0.14);
+  border: 1px solid rgba(var(--lg-accent-rgb), 0.32);
+  color: var(--lg-pill-color);
+}
+.eh-audit-badge.kind-ok {
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.34);
+  color: #34d399;
+}
+.eh-audit-badge.kind-warn {
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.36);
+  color: #fbbf24;
+}
+body[data-studio-theme="light"] .eh-audit-badge.kind-accent { color: var(--lg-pill-light); }
+body[data-studio-theme="light"] .eh-audit-badge.kind-ok { color: #047857; }
+body[data-studio-theme="light"] .eh-audit-badge.kind-warn { color: #b45309; }
+.eh-audit-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--s-text);
+}
+.eh-audit-detail {
+  font-size: 11px;
+  color: var(--s-text-muted);
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.eh-audit-ts {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #cbd5e1;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  padding: 3px 9px;
+  border-radius: 8px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+body[data-studio-theme="light"] .eh-audit-ts {
+  color: #334155;
+  background: #f1f5f9;
+  border-color: rgba(15, 23, 42, 0.10);
+}
+
+
+/* ============================================================================
+   eHadiPanel Enterprise v48.0 Pro — Exact Native .nav-btn Parity for
+   "هسته هوشمند و حافظه" (#ehMemSidebarBtn) & "سلامت سامانه" (#ehDiagSidebarBtn)
+   - Transparent idle state (zero static gray pill box)
+   - Identical height (40px), radius (11px), padding, gap & typography
+   - Animated mouse-tracking glowing stroke (::before) + right-edge indicator (::after)
+   - Smooth hover slide, glow, icon scale & click ripple wave in BOTH Dark & Light themes
+   ============================================================================ */
+
+/* Base state: 100% identical to #sidebar .nav-btn (clean, borderless until hover) */
+#sidebar .eh-diag-sb-btn,
+#sidebar .eh-mem-sb-btn,
+body[data-studio-theme="light"] #sidebar .eh-diag-sb-btn,
+body[data-studio-theme="light"] #sidebar .eh-mem-sb-btn {
+  position: relative !important;
+  overflow: hidden !important;
+  isolation: isolate !important;
+  width: 100% !important;
+  height: var(--eh-nav-h, 40px) !important;
+  min-height: var(--eh-nav-h, 40px) !important;
+  max-height: var(--eh-nav-h, 40px) !important;
+  padding: 0 12px !important;
+  margin: 0 !important;
+  border-radius: 11px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 10px !important;
+  line-height: 1 !important;
+  font-size: 12.5px !important;
+  font-weight: 600 !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  color: var(--s-text-muted) !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+  transition: transform 0.22s var(--lg-smooth), color 0.18s ease, background 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease !important;
+}
+
+/* Mouse-tracking animated luminous stroke on hover (matches all sidebar nav buttons) */
+#sidebar .nav-btn::before,
+#sidebar .eh-diag-sb-btn::before,
+#sidebar .eh-mem-sb-btn::before {
+  content: "" !important;
+  position: absolute !important;
+  inset: 0 !important;
+  border-radius: inherit !important;
+  padding: 1.25px !important;
+  background: radial-gradient(150px circle at var(--mx, 50%) var(--my, 50%), rgba(var(--lg-accent-rgb), 0.95), rgba(var(--lg-accent-2-rgb), 0.50) 48%, transparent 78%) !important;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0) !important;
+  -webkit-mask-composite: xor !important;
+  mask-composite: exclude !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.22s ease !important;
+}
+#sidebar .nav-btn:hover::before,
+#sidebar .eh-diag-sb-btn:hover::before,
+#sidebar .eh-mem-sb-btn:hover::before {
+  opacity: 1 !important;
+}
+
+/* Animated right-edge accent stripe on hover */
+#sidebar .eh-diag-sb-btn::after,
+#sidebar .eh-mem-sb-btn::after {
+  content: "" !important;
+  position: absolute !important;
+  right: 0 !important;
+  top: 9px !important;
+  bottom: 9px !important;
+  width: 3px !important;
+  border-radius: 99px !important;
+  background: linear-gradient(180deg, var(--lg-accent-2), var(--lg-accent)) !important;
+  box-shadow: 0 0 10px rgba(var(--lg-accent-rgb), 0.85) !important;
+  opacity: 0 !important;
+  transform: scaleY(0.35) !important;
+  transition: opacity 0.22s ease, transform 0.26s var(--lg-spring) !important;
+  pointer-events: none !important;
+}
+#sidebar .eh-diag-sb-btn:hover::after,
+#sidebar .eh-mem-sb-btn:hover::after {
+  opacity: 1 !important;
+  transform: scaleY(1) !important;
+}
+
+/* Hover state: identical gradient, border, slide & glow in BOTH Dark & Light themes */
+#sidebar .eh-diag-sb-btn:hover,
+#sidebar .eh-mem-sb-btn:hover {
+  background: linear-gradient(90deg, rgba(var(--lg-accent-rgb), 0.16), rgba(var(--lg-accent-2-rgb), 0.08)) !important;
+  border-color: rgba(var(--lg-accent-rgb), 0.34) !important;
+  color: var(--lg-pill-color) !important;
+  transform: translateX(-3px) !important;
+  box-shadow: 0 4px 16px -4px rgba(var(--lg-accent-rgb), 0.28) !important;
+}
+body[data-studio-theme="light"] #sidebar .eh-diag-sb-btn:hover,
+body[data-studio-theme="light"] #sidebar .eh-mem-sb-btn:hover {
+  background: linear-gradient(90deg, rgba(var(--lg-accent-rgb), 0.13), rgba(var(--lg-accent-2-rgb), 0.06)) !important;
+  border-color: rgba(var(--lg-accent-rgb), 0.36) !important;
+  color: var(--lg-pill-light) !important;
+  transform: translateX(-3px) !important;
+  box-shadow: 0 4px 14px -4px rgba(var(--lg-accent-rgb), 0.24) !important;
+}
+
+/* Icon slot aligned identically with 18px SVG icons of other sidebar buttons */
+#sidebar .eh-mem-sb-ico {
+  width: 18px !important;
+  height: 18px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  font-size: 15px !important;
+  flex-shrink: 0 !important;
+  color: currentColor !important;
+  transition: color 0.2s ease, transform 0.22s var(--lg-spring) !important;
+}
+#sidebar .eh-diag-sb-btn .eh-diag-sb-dot {
+  width: 8px !important;
+  height: 8px !important;
+  margin-inline: 5px !important;
+  flex-shrink: 0 !important;
+  transition: transform 0.22s var(--lg-spring), box-shadow 0.22s ease !important;
+}
+#sidebar .eh-mem-sb-btn:hover .eh-mem-sb-ico {
+  color: var(--lg-pill-color) !important;
+  transform: scale(1.16) rotate(-8deg) !important;
+}
+body[data-studio-theme="light"] #sidebar .eh-mem-sb-btn:hover .eh-mem-sb-ico {
+  color: var(--lg-pill-light) !important;
+}
+#sidebar .eh-diag-sb-btn:hover .eh-diag-sb-dot {
+  transform: scale(1.25) !important;
+}
+
+/* Label & collapsed-sidebar safety */
+#sidebar .eh-diag-sb-btn .eh-diag-sb-lbl,
+#sidebar .eh-mem-sb-btn .eh-diag-sb-lbl {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  font-size: inherit !important;
+  font-weight: inherit !important;
+  color: inherit !important;
+}
+body.sidebar-collapsed #sidebar .eh-diag-sb-btn,
+body.sidebar-collapsed #sidebar .eh-mem-sb-btn {
+  justify-content: center !important;
+  padding: 0 !important;
+}
+body.sidebar-collapsed #sidebar .eh-diag-sb-btn .eh-diag-sb-dot,
+body.sidebar-collapsed #sidebar .eh-mem-sb-btn .eh-mem-sb-ico {
+  display: inline-flex !important;
+  margin: 0 auto !important;
+}
+body.sidebar-collapsed #sidebar .eh-diag-sb-btn .eh-diag-sb-lbl,
+body.sidebar-collapsed #sidebar .eh-mem-sb-btn .eh-diag-sb-lbl,
+body.sidebar-collapsed #sidebar .eh-mem-sb-btn .eh-mem-badge {
+  display: none !important;
+}
+
+
+/* ============================================================================
+   eHadiPanel Enterprise v48.0 Pro — Precision Polish v48.9
+   1) Zero-Jump Memory Modal Tab Counters (.eh-mem-tab-cnt)
+   2) Explicit I-Beam Text Cursor (cursor: text) on Selectable Chat Content
+   3) Disable 8-Edge Frameless Resize Handles & Resize Cursors When Maximized
+   ============================================================================ */
+
+/* 1. MEMORY MODAL TAB COUNTERS — Stable Tabular Width, Zero Horizontal Jump */
+.eh-mem-tab-cnt {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  min-width: 24px !important;
+  height: 20px !important;
+  padding: 0 7px !important;
+  box-sizing: border-box !important;
+  text-align: center !important;
+  line-height: 1 !important;
+  font-variant-numeric: tabular-nums !important;
+  flex-shrink: 0 !important;
+}
+
+/* 2. EXACT GLYPH-ONLY TEXT CURSOR IN CHAT (cursor: auto overrides inherited default cursor;
+      Chromium shows I-beam STRICTLY over actual characters, and normal arrow on empty line space!) */
+#chatStream,
+#chatStream .eh-v42-feed,
+#chatStream .eh-v42-user,
+#chatStream .eh-v42-user *,
+#chatStream .eh-v42-ai,
+#chatStream .eh-v42-ai .msg-body,
+#chatStream .eh-v42-ai .msg-body *,
+#chatStream .eh-v48-kpi-strip,
+#chatStream .eh-v48-kpi-strip *,
+#chatStream .eh-v48-cite-drawer,
+#chatStream .eh-v48-cite-drawer *,
+#chatStream .ai-table-card,
+#chatStream .ai-table-card *,
+.eh-v42-feed,
+.eh-v42-feed .msg-body,
+.eh-v42-feed .msg-body *,
+.eh-v42-feed td,
+.eh-v42-feed th {
+  cursor: auto !important;
+}
+/* Preserve pointer cursor on ALL clickable elements inside chat */
+#chatStream button,
+#chatStream button *,
+#chatStream a,
+#chatStream a *,
+#chatStream .eh-v48-cite-item:not(.is-static),
+#chatStream .eh-v48-cite-item:not(.is-static) *,
+#chatStream .eh-v48-action-bar button,
+#chatStream .eh-v48-action-bar button *,
+#chatStream .toggle-table-btn,
+#chatStream .excel-btn,
+#chatStream .copy-mini-btn,
+#chatStream .prompt-chip,
+#chatStream .eh-v48-pill,
+.eh-v42-feed button,
+.eh-v42-feed button *,
+.eh-v42-feed a,
+.eh-v42-feed a * {
+  cursor: pointer !important;
+}
+
+/* 3. MAXIMIZED WINDOW — Completely Disable All 8 Outer Resize Handles & Cursors */
+/* Maximized mode hides resize handles cleanly without forcing default cursor on text */
+body.eh-win-maximized .eh-win-resize-edge,
+body.eh-win-maximized [data-resize],
+body.eh-win-maximized [data-resize-dir],
+body.eh-win-maximized [class*="resize-handle"],
+body.eh-win-maximized [class*="win-resize"],
+body.eh-win-maximized [class*="edge-resize"],
+body.eh-win-maximized [class*="resizer"] {
+  display: none !important;
+  pointer-events: none !important;
+  cursor: default !important;
+  width: 0 !important;
+  height: 0 !important;
+}

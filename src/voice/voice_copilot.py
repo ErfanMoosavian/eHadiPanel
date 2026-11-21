@@ -122,8 +122,8 @@ def _get_domain_vocab_hint() -> str:
     try:
         db_p = Path(Config.DUCKDB_PATH)
         if db_p.exists():
-            con = duckdb.connect(str(db_p), read_only=True)
-            try:
+            from src.core.db_manager import duckdb_session
+            with duckdb_session(db_p) as con:
                 tbls = [r[0] for r in con.execute("SHOW TABLES").fetchall()]
                 if "smart_teachers_exploded" in tbls:
                     rows = con.execute(
@@ -134,8 +134,6 @@ def _get_domain_vocab_hint() -> str:
                         name = str(r[0] or "").strip()
                         if name and len(name) <= 45:
                             extra.append(name)
-            finally:
-                con.close()
     except Exception:
         pass
 

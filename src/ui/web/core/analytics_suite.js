@@ -789,9 +789,17 @@
     ov.id = 'ehBoardroomOverlay';
     ov.className = 'eh-boardroom-overlay eh-br-luxury';
 
-    const totalSlides = 6;
-    const dotsHtml = Array.from({ length: totalSlides }, (_, idx) =>
-      `<button type="button" class="eh-br-dot ${idx === 0 ? 'active' : ''}" data-br-jump="${idx}" title="\u0627\u0633\u0644\u0627\u06cc\u062f ${Ch.toFa(idx + 1)}"></button>`
+    const slideTitles = [
+      'نمای کلان عملکرد',
+      'روند زمانی و جذب',
+      'عملکرد کارگروه‌ها',
+      'شبکه اساتید',
+      'تقویم اجرایی',
+      'مصوبات و پیگیری‌ها',
+    ];
+    const totalSlides = slideTitles.length;
+    const dotsHtml = slideTitles.map((ttl, idx) =>
+      `<button type="button" class="eh-br-dot ${idx === 0 ? 'active' : ''}" data-br-jump="${idx}" title="اسلاید ${Ch.toFa(idx + 1)}: ${ttl}"></button>`
     ).join('');
 
     ov.innerHTML = `
@@ -800,23 +808,23 @@
         <div class="eh-br-brand">
           <span class="eh-br-badge-icon">${ic('presentation', 17)}</span>
           <div>
-            <strong>\u06af\u0632\u0627\u0631\u0634 \u062c\u0627\u0645\u0639 \u062c\u0644\u0633\u0647 \u0647\u06cc\u0626\u062a\u200c\u0645\u062f\u06cc\u0631\u0647</strong>
-            <div style="font-size:11px; color:var(--s-text-muted);">\u0645\u0624\u0633\u0633\u0647 \u0639\u0644\u0645\u06cc \u0641\u0631\u0647\u0646\u06af\u06cc \u0627\u0645\u0627\u0645 \u0647\u0627\u062f\u06cc (\u0639\u0644\u06cc\u0647\u200c\u0627\u0644\u0633\u0644\u0627\u0645)</div>
+            <strong>گزارش جامع جلسه هیئت‌مدیره</strong>
+            <div style="font-size:11px; color:var(--s-text-muted);">مؤسسه علمی فرهنگی امام هادی (علیه‌السلام)</div>
           </div>
         </div>
         <div class="eh-br-dots">${dotsHtml}</div>
         <div style="display:flex; align-items:center; gap:8px;">
-          <span class="pro-kbd">\u2190 / \u2192</span>
-          <button type="button" class="ghost-btn bi-mini-btn" id="brClose">${ic('close', 14)}<span>\u062e\u0631\u0648\u062c \u0627\u0632 \u0627\u0631\u0627\u0626\u0647</span></button>
+          <span class="pro-kbd" title="کلید چپ: اسلاید بعدی • کلید راست: اسلاید قبلی">→ قبلی | بعدی ←</span>
+          <button type="button" class="ghost-btn bi-mini-btn" id="brClose">${ic('close', 14)}<span>خروج از ارائه</span></button>
         </div>
       </div>
 
       <div class="eh-br-stage" id="brStage"></div>
 
       <div class="eh-br-dock">
-        <button type="button" class="pro-icon-btn" id="brPrev" title="\u0627\u0633\u0644\u0627\u06cc\u062f \u0642\u0628\u0644\u06cc">${ic('chevronRight', 18)}</button>
-        <span id="brCounter" style="font-size:12.5px; font-weight:800; min-width:58px; text-align:center;">\u06f1 / \u06f6</span>
-        <button type="button" class="pro-icon-btn" id="brNext" title="\u0627\u0633\u0644\u0627\u06cc\u062f \u0628\u0639\u062f\u06cc">${ic('chevronLeft', 18)}</button>
+        <button type="button" class="eh-br-nav-btn" id="brPrev" title="اسلاید قبلی (کلید راست)">${ic('chevronRight', 16)}<span>قبلی</span></button>
+        <span id="brCounter" class="eh-br-counter">اسلاید ۱ از ۶</span>
+        <button type="button" class="eh-br-nav-btn" id="brNext" title="اسلاید بعدی (کلید چپ)"><span>بعدی</span>${ic('chevronLeft', 16)}</button>
       </div>
     `;
     document.body.appendChild(ov);
@@ -824,74 +832,174 @@
     let slide = 0;
     const drawSlide = () => {
       const st = ov.querySelector('#brStage');
-      ov.querySelector('#brCounter').textContent = `${Ch.toFa(slide + 1)} / ${Ch.toFa(totalSlides)}`;
+      ov.querySelector('#brCounter').textContent = `اسلاید ${Ch.toFa(slide + 1)} از ${Ch.toFa(totalSlides)}`;
       ov.querySelectorAll('.eh-br-dot').forEach((d, idx) => d.classList.toggle('active', idx === slide));
+      const prevBtn = ov.querySelector('#brPrev');
+      const nextBtn = ov.querySelector('#brNext');
+      if (prevBtn) prevBtn.disabled = (slide === 0);
+      if (nextBtn) nextBtn.disabled = (slide === totalSlides - 1);
+
       const k = res.kpis || {};
+      const groups = res.groups || [];
+      const hasPerson = Boolean(res.has_person_level && k.unique_verified && k.unique_participants > 0);
+      const wb = k.workload_balance || { score: 100, top3_share_pct: 0, label: 'متوازن' };
+      const topGroup = groups[0] || null;
+      const topGroupShare = (topGroup && k.total_attendance > 0)
+        ? Math.round((topGroup.attendance / k.total_attendance) * 100)
+        : 0;
+      const bestAvgGroup = groups
+        .filter(g => g.courses >= 2 && g.avg_attendance > 0)
+        .sort((a, b) => b.avg_attendance - a.avg_attendance)[0] || topGroup;
 
       if (slide === 0) {
+        // Smart 6th executive KPI tailored to available real data (NEVER shows internal data-health in boardroom!)
+        let card6Html = '';
+        if (hasPerson) {
+          card6Html = `
+            <div class="eh-br-kpi-card">
+              <span class="eh-br-kpi-lbl">مخاطبان یکتا و وفاداری</span>
+              <strong class="eh-br-kpi-num">${Ch.fmtNum(k.unique_participants)}</strong>
+              <small>نرخ بازگشت و حضور مجدد: ${Ch.toFa(k.repeat_rate)}٪</small>
+            </div>`;
+        } else if (Number(k.total_cost || 0) > 0) {
+          card6Html = `
+            <div class="eh-br-kpi-card">
+              <span class="eh-br-kpi-lbl">هزینه کل و سرانه مخاطب</span>
+              <strong class="eh-br-kpi-num">${Ch.fmtNum(k.total_cost)}</strong>
+              <small>تومان • سرانه هر نفر-دوره: ${Ch.fmtNum(k.cost_per_attendee)} تومان</small>
+            </div>`;
+        } else if (Number(k.total_hours || 0) > 0) {
+          card6Html = `
+            <div class="eh-br-kpi-card">
+              <span class="eh-br-kpi-lbl">مجموع ساعات آموزشی</span>
+              <strong class="eh-br-kpi-num">${Ch.toFa(k.total_hours)}</strong>
+              <small>ساعت در ${Ch.fmtNum(k.total_sessions || 0)} جلسه ثبت‌شده</small>
+            </div>`;
+        } else if (bestAvgGroup) {
+          card6Html = `
+            <div class="eh-br-kpi-card">
+              <span class="eh-br-kpi-lbl">بالاترین میانگین استقبال</span>
+              <strong class="eh-br-kpi-num eh-br-kpi-text">${bestAvgGroup.name}</strong>
+              <small>میانگین ${Ch.toFa(bestAvgGroup.avg_attendance)} نفر در هر دوره (${Ch.fmtNum(bestAvgGroup.courses)} دوره)</small>
+            </div>`;
+        } else {
+          card6Html = `
+            <div class="eh-br-kpi-card">
+              <span class="eh-br-kpi-lbl">کارگروه‌های فعال</span>
+              <strong class="eh-br-kpi-num">${Ch.fmtNum(k.total_groups)}</strong>
+              <small>حوزه‌های علمی و آموزشی فعال</small>
+            </div>`;
+        }
+
+        const coursesSub = k.joint_courses > 0
+          ? `در ${Ch.fmtNum(k.total_groups)} کارگروه • شامل ${Ch.fmtNum(k.joint_courses)} دوره مشترک`
+          : `در ${Ch.fmtNum(k.total_groups)} کارگروه تخصصی`;
+
+        const medVal = (k.median_per_course !== undefined && k.median_per_course !== null && k.median_per_course > 0)
+          ? k.median_per_course
+          : k.avg_per_course;
+
         st.innerHTML = `
           <div class="eh-br-slide">
-            <div class="eh-br-pill">\u0627\u0633\u0644\u0627\u06cc\u062f \u06f1 \u0627\u0632 \u06f6 \u2022 \u0646\u0645\u0627\u06cc \u06a9\u0644\u0627\u0646 \u0639\u0645\u0644\u06a9\u0631\u062f</div>
-            <h2>\u062e\u0644\u0627\u0635\u0647 \u0634\u0627\u062e\u0635\u200c\u0647\u0627\u06cc \u0631\u0627\u0647\u0628\u0631\u062f\u06cc \u0645\u0624\u0633\u0633\u0647 \u0627\u0645\u0627\u0645 \u0647\u0627\u062f\u06cc (\u0639\u0644\u06cc\u0647\u200c\u0627\u0644\u0633\u0644\u0627\u0645)</h2>
+            <div class="eh-br-pill">اسلاید ۱ از ۶ • نمای کلان عملکرد</div>
+            <h2>خلاصه شاخص‌های راهبردی مؤسسه امام هادی (علیه‌السلام)</h2>
             <div class="eh-br-kpis-6">
-              <div class="eh-br-kpi-card"><span class="eh-br-kpi-lbl">\u0634\u0631\u06a9\u062a\u200c\u06a9\u0646\u0646\u062f\u06af\u0627\u0646 \u06cc\u06a9\u062a\u0627</span><strong class="eh-br-kpi-num">${Ch.fmtNum(k.unique_participants)}</strong><small>\u0627\u0641\u0631\u0627\u062f \u063a\u06cc\u0631\u062a\u06a9\u0631\u0627\u0631\u06cc</small></div>
-              <div class="eh-br-kpi-card"><span class="eh-br-kpi-lbl">\u0645\u062c\u0645\u0648\u0639 \u062d\u0636\u0648\u0631 \u06a9\u0644</span><strong class="eh-br-kpi-num">${Ch.fmtNum(k.total_attendance)}</strong><small>\u0646\u0641\u0631-\u062d\u0636\u0648\u0631 \u062f\u0631 \u0628\u0631\u0646\u0627\u0645\u0647\u200c\u0647\u0627</small></div>
-              <div class="eh-br-kpi-card"><span class="eh-br-kpi-lbl">\u062f\u0648\u0631\u0647\u200c\u0647\u0627 \u0648 \u0631\u0648\u06cc\u062f\u0627\u062f\u0647\u0627</span><strong class="eh-br-kpi-num">${Ch.fmtNum(k.total_courses)}</strong><small>\u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 ${Ch.toFa(k.avg_per_course)} \u0646\u0641\u0631/\u062f\u0648\u0631\u0647</small></div>
-              <div class="eh-br-kpi-card"><span class="eh-br-kpi-lbl">\u0646\u0631\u062e \u0648\u0641\u0627\u062f\u0627\u0631\u06cc \u0648 \u0628\u0627\u0632\u06af\u0634\u062a</span><strong class="eh-br-kpi-num">${Ch.toFa(k.repeat_rate)}\u066a</strong><small>\u062d\u0636\u0648\u0631 \u0645\u062c\u062f\u062f \u0645\u062e\u0627\u0637\u0628\u0627\u0646</small></div>
-              <div class="eh-br-kpi-card"><span class="eh-br-kpi-lbl">\u0627\u0633\u0627\u062a\u06cc\u062f \u0648 \u06a9\u0627\u0631\u06af\u0631\u0648\u0647\u200c\u0647\u0627</span><strong class="eh-br-kpi-num">${Ch.fmtNum(k.total_teachers)} / ${Ch.fmtNum(k.total_groups)}</strong><small>\u0634\u0628\u06a9\u0647 \u0639\u0644\u0645\u06cc \u0648 \u067e\u0698\u0648\u0647\u0634\u06cc</small></div>
-              <div class="eh-br-kpi-card"><span class="eh-br-kpi-lbl">\u0633\u0644\u0627\u0645\u062a \u0648 \u06cc\u06a9\u062a\u0627\u06cc\u06cc \u062f\u0627\u062f\u0647</span><strong class="eh-br-kpi-num">${Ch.toFa(k.data_health_score)}\u066a</strong><small>\u067e\u0627\u06cc\u0634 \u06a9\u06cc\u0641\u06cc\u062a \u062b\u0628\u062a\u200c\u0646\u0627\u0645\u200c\u0647\u0627</small></div>
+              <div class="eh-br-kpi-card">
+                <span class="eh-br-kpi-lbl">مجموع مشارکت (نفر-دوره)</span>
+                <strong class="eh-br-kpi-num">${Ch.fmtNum(k.total_attendance)}</strong>
+                <small>کل حضور ثبت‌شده در برنامه‌های مؤسسه</small>
+              </div>
+              <div class="eh-br-kpi-card">
+                <span class="eh-br-kpi-lbl">دوره‌ها و رویدادهای برگزارشده</span>
+                <strong class="eh-br-kpi-num">${Ch.fmtNum(k.total_courses)}</strong>
+                <small>${coursesSub}</small>
+              </div>
+              <div class="eh-br-kpi-card">
+                <span class="eh-br-kpi-lbl">میانگین استقبال در هر دوره</span>
+                <strong class="eh-br-kpi-num">${Ch.toFa(k.avg_per_course)} نفر</strong>
+                <small>میانه واقعی (Median): ${Ch.toFa(medVal)} نفر در هر دوره</small>
+              </div>
+              <div class="eh-br-kpi-card">
+                <span class="eh-br-kpi-lbl">پرمخاطب‌ترین کارگروه (کانون جذب)</span>
+                <strong class="eh-br-kpi-num eh-br-kpi-text">${topGroup ? topGroup.name : '—'}</strong>
+                <small>${topGroup ? `${Ch.fmtNum(topGroup.attendance)} نفر (${Ch.toFa(topGroupShare)}٪ کل حضور در ${Ch.fmtNum(topGroup.courses)} دوره)` : 'ثبت‌نشده'}</small>
+              </div>
+              <div class="eh-br-kpi-card">
+                <span class="eh-br-kpi-lbl">شبکه اساتید و توازن بار علمی</span>
+                <strong class="eh-br-kpi-num">${Ch.fmtNum(k.total_teachers)} استاد</strong>
+                <small>توازن بار کاری: ${Ch.toFa(wb.score)}٪ (${wb.label})</small>
+              </div>
+              ${card6Html}
             </div>
           </div>`;
       } else if (slide === 1) {
+        const tlTitle = hasPerson
+          ? 'روند جذب مخاطبان جدید در برابر مخاطبان قدیمی'
+          : 'روند مجموع حضور (نفر-دوره) و تعداد برنامه‌ها در بازه‌های زمانی';
         st.innerHTML = `
           <div class="eh-br-slide">
-            <div class="eh-br-pill">\u0627\u0633\u0644\u0627\u06cc\u062f \u06f2 \u0627\u0632 \u06f6 \u2022 \u067e\u0648\u06cc\u0627\u06cc\u06cc \u062c\u0630\u0628 \u0645\u062e\u0627\u0637\u0628</div>
-            <h2>\u0631\u0648\u0646\u062f \u062c\u0630\u0628 \u0645\u062e\u0627\u0637\u0628\u0627\u0646 \u062c\u062f\u06cc\u062f \u062f\u0631 \u0628\u0631\u0627\u0628\u0631 \u0645\u062e\u0627\u0637\u0628\u0627\u0646 \u0642\u062f\u06cc\u0645\u06cc</h2>
+            <div class="eh-br-pill">اسلاید ۲ از ۶ • روند زمانی و جذب</div>
+            <h2>${tlTitle}</h2>
             <div class="eh-br-card-wide"><div id="brCh1" style="width:100%;"></div></div>
           </div>`;
-        Ch.renderSplineArea(st.querySelector('#brCh1'), [
-          { name: '\u0645\u062e\u0627\u0637\u0628\u0627\u0646 \u062c\u062f\u06cc\u062f', values: res.timeline.map(x => x.new_participants) },
-          { name: '\u0645\u062e\u0627\u0637\u0628\u0627\u0646 \u0642\u062f\u06cc\u0645\u06cc', values: res.timeline.map(x => x.returning_participants) },
-        ], res.timeline.map(x => x.label), { id: 'br1' });
+        if (hasPerson) {
+          Ch.renderSplineArea(st.querySelector('#brCh1'), [
+            { name: 'مخاطبان جدید', values: res.timeline.map(x => x.new_participants) },
+            { name: 'مخاطبان قدیمی', values: res.timeline.map(x => x.returning_participants) },
+          ], res.timeline.map(x => x.label), { id: 'br1' });
+        } else {
+          Ch.renderSplineArea(st.querySelector('#brCh1'), [
+            { name: 'مجموع نفر-دوره', values: res.timeline.map(x => x.attendance) },
+          ], res.timeline.map(x => x.label), { id: 'br1' });
+        }
       } else if (slide === 2) {
+        const gTitle = hasPerson
+          ? 'مقایسه حضور کل، مخاطبان یکتا و توازن کارگروه‌ها'
+          : 'مقایسه سهم مشارکت و توازن عملکرد کارگروه‌ها';
         st.innerHTML = `
           <div class="eh-br-slide">
-            <div class="eh-br-pill">\u0627\u0633\u0644\u0627\u06cc\u062f \u06f3 \u0627\u0632 \u06f6 \u2022 \u0639\u0645\u0644\u06a9\u0631\u062f \u06a9\u0627\u0631\u06af\u0631\u0648\u0647\u200c\u0647\u0627</div>
-            <h2>\u0645\u0642\u0627\u06cc\u0633\u0647 \u062d\u0636\u0648\u0631 \u06a9\u0644\u060c \u0645\u062e\u0627\u0637\u0628\u0627\u0646 \u06cc\u06a9\u062a\u0627 \u0648 \u062a\u0648\u0627\u0632\u0646 \u06a9\u0627\u0631\u06af\u0631\u0648\u0647\u200c\u0647\u0627</h2>
+            <div class="eh-br-pill">اسلاید ۳ از ۶ • عملکرد کارگروه‌ها</div>
+            <h2>${gTitle}</h2>
             <div class="eh-br-grid2">
               <div class="eh-br-card-wide"><div id="brCh2Bar" style="width:100%;"></div></div>
               <div class="eh-br-card-wide"><div id="brCh2Rad" style="width:100%;"></div></div>
             </div>
           </div>`;
-        Ch.renderHBar(st.querySelector('#brCh2Bar'), res.groups.map(g => ({ label: g.name, v1: g.attendance, v2: g.unique })));
-        Ch.renderRadar(st.querySelector('#brCh2Rad'), res.groups.map(g => ({ label: g.name, value: g.attendance })));
+        Ch.renderHBar(
+          st.querySelector('#brCh2Bar'),
+          groups.map(g => hasPerson ? { label: g.name, v1: g.attendance, v2: g.unique } : { label: g.name, v1: g.attendance })
+        );
+        Ch.renderRadar(st.querySelector('#brCh2Rad'), groups.map(g => ({ label: g.name, value: g.attendance })));
       } else if (slide === 3) {
         const topT = (res.teachers || []).slice(0, 6);
-        const medals = ['\ud83e\udd47', '\ud83e\udd48', '\ud83e\udd49', '\u06f4', '\u06f5', '\u06f6'];
-        const cards = topT.map((t, idx) => `
-          <div class="eh-br-teacher-card">
-            <div class="eh-br-medal">${medals[idx] || Ch.toFa(idx + 1)}</div>
-            <div style="flex:1; min-width:0;">
-              <div style="font-size:15px; font-weight:800; color:var(--s-text);">${Ch.formatTeacherShort(t.name)}</div>
-              <div style="font-size:11.5px; color:var(--s-text-muted); margin-top:2px;">${(t.groups || []).join('\u060c ') || '\u062f\u0648\u0631\u0647\u200c\u0647\u0627\u06cc \u0639\u0644\u0645\u06cc'}</div>
-            </div>
-            <div style="text-align:left;">
-              <div style="font-size:18px; font-weight:800; color:var(--lg-accent);">${Ch.fmtNum(t.attendance)} \u0646\u0641\u0631</div>
-              <div style="font-size:11px; color:var(--s-text-muted);">${Ch.fmtNum(t.courses)} \u062f\u0648\u0631\u0647 \u2022 \u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 ${Ch.toFa(t.avg_attendance)}</div>
-            </div>
-          </div>
-        `).join('');
+        const cards = topT.map((t, idx) => {
+          const courseMeta = (t.joint_courses && t.joint_courses > 0)
+            ? `${Ch.fmtNum(t.courses)} دوره (${Ch.fmtNum(t.independent_courses || 0)} مستقل، ${Ch.fmtNum(t.joint_courses)} مشترک) • میانگین ${Ch.toFa(t.avg_attendance)}`
+            : `${Ch.fmtNum(t.courses)} دوره • میانگین ${Ch.toFa(t.avg_attendance)}`;
+          return `
+            <div class="eh-br-teacher-card">
+              <div class="eh-br-rank-badge">${Ch.toFa(idx + 1)}</div>
+              <div style="flex:1; min-width:0;">
+                <div style="font-size:15px; font-weight:800; color:var(--s-text);">${Ch.formatTeacherShort(t.name)}</div>
+                <div style="font-size:11.5px; color:var(--s-text-muted); margin-top:2px;">${(t.groups || []).join('، ') || 'دوره‌های علمی'}</div>
+              </div>
+              <div style="text-align:left;">
+                <div style="font-size:18px; font-weight:800; color:var(--lg-accent);">${Ch.fmtNum(t.attendance)} نفر</div>
+                <div style="font-size:11px; color:var(--s-text-muted);">${courseMeta}</div>
+              </div>
+            </div>`;
+        }).join('');
         st.innerHTML = `
           <div class="eh-br-slide">
-            <div class="eh-br-pill">\u0627\u0633\u0644\u0627\u06cc\u062f \u06f4 \u0627\u0632 \u06f6 \u2022 \u0634\u0628\u06a9\u0647 \u0627\u0633\u0627\u062a\u06cc\u062f</div>
-            <h2>\u0627\u0633\u0627\u062a\u06cc\u062f \u0634\u0627\u062e\u0635 \u0648 \u0627\u062b\u0631\u06af\u0630\u0627\u0631 \u0645\u0624\u0633\u0633\u0647</h2>
-            <div class="eh-br-teachers-grid">${cards || '<div class="eh-empty-chart">\u062f\u0627\u062f\u0647\u200c\u0627\u06cc \u062b\u0628\u062a \u0646\u0634\u062f\u0647 \u0627\u0633\u062a.</div>'}</div>
+            <div class="eh-br-pill">اسلاید ۴ از ۶ • شبکه اساتید</div>
+            <h2>اساتید شاخص و اثرگذار مؤسسه</h2>
+            <div class="eh-br-teachers-grid">${cards || '<div class="eh-empty-chart">داده‌ای ثبت نشده است.</div>'}</div>
           </div>`;
       } else if (slide === 4) {
         st.innerHTML = `
           <div class="eh-br-slide">
-            <div class="eh-br-pill">\u0627\u0633\u0644\u0627\u06cc\u062f \u06f5 \u0627\u0632 \u06f6 \u2022 \u062a\u0642\u0648\u06cc\u0645 \u0627\u062c\u0631\u0627\u06cc\u06cc</div>
-            <h2>\u0646\u0642\u0634\u0647 \u062d\u0631\u0627\u0631\u062a\u06cc \u0628\u0631\u06af\u0632\u0627\u0631\u06cc \u0628\u0631\u0646\u0627\u0645\u0647\u200c\u0647\u0627 \u062f\u0631 \u0645\u0627\u0647\u200c\u0647\u0627\u06cc \u0633\u0627\u0644</h2>
+            <div class="eh-br-pill">اسلاید ۵ از ۶ • تقویم اجرایی</div>
+            <h2>نقشه حرارتی برگزاری برنامه‌ها در ماه‌های سال</h2>
             <div class="eh-br-card-wide"><div id="brChHeat" style="width:100%;"></div></div>
           </div>`;
         Ch.renderHeatmap(st.querySelector('#brChHeat'), res.heatmap || []);
@@ -900,30 +1008,32 @@
           <div class="eh-br-dec-row">
             <span class="eh-step-num">${Ch.toFa(i + 1)}</span>
             <span style="flex:1; font-size:14px; font-weight:700;">${d.title}</span>
-            <span class="eh-badge">${d.done ? '\u0627\u0646\u062c\u0627\u0645 \u0634\u062f' : '\u062f\u0631 \u062f\u0633\u062a \u067e\u06cc\u06af\u06cc\u0631\u06cc'}</span>
+            <span class="eh-badge">${d.done ? 'انجام شد' : 'در دست پیگیری'}</span>
           </div>
         `).join('');
         st.innerHTML = `
           <div class="eh-br-slide">
-            <div class="eh-br-pill">\u0627\u0633\u0644\u0627\u06cc\u062f \u06f6 \u0627\u0632 \u06f6 \u2022 \u0645\u0635\u0648\u0628\u0627\u062a \u0648 \u062a\u0635\u0645\u06cc\u0645\u200c\u0647\u0627</div>
-            <h2>\u062f\u0633\u062a\u0648\u0631 \u062c\u0644\u0633\u0647 \u0648 \u067e\u06cc\u06af\u06cc\u0631\u06cc\u200c\u0647\u0627\u06cc \u0645\u062f\u06cc\u0631\u06cc\u062a\u06cc</h2>
+            <div class="eh-br-pill">اسلاید ۶ از ۶ • مصوبات و تصمیم‌ها</div>
+            <h2>دستور جلسه و پیگیری‌های مدیریتی</h2>
             <div class="eh-br-card-wide" style="display:flex; flex-direction:column; gap:10px;">
-              ${rows || '<div class="eh-empty-chart">\u0645\u0648\u0631\u062f\u06cc \u062f\u0631 \u062f\u0641\u062a\u0631\u0686\u0647 \u062a\u0635\u0645\u06cc\u0645\u200c\u0647\u0627 \u062b\u0628\u062a \u0646\u0634\u062f\u0647 \u0627\u0633\u062a\u061b \u0627\u0632 \u0635\u0641\u062d\u0647 \u0627\u0635\u0644\u06cc \u0645\u0648\u0627\u0631\u062f \u062c\u0644\u0633\u0647 \u0631\u0627 \u0627\u0636\u0627\u0641\u0647 \u06a9\u0646\u06cc\u062f.</div>'}
+              ${rows || '<div class="eh-empty-chart">موردی در دفترچه تصمیم‌ها ثبت نشده است؛ از صفحه اصلی موارد جلسه را اضافه کنید.</div>'}
             </div>
           </div>`;
       }
     };
 
+    const goNext = () => { if (slide < totalSlides - 1) { slide += 1; drawSlide(); } };
+    const goPrev = () => { if (slide > 0) { slide -= 1; drawSlide(); } };
     const closeBr = () => { document.removeEventListener('keydown', onKey); ov.remove(); };
     const onKey = (e) => {
       if (e.key === 'Escape') closeBr();
-      if (e.key === 'ArrowLeft') { slide = (slide + 1) % totalSlides; drawSlide(); }
-      if (e.key === 'ArrowRight') { slide = (slide - 1 + totalSlides) % totalSlides; drawSlide(); }
+      if (e.key === 'ArrowLeft' || e.key === 'PageDown' || e.key === ' ') { e.preventDefault(); goNext(); }
+      if (e.key === 'ArrowRight' || e.key === 'PageUp') { e.preventDefault(); goPrev(); }
     };
     document.addEventListener('keydown', onKey);
     ov.querySelectorAll('[data-br-jump]').forEach(btn => btn.addEventListener('click', () => { slide = Number(btn.dataset.brJump); drawSlide(); }));
-    ov.querySelector('#brNext').addEventListener('click', () => { slide = (slide + 1) % totalSlides; drawSlide(); });
-    ov.querySelector('#brPrev').addEventListener('click', () => { slide = (slide - 1 + totalSlides) % totalSlides; drawSlide(); });
+    ov.querySelector('#brNext').addEventListener('click', goNext);
+    ov.querySelector('#brPrev').addEventListener('click', goPrev);
     ov.querySelector('#brClose').addEventListener('click', closeBr);
     drawSlide();
   }

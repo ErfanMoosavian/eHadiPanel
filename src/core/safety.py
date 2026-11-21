@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from src.core.config import Config
+from src.core.db_manager import format_jalali_now, iso_to_jalali
 
 AUDIT_FILE = Config.LOGS_DIR / "audit_log.jsonl"
 DECISIONS_FILE = Config.STORAGE_DIR / "decisions.json"
@@ -14,7 +15,7 @@ def log_audit(action: str, module: str, status: str = "ok", details: dict[str, A
     try:
         Config.ensure_directories()
         entry = {
-            "ts": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "ts": format_jalali_now(include_time=True, fa_digits=True), "ts_iso": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "action": action,
             "module": module,
             "status": status,
@@ -33,7 +34,10 @@ def get_recent_audits(limit: int = 50) -> list[dict[str, Any]]:
     out = []
     for ln in reversed(lines[-limit:]):
         try:
-            out.append(json.loads(ln))
+            rec = json.loads(ln)
+            if rec.get("ts") and "-" in str(rec["ts"]) and len(str(rec["ts"])) >= 10 and str(rec["ts"])[:2] in ("19", "20"):
+                rec["ts"] = iso_to_jalali(rec["ts"])
+            out.append(rec)
         except Exception:
             continue
     return out
@@ -77,7 +81,7 @@ def save_decision(payload: dict[str, Any]) -> dict[str, Any]:
         "owner": str(payload.get("owner") or "مدیریت").strip(),
         "due": str(payload.get("due") or "").strip(),
         "done": bool(payload.get("done", False)),
-        "created_at": payload.get("created_at") or datetime.now().strftime("%Y/%m/%d"),
+        "created_at": payload.get("created_at") or format_jalali_now(include_time=False, fa_digits=True),
     }
     if not item["title"]:
         return {"ok": False, "error": "عنوان تصمیم خالی است."}
@@ -87,12 +91,23 @@ def save_decision(payload: dict[str, Any]) -> dict[str, Any]:
     else:
         items.insert(0, item)
     DECISIONS_FILE.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
-    log_audit("decision_saved", "decisions", "ok", {"id": did, "done": item["done"]})
+    log_audit("decision_saved", "decisions", "ok", {"id": did, "title": item["title"], "done": item["done"]})
     return {"ok": True, "item": item, "decisions": items}
 
 
 def delete_decision(decision_id: str) -> dict[str, Any]:
-    items = [x for x in load_decisions() if x.get("id") != decision_id]
+    all_items = load_decisions()
+    target = next((x for x in all_items if x.get("id") == decision_id), None)
+    items = [x for x in all_items if x.get("id") != decision_id]
     DECISIONS_FILE.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
-    log_audit("decision_deleted", "decisions", "ok", {"id": decision_id})
+    log_audit("decision_deleted", "decisions", "ok", {"id": decision_id, "title": (target or {}).get("title", "")})
     return {"ok": True, "decisions": items}
+
+
+def clear_audit_logs() -> dict[str, Any]:
+    try:
+        if AUDIT_FILE.exists():
+            AUDIT_FILE.write_text("", encoding="utf-8")
+        return {"ok": True}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}

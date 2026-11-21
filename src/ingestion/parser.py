@@ -13,6 +13,7 @@ from docx import Document as DocxDocument
 from pptx import Presentation
 
 from src.core.config import Config
+from src.core.db_manager import format_jalali_now, get_db_lock
 
 try:
     import pyodbc
@@ -36,6 +37,10 @@ class DocumentIngestionEngine:
         return duckdb.connect(self.duckdb_path)
 
     def _init_duckdb(self) -> None:
+        with get_db_lock(self.duckdb_path):
+            self._init_duckdb_locked()
+
+    def _init_duckdb_locked(self) -> None:
         con = self._connect_duckdb()
         try:
             con.execute("""
@@ -336,6 +341,8 @@ class DocumentIngestionEngine:
 
         all_chunks: list[dict[str, Any]] = []
         warnings: list[str] = []
+        _lk = get_db_lock(self.duckdb_path)
+        _lk.acquire()
         con = self._connect_duckdb()
 
         db_lance = lancedb.connect(self.lancedb_path)
@@ -355,10 +362,11 @@ class DocumentIngestionEngine:
             prev_by_path = {str(r[0]): r for r in prev_files_rows}
             current_paths = {str(p) for p in files}
 
-            # Remove deleted files' tables & catalog entries
-            removed_paths = set(prev_by_path.keys()) - current_paths
+            # Remove deleted files' tables & catalog entries (including any previous failed entries)
+            all_prev_paths = {str(r[0]) for r in con.execute("SELECT file_path FROM processed_files").fetchall()}
+            removed_paths = all_prev_paths - current_paths
             if removed_paths:
-                rem_names = {prev_by_path[rp][1] for rp in removed_paths}
+                rem_names = {prev_by_path[rp][1] for rp in removed_paths if rp in prev_by_path}
                 if rem_names:
                     ph = ",".join("?" for _ in rem_names)
                     rem_tbls = con.execute(f"SELECT table_name FROM tabular_catalog WHERE file_name IN ({ph})", list(rem_names)).fetchall()
@@ -398,9 +406,11 @@ class DocumentIngestionEngine:
                 con.execute("DELETE FROM processed_files WHERE file_path = ?", [sp])
                 existing_lance_rows = [row for row in existing_lance_rows if row.get("file_name") != fn_old]
 
-            now_str = datetime.now().strftime("%Y/%m/%d - %H:%M")
+            now_str = format_jalali_now(include_time=True, fa_digits=True)
 
             for path in sorted(files, key=lambda x: x.name.lower()):
+                if str(path) in unchanged_paths:
+                    continue
                 ext = path.suffix.lower()
                 file_type = ext.lstrip(".").upper()
                 f_hash = self._file_hash(path)
@@ -436,6 +446,7 @@ class DocumentIngestionEngine:
                     msg = str(exc)
                     warnings.append(f"{path.name}: {msg}")
 
+                con.execute("DELETE FROM processed_files WHERE file_path = ?", [str(path)])
                 con.execute(
                     "INSERT INTO processed_files VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     [
@@ -453,6 +464,7 @@ class DocumentIngestionEngine:
                 )
         finally:
             con.close()
+            _lk.release()
 
         if all_chunks:
             db_lance.create_table("document_chunks", data=all_chunks, mode="overwrite")
@@ -465,18 +477,18 @@ class DocumentIngestionEngine:
         return data
 
     def get_dashboard_stats(self) -> dict[str, Any]:
-        con = self._connect_duckdb()
-        try:
-            files_rows = con.execute("""
-                SELECT file_name, file_type, chunks_count, tables_count, rows_count, status, message, processed_at
-                FROM processed_files
-                ORDER BY processed_at DESC, file_name ASC
-            """).fetchall()
-
-            tables_count = con.execute("SELECT COUNT(*) FROM tabular_catalog").fetchone()[0]
-            total_rows = con.execute("SELECT COALESCE(SUM(rows_count), 0) FROM tabular_catalog").fetchone()[0]
-        finally:
-            con.close()
+        with get_db_lock(self.duckdb_path):
+            con = self._connect_duckdb()
+            try:
+                files_rows = con.execute("""
+                    SELECT file_name, file_type, chunks_count, tables_count, rows_count, status, message, processed_at
+                    FROM processed_files
+                    ORDER BY processed_at DESC, file_name ASC
+                """).fetchall()
+                tables_count = con.execute("SELECT COUNT(*) FROM tabular_catalog").fetchone()[0]
+                total_rows = con.execute("SELECT COALESCE(SUM(rows_count), 0) FROM tabular_catalog").fetchone()[0]
+            finally:
+                con.close()
 
         total_chunks = 0
         db = lancedb.connect(self.lancedb_path)

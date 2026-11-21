@@ -26,11 +26,7 @@
         const card = h.closest('.glass-card') || h.parentElement?.parentElement;
         if (!card || card.dataset.ehSubsysTagged === '1') continue;
         card.dataset.ehSubsysTagged = '1';
-        const rows = Array.from(card.querySelectorAll('div, li')).filter(el => {
-          const txt = (el.textContent || '').trim();
-          const hasTitle = txt.includes('DuckDB') || txt.includes('LanceDB') || txt.includes('Gemini') || txt.includes('\u0645\u0648\u062a\u0648\u0631 \u067e\u0631\u062f\u0627\u0632\u0634');
-          return hasTitle && el.children.length >= 2 && el.children.length <= 4 && !el.querySelector('.eh-subsys-row');
-        });
+        const rows = Array.from(card.querySelectorAll('.pipeline-item')).filter(el => !el.classList.contains('eh-subsys-item'));
         if (rows.length) {
           const listParent = rows[0].parentElement;
           if (listParent && listParent !== card) listParent.classList.add('eh-subsys-list');
@@ -212,7 +208,7 @@
   applyDensity(initDen, false);
 
   document.addEventListener('pointermove', (e) => {
-    const card = e.target.closest?.('.glass-card, .eh-kpi, .eh-quick-card, .bi-card, .bi-kpi, .eh-chart-box');
+    const card = e.target.closest?.('.glass-card, .eh-kpi, .eh-quick-card, .bi-card, .bi-kpi, .eh-chart-box, #sidebar .nav-btn, #sidebar .eh-diag-sb-btn, #sidebar .eh-mem-sb-btn');
     if (card) {
       const r = card.getBoundingClientRect();
       card.style.setProperty('--mx', Math.round(e.clientX - r.left) + 'px');
@@ -234,7 +230,7 @@
 
   document.addEventListener('pointerdown', (e) => {
     if (e.button !== 0) return;
-    const target = e.target.closest?.('.primary-btn, .ghost-btn, .eh-quick-card, .bi-lens-tab, .nav-btn, .pro-icon-btn, .pro-cat-btn, .eh-mini-btn, .prompt-chip, .cite-chip, .eh-cselect-btn, .eh-theme-card, .eh-palette-card, .eh-topbar-board-btn');
+    const target = e.target.closest?.('.primary-btn, .ghost-btn, .eh-quick-card, .bi-lens-tab, .nav-btn, .eh-diag-sb-btn, .eh-mem-sb-btn, .pro-icon-btn, .pro-cat-btn, .eh-mini-btn, .prompt-chip, .cite-chip, .eh-cselect-btn, .eh-theme-card, .eh-palette-card, .eh-topbar-board-btn');
     if (!target) return;
     const r = target.getBoundingClientRect();
     const x = e.clientX - r.left;
@@ -511,14 +507,14 @@
       sel.onchange = () => {
         if (sel.value === '') return;
         const item = arr[Number(sel.value)];
-        const out = bd.querySelector('textarea');
+        const out = bd.querySelector('#msPreview') || bd.querySelector('.eitaa-preview-text') || bd.querySelector('textarea');
         if (item && out) { out.value = item.text; window.showToast?.('\u0627\u0644\u06af\u0648 \u0628\u0627\u0631\u06af\u0630\u0627\u0631\u06cc \u0634\u062f'); }
       };
     };
     renderList();
 
     bar.querySelector('#btnSaveEitaaTpl').addEventListener('click', async () => {
-      const out = bd.querySelector('textarea');
+      const out = bd.querySelector('#msPreview') || bd.querySelector('.eitaa-preview-text') || bd.querySelector('textarea');
       const txt = out?.value?.trim();
       if (!txt) { window.showToast?.('\u0627\u0628\u062a\u062f\u0627 \u0645\u062a\u0646 \u0631\u0627 \u062a\u0648\u0644\u06cc\u062f \u06cc\u0627 \u0648\u0627\u0631\u062f \u06a9\u0646\u06cc\u062f'); return; }
       arr.unshift({ title: '\u0627\u0644\u06af\u0648\u06cc \u0634\u0645\u0627\u0631\u0647 ' + toFa(arr.length + 1), text: txt });
@@ -776,8 +772,14 @@
                   </div>
                   <div class="eh-set-card" style="margin-top:12px;">
                     <div class="eh-set-card-head">
-                      <span class="eh-set-card-title">\u0622\u062e\u0631\u06cc\u0646 \u0631\u0648\u06cc\u062f\u0627\u062f\u0647\u0627\u06cc \u0633\u06cc\u0633\u062a\u0645</span>
-                      <button type="button" class="eh-mini-btn" id="btnRefreshAudit">\u0628\u0631\u0648\u0632\u0631\u0633\u0627\u0646\u06cc</button>
+                      <div>
+                        <span class="eh-set-card-title">تاریخچه فعالیت‌های سامانه</span>
+                        <div class="eh-set-card-desc" style="margin-top:2px;">گزارش خودکار ثبت تصمیم‌ها، پشتیبان‌گیری، اسکن اسناد و تغییرات مدیریتی</div>
+                      </div>
+                      <div style="display:flex; gap:6px; align-items:center;">
+                        <button type="button" class="eh-mini-btn" id="btnClearAudit" title="پاکسازی تاریخچه فعالیت‌های قبلی">پاکسازی</button>
+                        <button type="button" class="eh-mini-btn" id="btnRefreshAudit" title="بارگذاری مجدد فهرست">بروزرسانی</button>
+                      </div>
                     </div>
                     <div id="setAuditList" style="max-height:190px; overflow-y:auto; display:flex; flex-direction:column; gap:6px; font-size:11.5px;"></div>
                   </div>
@@ -796,7 +798,7 @@
               </div>
             </div>
             <div class="pro-modal-footer">
-              <span style="font-size:11px; color:var(--s-text-dim);">eHadi Panel v29.0 Pro - ${INST_HTML}</span>
+              <span style="font-size:11px; color:var(--s-text-dim);">eHadiPanel Beta 0.2 — ${INST_HTML}</span>
               <button type="button" class="primary-btn" data-close-modal style="padding:7px 22px;">\u062a\u0623\u06cc\u06cc\u062f \u0648 \u0628\u0633\u062a\u0646</button>
             </div>
           </div>
@@ -840,15 +842,39 @@
         bd.querySelector('#btnSetRescan')?.addEventListener('click', () => { App.closeAllModals(); window.scanDocs?.(); });
         bd.querySelector('#btnSetHealth')?.addEventListener('click', () => App.openModal('data_health'));
         bd.querySelector('#btnRefreshAudit')?.addEventListener('click', () => loadAuditLogs(bd));
+        bd.querySelector('#btnClearAudit')?.addEventListener('click', async () => {
+          const r = await window.pywebview?.api?.clear_audit_logs?.();
+          if (r && r.ok) {
+            window.showToast?.('تاریخچه فعالیت‌های سامانه پاکسازی شد');
+            loadAuditLogs(bd);
+          }
+        });
       },
       async onOpen(bd, opts) {
         const sp = document.getElementById('page-settings');
         const sAI = bd.querySelector('#prefsSlotAI');
         const sRep = bd.querySelector('#prefsSlotReports');
+        const sBackup = bd.querySelector('#prefs-pane-backup');
         if (sp && sAI && sRep) {
           const bc = document.getElementById('brandingCard');
           if (bc && bc.parentElement !== sRep) { bc.style.marginTop = '0'; sRep.appendChild(bc); }
-          Array.from(sp.children).forEach(ch => { if (ch.id !== 'brandingCard') sAI.appendChild(ch); });
+          const diagCard = document.getElementById('ehDiagSettingsCard');
+          if (diagCard && sBackup && diagCard.parentElement !== sBackup) {
+            diagCard.style.marginTop = '12px';
+            sBackup.appendChild(diagCard);
+          }
+          Array.from(sp.children).forEach(ch => {
+            if (ch.id === 'brandingCard' || ch.id === 'ehDiagSettingsCard') return;
+            if (ch.classList.contains('page-header')) { ch.remove(); return; }
+            sAI.appendChild(ch);
+          });
+        }
+        // Also clean any previously moved redundant header or misplaced diag card
+        sAI?.querySelectorAll('.page-header').forEach(h => h.remove());
+        const existingDiagInAI = sAI?.querySelector('#ehDiagSettingsCard');
+        if (existingDiagInAI && sBackup) {
+          existingDiagInAI.style.marginTop = '12px';
+          sBackup.appendChild(existingDiagInAI);
         }
         sAI?.querySelectorAll('h3, .card-title').forEach(el => {
           if (el.textContent.includes('\u062a\u0646\u0638\u06cc\u0645\u0627\u062a \u0633\u06cc\u0633\u062a\u0645')) {
@@ -904,19 +930,73 @@
   async function loadAuditLogs(bd) {
     const box = bd.querySelector('#setAuditList');
     if (!box) return;
+    const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const ACTION_MAP = {
+      decision_saved: { title: 'ثبت / بروزرسانی تصمیم مدیریتی', tag: 'دفترچه تصمیم‌ها', kind: 'accent' },
+      decision_deleted: { title: 'حذف تصمیم از دفترچه', tag: 'دفترچه تصمیم‌ها', kind: 'warn' },
+      backup_snapshot: { title: 'ایجاد نسخه پشتیبان امن', tag: 'پشتیبان‌گیری', kind: 'ok' },
+      docs_scanned: { title: 'اسکن و پردازش اسناد', tag: 'مدیریت اسناد', kind: 'ok' },
+      settings_saved: { title: 'ذخیره تنظیمات سامانه', tag: 'تنظیمات', kind: 'accent' },
+      branding_saved: { title: 'بروزرسانی سربرگ و تنظیمات ظاهری', tag: 'سربرگ و ظاهر', kind: 'accent' },
+      event_saved: { title: 'ثبت رویداد اجرایی', tag: 'رویدادها', kind: 'accent' },
+      event_deleted: { title: 'حذف رویداد اجرایی', tag: 'رویدادها', kind: 'warn' },
+      letter_saved: { title: 'ثبت نامه در دبیرخانه', tag: 'دبیرخانه', kind: 'ok' },
+      porsline_imported: { title: 'ورود فایل پرس‌لاین', tag: 'پرس‌لاین', kind: 'ok' },
+      data_merged: { title: 'ادغام رکوردهای تکراری', tag: 'پاک‌سازی داده‌ها', kind: 'ok' },
+    };
+    const MOD_MAP = {
+      decisions: 'دفترچه تصمیم‌ها',
+      safety: 'پشتیبان‌گیری',
+      docs: 'مدیریت اسناد',
+      settings: 'تنظیمات',
+      events: 'رویدادها',
+      letters: 'دبیرخانه',
+      porsline: 'پرس‌لاین',
+    };
     try {
       const res = await window.pywebview?.api?.get_audit_logs?.();
       const logs = (res && res.logs) || [];
       if (!logs.length) {
-        box.innerHTML = '<div style="color:var(--s-text-dim); padding:8px;">\u0647\u0646\u0648\u0632 \u0631\u0648\u06cc\u062f\u0627\u062f\u06cc \u062b\u0628\u062a \u0646\u0634\u062f\u0647 \u0627\u0633\u062a</div>';
+        box.innerHTML = '<div style="color:var(--s-text-muted); padding:10px 6px; font-size:11.8px;">هنوز فعالیتی در تاریخچه سامانه ثبت نشده است.</div>';
         return;
       }
-      box.innerHTML = logs.slice(0, 20).map(lg => `
-        <div class="eh-radar-row" style="padding:6px 10px;">
-          <span><strong>${lg.action}</strong> <span style="color:var(--s-text-muted);">(${lg.module})</span></span>
-          <span class="pro-kbd">${lg.ts}</span>
-        </div>
-      `).join('');
+      box.innerHTML = logs.slice(0, 25).map(lg => {
+        const meta = ACTION_MAP[lg.action] || {
+          title: String(lg.action || 'رویداد سامانه').replace(/_/g, ' '),
+          tag: MOD_MAP[lg.module] || lg.module || 'سیستم',
+          kind: lg.status === 'error' ? 'warn' : 'accent',
+        };
+        const d = (lg.details && typeof lg.details === 'object') ? lg.details : {};
+        let detailStr = '';
+        if (lg.action === 'decision_saved') {
+          const stLabel = d.done ? 'تکمیل‌شده' : 'در دست پیگیری';
+          detailStr = d.title ? `«${d.title}» — ${stLabel}` : `وضعیت: ${stLabel}`;
+        } else if (lg.action === 'decision_deleted') {
+          detailStr = d.title ? `«${d.title}»` : '';
+        } else if (lg.action === 'backup_snapshot') {
+          const fcnt = Array.isArray(d.files) ? d.files.length : 0;
+          detailStr = fcnt ? `${toFa(fcnt)} فایل پایگاه‌داده ذخیره شد` : (d.error ? `خطا: ${d.error}` : '');
+        } else if (lg.action === 'docs_scanned') {
+          detailStr = `${toFa(d.files || 0)} سند و ${toFa(d.tables || 0)} جدول بررسی شد`;
+        } else if (d.title) {
+          detailStr = `«${d.title}»`;
+        } else if (d.error) {
+          detailStr = `خطا: ${d.error}`;
+        }
+        const tsClean = String(lg.ts || '').replace(/\d/g, ch => '۰۱۲۳۴۵۶۷۸۹'[ch]);
+        return `
+          <div class="eh-audit-row">
+            <div class="eh-audit-main">
+              <div class="eh-audit-top">
+                <span class="eh-audit-badge kind-${meta.kind}">${esc(meta.tag)}</span>
+                <strong class="eh-audit-title">${esc(meta.title)}</strong>
+              </div>
+              ${detailStr ? `<div class="eh-audit-detail">${esc(detailStr)}</div>` : ''}
+            </div>
+            <span class="eh-audit-ts">${esc(tsClean)}</span>
+          </div>
+        `;
+      }).join('');
     } catch (_) {}
   }
 
@@ -957,7 +1037,7 @@
     setLabel(btnDocs, '\u0627\u0633\u0646\u0627\u062f \u0648 \u0641\u0627\u06cc\u0644\u200c\u0647\u0627');
     setLabel(btnHealth, '\u067e\u0627\u06a9\u200c\u0633\u0627\u0632\u06cc \u062f\u0627\u062f\u0647\u200c\u0647\u0627');
 
-    const btnSettings = document.querySelector('#sidebar .sidebar-footer .nav-btn');
+    const btnSettings = document.querySelector("#sidebar .sidebar-footer .nav-btn[onclick*='settings']") || document.querySelector('#sidebar .sidebar-footer .nav-btn:not(.eh-diag-sb-btn):not(.eh-mem-sb-btn)');
     setLabel(btnSettings, '\u062a\u0646\u0638\u06cc\u0645\u0627\u062a');
 
     const mkHeader = (t) => { const d = document.createElement('div'); d.className = 'eh-nav-group-lbl'; d.textContent = t; return d; };
@@ -1367,7 +1447,7 @@
         while (p && p !== card) {
           const pt = p.textContent || '';
           const matchCount = specs.filter(s => pt.includes(s.kw)).length;
-          if (matchCount === 1 && (pt.includes('\u0641\u0639\u0627\u0644') || pt.includes('\u0645\u062a\u0635\u0644'))) {
+          if (matchCount === 1 && (p.classList.contains('pipeline-item') || pt.includes('\u0641\u0639\u0627\u0644') || pt.includes('\u0645\u062a\u0635\u0644') || pt.includes('\u0628\u0631\u0631\u0633\u06cc') || pt.includes('\u0622\u0645\u0627\u062f\u0647') || pt.includes('\u06a9\u0644\u06cc\u062f'))) {
             foundRows.push({ row: p, spec: sp });
             break;
           }
@@ -1410,6 +1490,7 @@
       // Upgrade wrapper to 4-column horizontal grid & rebuild each tile cleanly
       const parentWrap = foundRows[0].row.parentElement;
       if (parentWrap && parentWrap !== card) {
+        parentWrap.classList.remove('eh-subsys-row', 'eh-subsys-list');
         parentWrap.classList.add('eh-subsys-wrapper');
         parentWrap.style.background = '';
         parentWrap.style.border = '';
@@ -1426,8 +1507,8 @@
           nameTxt = spec.kw;
           statusTxt = '\u0641\u0639\u0627\u0644';
         }
-        // Keep status concise on compact tile
-        const shortStatus = statusTxt.includes('\u0622\u0645\u0627\u062f\u0647') ? '\u0622\u0645\u0627\u062f\u0647' : statusTxt;
+        const statusIdAttr = (spec.kw === 'Gemini' || row.querySelector('#aiStatusLabel')) ? ' id="aiStatusLabel"' : '';
+        const shortStatus = statusTxt.includes('\u0622\u0645\u0627\u062f\u0647') ? '\u0645\u062a\u0635\u0644 \u0648 \u0622\u0645\u0627\u062f\u0647' : statusTxt;
         row.className = 'eh-subsys-item';
         row.style.cssText = '';
         row.innerHTML = `
@@ -1438,7 +1519,7 @@
               <span class="eh-ss-sub">${spec.sub}</span>
             </div>
           </div>
-          <span class="eh-ss-badge" title="${statusTxt}"><span class="eh-live-dot"></span>${shortStatus}</span>
+          <span class="eh-ss-badge" title="${statusTxt}"><span class="eh-live-dot"></span><span${statusIdAttr}>${shortStatus}</span></span>
         `;
       });
       break;
@@ -2033,7 +2114,7 @@
           btnTxt.includes('\u0641\u0642\u0647') ||
           btnTxt.includes('\u0633\u062e\u0646\u0631\u0627\u0646') ||
           btnTxt.includes('\u062f\u06cc\u0646'));
-      wrap.classList.toggle('eh-bi-wg-select', isBiWorkgroup);
+      if (!wrap.classList.contains('eh-bi-cselect')) wrap.classList.toggle('eh-bi-wg-select', isBiWorkgroup);
 
       const parentCard = wrap.closest('.glass-card, .bi-card, .bi-toolbar, .bi-controls');
       if (parentCard && inDash) parentCard.classList.add('eh-has-dropdown-open');
@@ -2198,7 +2279,7 @@
     ];
 
     const toolBtns = Array.from(chatPage.querySelectorAll('button')).filter(b => {
-      if ((feed && feed.contains(b)) || b.classList.contains('prompt-chip') || b.closest('.eh-v42-composer, .eh-v42-mini-tools')) return false;
+      if ((feed && feed.contains(b)) || b.classList.contains('prompt-chip') || b.closest('.eh-v42-composer, .eh-v42-mini-tools, .eh-v48-chat-controls, .eh-v48-action-bar, .eh-v48-cite-drawer')) return false;
       const t = (b.textContent || '').trim();
       return toolKeywords.some(k => t.includes(k));
     });
@@ -2240,7 +2321,7 @@
 
     // Hide any leftover empty toolbar wrapper containers so ZERO vertical space is wasted at top
     oldParents.forEach(op => {
-      if (op.contains(feed) || op.querySelector('input, textarea, .prompt-chip, .eh-v42-mini-tools')) return;
+      if (op.contains(feed) || op.querySelector('input, textarea, .prompt-chip, .eh-v42-mini-tools, .eh-v48-chat-controls')) return;
       if ((op.textContent || '').trim() === '' || op.querySelectorAll('button').length === 0) {
         op.classList.add('eh-v42-gone');
       }
@@ -2470,3 +2551,387 @@
   });
 })();
 // _V42_CHAT_MASTER_END
+
+
+// ================= eHadiPanel v48.0 Pro — Glassy Tooltips + Global Persian Digits =================
+(() => {
+  if (window.__EH_GLASS_TOOLTIP_V48) return;
+  window.__EH_GLASS_TOOLTIP_V48 = true;
+
+  // ---------- 1. SLEEK FROSTED-GLASS TOOLTIP ENGINE ----------
+  let tipEl = null;
+  let activeTarget = null;
+  let showTimer = null;
+  let lastHideTs = 0;
+
+  function ensureTip() {
+    if (tipEl && tipEl.isConnected) return tipEl;
+    tipEl = document.createElement('div');
+    tipEl.id = 'ehGlassTooltip';
+    tipEl.className = 'eh-glass-tooltip';
+    tipEl.setAttribute('role', 'tooltip');
+    document.body.appendChild(tipEl);
+    return tipEl;
+  }
+
+  function extractTip(el) {
+    if (!el || el.nodeType !== 1) return '';
+    // Move native HTML title to data-eh-tip so Windows never paints ugly default tooltips
+    const nativeTitle = el.getAttribute('title');
+    if (nativeTitle && nativeTitle.trim()) {
+      el.setAttribute('data-eh-tip', nativeTitle.trim());
+      if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', nativeTitle.trim());
+      el.removeAttribute('title');
+    }
+    // Move SVG <title> child to data-eh-tip on parent element
+    if (el instanceof SVGElement) {
+      const svgT = Array.from(el.children).find(c => c.tagName && c.tagName.toLowerCase() === 'title');
+      if (svgT && svgT.textContent && svgT.textContent.trim()) {
+        el.setAttribute('data-eh-tip', svgT.textContent.trim());
+        svgT.remove();
+      }
+    }
+    const tip = el.getAttribute('data-eh-tip') || el.getAttribute('data-tooltip') || '';
+    if (!tip.trim()) return '';
+    // Do not show redundant label tooltip on expanded sidebar nav items
+    if (el.classList.contains('nav-btn') && !el.classList.contains('eh-diag-sb-btn') && !el.classList.contains('eh-mem-sb-btn') && el.closest('#sidebar') && !document.body.classList.contains('sidebar-collapsed')) {
+      return '';
+    }
+    return tip.trim();
+  }
+
+  function findTipHost(startEl) {
+    let cur = startEl;
+    while (cur && cur !== document.body && cur !== document.documentElement) {
+      if (cur.nodeType === 1) {
+        const t = extractTip(cur);
+        if (t) return { el: cur, text: t };
+      }
+      cur = cur.parentElement || cur.parentNode;
+    }
+    return null;
+  }
+
+  function positionTip(targetEl, tipNode) {
+    const r = targetEl.getBoundingClientRect();
+    const tw = tipNode.offsetWidth;
+    const th = tipNode.offsetHeight;
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const margin = 10;
+
+    let top, left, placement = 'top';
+    const inCollapsedSb = Boolean(targetEl.closest('#sidebar') && document.body.classList.contains('sidebar-collapsed'));
+
+    if (inCollapsedSb) {
+      placement = 'left';
+      left = r.left - tw - 10;
+      top = r.top + (r.height - th) / 2;
+      if (left < margin) {
+        left = r.right + 10;
+        placement = 'right';
+      }
+    } else {
+      left = r.left + (r.width - tw) / 2;
+      top = r.top - th - 9;
+      if (top < margin) {
+        top = r.bottom + 9;
+        placement = 'bottom';
+      }
+    }
+
+    left = Math.max(margin, Math.min(vw - tw - margin, left));
+    top = Math.max(margin, Math.min(vh - th - margin, top));
+
+    tipNode.dataset.pos = placement;
+    tipNode.style.left = `${Math.round(left)}px`;
+    tipNode.style.top = `${Math.round(top)}px`;
+  }
+
+  function showTip(targetEl, text) {
+    const node = ensureTip();
+    node.textContent = text;
+    node.classList.remove('visible');
+    node.style.display = 'block';
+    positionTip(targetEl, node);
+    requestAnimationFrame(() => {
+      if (activeTarget === targetEl) node.classList.add('visible');
+    });
+  }
+
+  function hideTip(immediate = false) {
+    clearTimeout(showTimer);
+    showTimer = null;
+    activeTarget = null;
+    if (!tipEl) return;
+    tipEl.classList.remove('visible');
+    lastHideTs = performance.now();
+    if (immediate) tipEl.style.display = 'none';
+  }
+
+  // Strip native title attributes proactively so Chromium never flashes default tooltips
+  function stripNativeTitles(root = document) {
+    try {
+      root.querySelectorAll('[title]').forEach(el => {
+        const v = (el.getAttribute('title') || '').trim();
+        if (v) {
+          el.setAttribute('data-eh-tip', v);
+          if (!el.getAttribute('aria-label')) el.setAttribute('aria-label', v);
+        }
+        el.removeAttribute('title');
+      });
+    } catch (_) {}
+  }
+
+  document.addEventListener('pointerover', (e) => {
+    const hit = findTipHost(e.target);
+    if (!hit) {
+      if (activeTarget) hideTip();
+      return;
+    }
+    if (activeTarget === hit.el) return;
+    clearTimeout(showTimer);
+    activeTarget = hit.el;
+    const warm = (performance.now() - lastHideTs) < 350;
+    showTimer = setTimeout(() => {
+      if (activeTarget === hit.el && hit.el.isConnected) {
+        showTip(hit.el, hit.text);
+      }
+    }, warm ? 75 : 220);
+  }, true);
+
+  document.addEventListener('pointerout', (e) => {
+    if (!activeTarget) return;
+    const rel = e.relatedTarget;
+    if (rel && activeTarget.contains(rel)) return;
+    hideTip();
+  }, true);
+
+  document.addEventListener('pointerdown', () => hideTip(true), true);
+  document.addEventListener('wheel', () => hideTip(true), { capture: true, passive: true });
+  window.addEventListener('scroll', () => hideTip(true), true);
+  window.addEventListener('blur', () => hideTip(true));
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideTip(true); });
+
+  // ---------- 2. SMART GLOBAL PERSIAN DIGIT NORMALIZER ----------
+  const FA_MAP = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+  const SKIP_TAGS = new Set(['SCRIPT', 'STYLE', 'INPUT', 'TEXTAREA', 'SELECT', 'OPTION', 'CODE', 'PRE', 'NOSCRIPT']);
+  const SKIP_SEL = '.pro-kbd, .version-pill, .eh-modal-handle-pill, .eh-diag-err-txt, .eh-v48-no-fa-digits, [dir="ltr"]';
+
+  function convertSafePersianDigits(str) {
+    if (!/[0-9]/.test(str)) return str;
+    // Split preserving whitespace; skip any token that contains ASCII letters, @, URLs, or Windows paths
+    return str.replace(/\S+/g, (tok) => {
+      if (!/[0-9]/.test(tok)) return tok;
+      if (/[A-Za-z@\\]/.test(tok) || tok.includes('://')) return tok;
+      return tok.replace(/[0-9]/g, d => FA_MAP[Number(d)]);
+    });
+  }
+
+  let digitObs = null;
+  let isNormalizing = false;
+
+  function normalizeTextNode(node) {
+    if (!node || node.nodeType !== 3) return;
+    const val = node.nodeValue;
+    if (!val || !/[0-9]/.test(val)) return;
+    const p = node.parentElement;
+    if (!p || SKIP_TAGS.has(p.tagName) || p.closest(SKIP_SEL)) return;
+    const next = convertSafePersianDigits(val);
+    if (next !== val) node.nodeValue = next;
+  }
+
+  function normalizeDigitsInSubtree(root = document.body) {
+    if (!root || isNormalizing) return;
+    isNormalizing = true;
+    try {
+      if (root.nodeType === 3) {
+        normalizeTextNode(root);
+      } else if (root.nodeType === 1) {
+        stripNativeTitles(root);
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let node;
+        while ((node = walker.nextNode())) {
+          normalizeTextNode(node);
+        }
+      }
+    } catch (_) {} finally {
+      isNormalizing = false;
+    }
+  }
+
+  function startDigitObserver() {
+    if (!document.body || digitObs) return;
+    normalizeDigitsInSubtree(document.body);
+    digitObs = new MutationObserver((muts) => {
+      if (isNormalizing) return;
+      // Run SYNCHRONOUSLY inside microtask BEFORE browser paint -> ZERO English-to-Persian flash or jump!
+      digitObs.disconnect();
+      try {
+        for (const m of muts) {
+          const tgt = m.target;
+          if (!tgt) continue;
+          if (tgt.nodeType === 1 && (tgt.id === 'ehGlassTooltip' || tgt.closest?.('#ehGlassTooltip'))) continue;
+          if (m.type === 'characterData') {
+            normalizeTextNode(tgt);
+          } else if (m.addedNodes && m.addedNodes.length) {
+            m.addedNodes.forEach(n => {
+              if (n.nodeType === 1 && (n.id === 'ehGlassTooltip' || n.classList?.contains('eh-click-wave'))) return;
+              normalizeDigitsInSubtree(n);
+            });
+          }
+        }
+      } finally {
+        digitObs.observe(document.body, { childList: true, subtree: true, characterData: true });
+      }
+    });
+    digitObs.observe(document.body, { childList: true, subtree: true, characterData: true });
+  }
+
+  window.addEventListener('DOMContentLoaded', startDigitObserver);
+  window.addEventListener('pywebviewready', () => {
+    startDigitObserver();
+    setTimeout(() => normalizeDigitsInSubtree(document.body), 250);
+  });
+})();
+
+
+// ================= eHadiPanel v48.0 Pro — Unify Sidebar Footer Buttons with Native .nav-btn =================
+(() => {
+  if (window.__EH_SB_BTN_UNIFY_V488) return;
+  window.__EH_SB_BTN_UNIFY_V488 = true;
+
+  function unifyFooterBtns() {
+    ['ehDiagSidebarBtn', 'ehMemSidebarBtn'].forEach(id => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      if (!btn.classList.contains('nav-btn')) btn.classList.add('nav-btn');
+    });
+  }
+
+  function bootUnify() {
+    unifyFooterBtns();
+    const sb = document.querySelector('#sidebar, .sidebar');
+    if (sb && !sb._ehFooterBtnObs) {
+      sb._ehFooterBtnObs = new MutationObserver(unifyFooterBtns);
+      sb._ehFooterBtnObs.observe(sb, { childList: true, subtree: true });
+    }
+  }
+
+  window.addEventListener('DOMContentLoaded', () => {
+    bootUnify();
+    setTimeout(unifyFooterBtns, 250);
+    setTimeout(unifyFooterBtns, 900);
+  });
+  window.addEventListener('pywebviewready', () => {
+    bootUnify();
+    setTimeout(unifyFooterBtns, 400);
+  });
+})();
+
+
+// ================= eHadiPanel v48.0 Pro — Maximized Window 8-Edge Resize Cursor Guard =================
+(() => {
+  if (window.__EH_MAX_RESIZE_GUARD_V489) return;
+  window.__EH_MAX_RESIZE_GUARD_V489 = true;
+
+  let isMaxState = false;
+  const RESIZE_CUR_RX = /(?:^|-)(?:n|s|e|w|ne|nw|se|sw|ew|ns|nesw|nwse|col|row)-resize$/i;
+
+  function tagResizeHandles() {
+    if (!document.body) return;
+    // Tag explicit frameless resize edge/corner elements (direct body children or matching resize selectors)
+    const candidates = new Set(document.querySelectorAll(
+      '[data-resize], [data-resize-dir], [data-dir][class*="resize"], [class*="resize-handle"], [class*="win-resize"], [class*="edge-resize"], [class*="resizer"]'
+    ));
+    Array.from(document.body.children).forEach(el => {
+      if (!el || el.nodeType !== 1 || el.id === 'ehGlassTooltip') return;
+      if (el.classList.contains('eh-win-resize-edge')) return;
+      try {
+        const cs = getComputedStyle(el);
+        if (cs.position === 'fixed' && RESIZE_CUR_RX.test((cs.cursor || '').trim())) {
+          candidates.add(el);
+        }
+      } catch (_) {}
+    });
+    candidates.forEach(el => {
+      el.classList.add('eh-win-resize-edge');
+      if (isMaxState) {
+        el.style.setProperty('pointer-events', 'none', 'important');
+        el.style.setProperty('cursor', 'default', 'important');
+      } else {
+        el.style.removeProperty('pointer-events');
+        el.style.removeProperty('cursor');
+      }
+    });
+  }
+
+  function clearInlineResizeCursor() {
+    if (!isMaxState) return;
+    [document.documentElement, document.body].forEach(node => {
+      if (!node || !node.style) return;
+      if (RESIZE_CUR_RX.test((node.style.cursor || '').trim())) {
+        node.style.cursor = '';
+      }
+    });
+  }
+
+  function applyMaxState(val) {
+    isMaxState = Boolean(val);
+    document.body?.classList.toggle('eh-win-maximized', isMaxState);
+    tagResizeHandles();
+    if (isMaxState) clearInlineResizeCursor();
+  }
+
+  window.__ehSetMaximized = applyMaxState;
+
+  async function probeMaximizedState() {
+    try {
+      const res = await window.pywebview?.api?.is_window_maximized?.();
+      if (res && typeof res.maximized === 'boolean') {
+        applyMaxState(res.maximized);
+        return;
+      }
+    } catch (_) {}
+    // Fallback heuristic if API unavailable
+    const heur = (window.outerWidth >= (window.screen?.availWidth || 99999) - 4) &&
+                 (window.outerHeight >= (window.screen?.availHeight || 99999) - 4);
+    applyMaxState(heur);
+  }
+
+  // Intercept mousemove near edges while maximized so no JS resize handler overrides cursor
+  window.addEventListener('mousemove', clearInlineResizeCursor, false);
+  window.addEventListener('pointermove', clearInlineResizeCursor, false);
+  window.addEventListener('resize', scheduleProbeMax);
+
+  let resizeProbeTimer = null;
+  function scheduleProbeMax() {
+    clearTimeout(resizeProbeTimer);
+    resizeProbeTimer = setTimeout(probeMaximizedState, 90);
+  }
+
+  // Also probe right after clicking maximize button or double-clicking titlebar
+  document.addEventListener('click', (e) => {
+    const btn = e.target?.closest?.('.win-btn');
+    if (btn && (btn.getAttribute('onclick') || '').includes('max')) {
+      setTimeout(probeMaximizedState, 120);
+      setTimeout(probeMaximizedState, 360);
+    }
+  }, true);
+  document.addEventListener('dblclick', (e) => {
+    if (e.target?.closest?.('.titlebar') && !e.target?.closest?.('button, input, a')) {
+      setTimeout(probeMaximizedState, 120);
+      setTimeout(probeMaximizedState, 360);
+    }
+  }, true);
+
+  window.addEventListener('DOMContentLoaded', () => {
+    tagResizeHandles();
+    scheduleProbeMax();
+  });
+  window.addEventListener('pywebviewready', () => {
+    tagResizeHandles();
+    probeMaximizedState();
+    setTimeout(() => { tagResizeHandles(); probeMaximizedState(); }, 450);
+  });
+})();

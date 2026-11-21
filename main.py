@@ -1,18 +1,5 @@
-# _EH_DIAGNOSTICS_V43_HOOK
-try:
-    from src.core.diagnostics import install_diagnostics as _eh_install_diag
-    _eh_install_diag(app_version="v47.0 Pro")
-except Exception:
-    pass
-# _EH_MEMORY_ENGINE_V45_HOOK
-try:
-    from src.core.memory_engine import install_memory_engine as _eh_install_mem
-    _eh_install_mem()
-except Exception:
-    pass
-
-# _EHADI_V24_PROCESS_SPLASH
-import os as _os, sys as _sys, subprocess as _subprocess, threading as _threading, time as _time
+# _EHADI_PROCESS_SPLASH_FIRST (launch splash BEFORE heavy imports for instant appearance)
+import os as _os, sys as _sys, subprocess as _subprocess, tempfile as _tempfile, threading as _threading, time as _time
 from pathlib import Path as _Path
 
 if getattr(_sys, "frozen", False):
@@ -30,13 +17,37 @@ if "--ehadi-splash" in _sys.argv:
     _sr.main()
     _sys.exit(0)
 
+_SPLASH_READY_FILE = _Path(_tempfile.gettempdir()) / f"ehadi_splash_{_os.getpid()}.stage"
+
+def _set_splash_stage(stage: str) -> None:
+    try:
+        _SPLASH_READY_FILE.write_text(str(stage), encoding="utf-8")
+    except Exception:
+        pass
+
 try:
+    _set_splash_stage("0")
+    _sp_flags = 0x08000000 if _os.name == "nt" else 0
+    _sp_args = ["--ready-file", str(_SPLASH_READY_FILE), "--parent-pid", str(_os.getpid())]
     if getattr(_sys, "frozen", False):
-        _subprocess.Popen([_sys.executable, "--ehadi-splash"], creationflags=0x08000000)
+        _subprocess.Popen([_sys.executable, "--ehadi-splash", *_sp_args], creationflags=_sp_flags)
     else:
         _runner = _Path(__file__).resolve().parent / "build" / "splash_runner.py"
         if _runner.exists():
-            _subprocess.Popen([_sys.executable, str(_runner)], creationflags=0x08000000)
+            _subprocess.Popen([_sys.executable, str(_runner), *_sp_args], creationflags=_sp_flags)
+except Exception:
+    pass
+
+# _EH_DIAGNOSTICS_V43_HOOK
+try:
+    from src.core.diagnostics import install_diagnostics as _eh_install_diag
+    _eh_install_diag(app_version="Beta 0.2")
+except Exception:
+    pass
+# _EH_MEMORY_ENGINE_V45_HOOK
+try:
+    from src.core.memory_engine import install_memory_engine as _eh_install_mem
+    _eh_install_mem()
 except Exception:
     pass
 
@@ -51,7 +62,7 @@ def _apply_win32_taskbar_icon():
         _u32.SetWindowPos.argtypes = [_ct.c_void_p, _ct.c_void_p, _ct.c_int, _ct.c_int, _ct.c_int, _ct.c_int, _ct.c_uint]
         _u32.SetWindowPos.restype = _ct.c_bool
 
-        _ct.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ImamHadi.eHadiPanel.Enterprise.47")
+        _ct.windll.shell32.SetCurrentProcessExplicitAppUserModelID("ImamHadi.eHadiPanel.Beta.02")
         ico = _Path(getattr(_sys, "_MEIPASS", ".")) / "build" / "eHadiPanel.ico"
         if not ico.exists():
             ico = _Path("build/eHadiPanel.ico").resolve()
@@ -129,7 +140,7 @@ from src.reports.report_studio import (
     save_branding,
 )
 from src.core.config import BASE_DIR, Config
-from src.core.safety import create_snapshot_backup, delete_decision, get_recent_audits, load_decisions, log_audit, save_decision
+from src.core.safety import clear_audit_logs, create_snapshot_backup, delete_decision, get_recent_audits, load_decisions, log_audit, save_decision
 from src.ingestion.parser import DocumentIngestionEngine
 
 
@@ -170,7 +181,18 @@ class AppAPI:
         self._bi_cache = None
         data = self.engine.ingest_all()
         self.agent.invalidate_cache()
-        threading.Thread(target=self.agent.warmup, daemon=True).start()
+        def _refresh_after_scan():
+            try:
+                from src.core.memory_engine import rebuild_clean_teacher_layer
+                rebuild_clean_teacher_layer(force=True)
+            except Exception:
+                pass
+            self.agent.warmup()
+        threading.Thread(target=_refresh_after_scan, daemon=True).start()
+        try:
+            log_audit("docs_scanned", "docs", "ok", {"files": data.get("total_files", 0), "tables": data.get("total_tables", 0)})
+        except Exception:
+            pass
         return data
 
     def open_raw_docs_folder(self):
@@ -239,10 +261,10 @@ class AppAPI:
     def clear_chat_history(self):
         return self.agent.clear_chat_history()
 
-    def ask_ai(self, question: str, mode: str = "analyst"):
-        return self.agent.ask(question, mode=mode)
+    def ask_ai(self, question: str, mode: str = "analyst", route_mode: str = "auto", length_mode: str = "concise"):
+        return self.agent.ask(question, mode=mode, route_mode=route_mode, length_mode=length_mode)
 
-    def ask_ai_stream(self, stream_id: str, question: str, mode: str = "analyst"):
+    def ask_ai_stream(self, stream_id: str, question: str, mode: str = "analyst", route_mode: str = "auto", length_mode: str = "concise"):
         token_buf: list[str] = []
         buf_lock = threading.Lock()
         last_flush = [0.0]
@@ -290,7 +312,7 @@ class AppAPI:
 
         threading.Thread(
             target=self.agent.ask_stream,
-            args=(question, mode, emit_to_ui),
+            args=(question, mode, emit_to_ui, route_mode, length_mode),
             daemon=True,
         ).start()
         return {"ok": True, "stream_id": stream_id}
@@ -461,6 +483,10 @@ class AppAPI:
     def toggle_maximize(self):
         return self.toggle_maximize_window()
 
+    def is_window_maximized(self):
+        # Thread-safe, zero-blocking read (updated on UI thread by SizeChanged/_toggle)
+        return {"ok": True, "maximized": bool(self._maximized)}
+
     def toggle_maximize_window(self):
         if not self._window:
             return {"ok": False}
@@ -471,22 +497,28 @@ class AppAPI:
                 from System.Windows.Forms import FormWindowState, Screen
 
                 def _toggle():
-                    hwnd = int(native.Handle.ToInt64())
-                    wa = Screen.FromControl(native).WorkingArea
-                    native.MaximizedBounds = wa
-                    if native.WindowState == FormWindowState.Maximized:
-                        native.WindowState = FormWindowState.Normal
-                        pref = ctypes.c_int(2)
-                    else:
-                        native.WindowState = FormWindowState.Maximized
-                        pref = ctypes.c_int(1)
-                    ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(pref), ctypes.sizeof(pref))
-                    no_border = ctypes.c_uint(0xFFFFFFFE)
-                    ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 34, ctypes.byref(no_border), ctypes.sizeof(no_border))
+                    try:
+                        hwnd = int(native.Handle.ToInt64())
+                        wa = Screen.FromControl(native).WorkingArea
+                        native.MaximizedBounds = wa
+                        if native.WindowState == FormWindowState.Maximized:
+                            native.WindowState = FormWindowState.Normal
+                            self._maximized = False
+                            pref = ctypes.c_int(2)
+                        else:
+                            native.WindowState = FormWindowState.Maximized
+                            self._maximized = True
+                            pref = ctypes.c_int(1)
+                        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(pref), ctypes.sizeof(pref))
+                        no_border = ctypes.c_uint(0xFFFFFFFE)
+                        ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 34, ctypes.byref(no_border), ctypes.sizeof(no_border))
+                    except Exception:
+                        pass
 
                 native.BeginInvoke(Action(_toggle))
                 return {"ok": True}
             self._window.toggle_fullscreen()
+            self._maximized = not self._maximized
             return {"ok": True}
         except Exception as exc:
             return {"ok": False, "error": str(exc)}
@@ -503,18 +535,28 @@ class AppAPI:
             "bottom-right": 17,
             "move": 2,
         }
-        ht = hit_map.get(str(direction or "").lower())
+        dir_low = str(direction or "").lower()
+        ht = hit_map.get(dir_low)
         if not ht or not self._window:
             return {"ok": False}
+        if dir_low != "move" and self._maximized:
+            return {"ok": False, "blocked": "maximized"}
         try:
             native = getattr(self._window, "native", None)
             if native is not None:
                 from System import Action
+                from System.Windows.Forms import FormWindowState
 
                 def _do_hit():
-                    hwnd = int(native.Handle.ToInt64())
-                    ctypes.windll.user32.ReleaseCapture()
-                    ctypes.windll.user32.SendMessageW(hwnd, 0x00A1, ht, 0)
+                    try:
+                        if dir_low != "move" and native.WindowState == FormWindowState.Maximized:
+                            self._maximized = True
+                            return
+                        hwnd = int(native.Handle.ToInt64())
+                        ctypes.windll.user32.ReleaseCapture()
+                        ctypes.windll.user32.SendMessageW(hwnd, 0x00A1, ht, 0)
+                    except Exception:
+                        pass
 
                 native.BeginInvoke(Action(_do_hit))
                 return {"ok": True, "mode": "win32"}
@@ -689,6 +731,9 @@ class AppAPI:
     def get_audit_logs(self):
         return {"ok": True, "logs": get_recent_audits(60)}
 
+    def clear_audit_logs(self):
+        return clear_audit_logs()
+
     def get_memory_state(self):
         from src.core.memory_engine import get_memory_state as _gms
         return _gms()
@@ -703,6 +748,8 @@ class AppAPI:
 
     def resolve_fuzzy_pair(self, canonical_name: str = "", alias_name: str = "", entity_type: str = "teacher", decision: str = "approved", confidence: float = 1.0):
         from src.core.memory_engine import save_alias as _sa
+        self._bi_cache = None
+        self.agent.invalidate_cache()
         return _sa(
             canonical_name=canonical_name,
             alias_name=alias_name,
@@ -713,7 +760,80 @@ class AppAPI:
 
     def delete_entity_alias(self, alias_id: int = 0):
         from src.core.memory_engine import delete_alias as _da
+        self._bi_cache = None
         return _da(int(alias_id))
+
+    # --- Beta 0.2: هسته هوشمند موجودیت‌ها (کنترل ۱۰۰٪ از رابط کاربری)، سیاست ساعات و حسابرسی ---
+    def get_brain_config(self):
+        from src.core.memory_engine import load_brain_config as _lbc
+        return {"ok": True, "config": _lbc()}
+
+    def save_brain_config(self, payload: dict | None = None):
+        from src.core.memory_engine import save_brain_config as _sbc
+        self._bi_cache = None
+        self.agent.invalidate_cache()
+        return _sbc(payload or {})
+
+    def add_compound_name(self, name: str = ""):
+        from src.core.memory_engine import add_compound_name as _acn
+        self._bi_cache = None
+        self.agent.invalidate_cache()
+        return _acn(name)
+
+    def delete_compound_name(self, name: str = ""):
+        from src.core.memory_engine import delete_compound_name as _dcn
+        self._bi_cache = None
+        self.agent.invalidate_cache()
+        return _dcn(name)
+
+    def set_entity_type_override(self, raw_name: str = "", entity_mode: str = "auto"):
+        from src.core.memory_engine import set_entity_type_override as _seto
+        self._bi_cache = None
+        self.agent.invalidate_cache()
+        return _seto(raw_name, entity_mode)
+
+    def set_hours_policy(self, policy: str = "equal"):
+        from src.core.memory_engine import set_hours_policy as _shp
+        self._bi_cache = None
+        self.agent.invalidate_cache()
+        return _shp(policy)
+
+    def set_course_hour_override(self, course_key: str = "", teacher_shares: dict | None = None):
+        from src.core.memory_engine import set_course_hour_override as _scho
+        self._bi_cache = None
+        self.agent.invalidate_cache()
+        return _scho(course_key, teacher_shares)
+
+    def get_brain_history(self, limit: int = 30):
+        from src.core.memory_engine import get_brain_history as _gbh
+        return {"ok": True, "history": _gbh(int(limit))}
+
+    def undo_brain_action(self, history_id: int = 0):
+        from src.core.memory_engine import undo_brain_action as _uba
+        self._bi_cache = None
+        self.agent.invalidate_cache()
+        return _uba(int(history_id))
+
+    def export_brain_config(self):
+        from src.core.memory_engine import export_brain_json as _ebj
+        return _ebj()
+
+    def import_brain_config(self, raw_json: str = ""):
+        from src.core.memory_engine import import_brain_json as _ibj
+        self._bi_cache = None
+        self.agent.invalidate_cache()
+        return _ibj(raw_json)
+
+    def get_teacher_exact_stats(self, teacher_name: str = "", hours_policy: str = ""):
+        from src.core.memory_engine import get_teacher_exact_stats as _gtes
+        return _gtes(teacher_name, hours_policy)
+
+    def get_audit_rows(self, entity_type: str = "teacher", entity_name: str = ""):
+        return self.exec_engine.get_audit_rows(entity_type, entity_name)
+
+    def get_duplicate_files(self):
+        from src.core.db_manager import detect_duplicate_files as _ddf
+        return {"ok": True, "alerts": _ddf()}
 
     def run_health_check(self, check_network: bool = False):
         from src.core.diagnostics import run_health_check as _rhc
@@ -727,31 +847,49 @@ class AppAPI:
         from src.core.diagnostics import get_recent_errors as _gre
         return _gre(limit)
 
+    def clear_error_logs(self):
+        from src.core.diagnostics import clear_error_logs as _cel
+        return _cel()
+
     def log_frontend_error(self, payload=None):
         from src.core.diagnostics import log_frontend_error as _lfe
         return _lfe(payload)
 
 
-def _enable_native_dwm_animations(window):
+def _enable_native_dwm_animations(window, api=None):
     try:
         native = getattr(window, "native", None)
         if native is None:
             return
-        from System import Action
+        from System import Action, EventHandler
         from System.Drawing import Color
-        from System.Windows.Forms import FormBorderStyle, Screen
+        from System.Windows.Forms import FormBorderStyle, FormWindowState, Screen
 
         def _apply():
-            native.FormBorderStyle = getattr(FormBorderStyle, "None")
-            native.BackColor = Color.FromArgb(10, 11, 15)
-            native.MaximizedBounds = Screen.FromControl(native).WorkingArea
-            hwnd = int(native.Handle.ToInt64())
-            dark = ctypes.c_int(1)
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(dark), ctypes.sizeof(dark))
-            no_border = ctypes.c_uint(0xFFFFFFFE)
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 34, ctypes.byref(no_border), ctypes.sizeof(no_border))
-            round_pref = ctypes.c_int(2)
-            ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(round_pref), ctypes.sizeof(round_pref))
+            try:
+                native.FormBorderStyle = getattr(FormBorderStyle, "None")
+                native.BackColor = Color.FromArgb(10, 11, 15)
+                native.MaximizedBounds = Screen.FromControl(native).WorkingArea
+                hwnd = int(native.Handle.ToInt64())
+                dark = ctypes.c_int(1)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 20, ctypes.byref(dark), ctypes.sizeof(dark))
+                no_border = ctypes.c_uint(0xFFFFFFFE)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 34, ctypes.byref(no_border), ctypes.sizeof(no_border))
+                round_pref = ctypes.c_int(2)
+                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(round_pref), ctypes.sizeof(round_pref))
+
+                def _on_size_changed(sender, args):
+                    # NEVER call evaluate_js() on the WinForms UI thread (causes instant deadlock!)
+                    try:
+                        if api is not None:
+                            api._maximized = bool(native.WindowState == FormWindowState.Maximized)
+                    except Exception:
+                        pass
+
+                native.SizeChanged += EventHandler(_on_size_changed)
+                _on_size_changed(None, None)
+            except Exception:
+                pass
 
         native.BeginInvoke(Action(_apply))
     except Exception:
@@ -759,11 +897,19 @@ def _enable_native_dwm_animations(window):
 
 
 def main():
+    _set_splash_stage("1")
     api = AppAPI()
+    _set_splash_stage("2")
     html_path = Path(__file__).resolve().parent / "src" / "ui" / "web" / "index.html"
+    clean_title = re.sub(
+        r"\s*(?:Enterprise|v?\d+(?:\.\d+)*\s*(?:Pro)?)\s*",
+        " ",
+        str(getattr(Config, "APP_NAME", "پنل مدیریت مؤسسه امام هادی")),
+        flags=re.IGNORECASE,
+    ).strip() or "پنل مدیریت مؤسسه امام هادی"
 
     window = webview.create_window(
-        title=Config.APP_NAME,
+        title=clean_title,
         url=str(html_path),
         js_api=api,
         width=1280,
@@ -775,8 +921,10 @@ def main():
         background_color="#050811",
     )
     api.set_window(window)
+    _set_splash_stage("3")
     def _on_window_shown():
-        _enable_native_dwm_animations(window)
+        _set_splash_stage("READY")
+        _enable_native_dwm_animations(window, api)
         if not getattr(api, "_warmed_up", False):
             api._warmed_up = True
             threading.Thread(target=api.agent.warmup, daemon=True).start()

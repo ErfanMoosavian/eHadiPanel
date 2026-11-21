@@ -55,8 +55,8 @@
         <div class="bi-hub-brand">
           <span class="bi-dot"></span>
           <div>
-            <strong>مرکز هوش تجاری سازمانی (Enterprise BI Hub)</strong>
-            <div class="bi-hub-sub">تحلیل زنده و آفلاین روی داده‌های آموزشی، فاکتورهای خرید و کلیه جداول DuckDB</div>
+            <strong>مرکز هوش تجاری و تحلیل آماری</strong>
+            <div class="bi-hub-sub">تحلیل زنده و آفلاین روی داده‌های آموزشی، فاکتورهای خرید و کلیه جداول ثبت‌شده</div>
           </div>
         </div>
 
@@ -244,7 +244,7 @@
         <div class="glass-card bi-kpi">
           <div class="bi-kpi-label">مجموع نفر-حضور جدولی</div>
           <div class="bi-kpi-val" style="color:#38bdf8;">${faNum(totalParticipants)}</div>
-          <div class="bi-kpi-sub">جمع دقیق از جداول DuckDB</div>
+          <div class="bi-kpi-sub">جمع دقیق از جداول ثبت‌شده</div>
         </div>
         <div class="glass-card bi-kpi">
           <div class="bi-kpi-label">میانگین شرکت‌کننده هر دوره</div>
@@ -316,6 +316,7 @@
       </div>
     `;
 
+    window.__ehScanSelects && window.__ehScanSelects(vp);
     document.getElementById('eduWgSel').addEventListener('change', e => {
       state.eduWorkgroup = e.target.value;
       renderEducationLens(vp);
@@ -572,6 +573,7 @@
       </div>
     `;
 
+    window.__ehScanSelects && window.__ehScanSelects(vp);
     document.getElementById('finCatSel').addEventListener('change', e => { state.finCategory = e.target.value; renderFinanceLens(vp); });
     document.getElementById('finFileSel').addEventListener('change', e => { state.finFile = e.target.value; renderFinanceLens(vp); });
     const fSearch = document.getElementById('finSearchInp');
@@ -633,9 +635,14 @@
     const textCols = tblData.text_columns && tblData.text_columns.length ? tblData.text_columns : cols;
     const numCols = tblData.numeric_columns || [];
 
-    if (!cols.includes(state.uniGroupCol)) state.uniGroupCol = textCols[0] || cols[0] || '';
-    if (state.uniMetricCol !== '__COUNT__' && !numCols.includes(state.uniMetricCol)) {
-      state.uniMetricCol = numCols[0] || '__COUNT__';
+    const skipAxisRx = /^(ردیف|شماره|id|no|index)$/i;
+    const skipMetricRx = /(ردیف|سال|کد\s*ملی|موبایل|تلفن|شماره|تاریخ|id)/i;
+    const smartNumCols = numCols.filter(c => !skipMetricRx.test(String(c || '').trim()));
+    if (!cols.includes(state.uniGroupCol)) {
+      state.uniGroupCol = textCols.find(c => !skipAxisRx.test(String(c || '').trim())) || textCols[0] || cols[0] || '';
+    }
+    if (!state.uniMetricCol || (state.uniMetricCol !== '__COUNT__' && !numCols.includes(state.uniMetricCol))) {
+      state.uniMetricCol = smartNumCols[0] || numCols[0] || '__COUNT__';
     }
 
     const gIdx = cols.indexOf(state.uniGroupCol);
@@ -644,8 +651,10 @@
     const groups = {};
     let totalMetric = 0;
     let validRows = 0;
+    const sumRowRx = /^(جمع\s*کل|مجموع(\s*کل)?|جمع|کل|میانگین|total|grand\s*total|subtotal)$/i;
     (tblData.rows || []).forEach(r => {
       const k = (gIdx >= 0 ? String(r[gIdx] || '').trim() : '') || 'نامشخص';
+      if (sumRowRx.test(k)) return;
       if (!groups[k]) groups[k] = { name: k, sum: 0, count: 0 };
       if (mIdx >= 0) {
         const v = parseClientNum(r[mIdx]);
@@ -727,10 +736,11 @@
       </div>
     `;
 
+    window.__ehScanSelects && window.__ehScanSelects(vp);
     document.getElementById('uniTblSel').addEventListener('change', e => {
       state.uniTable = e.target.value;
       state.uniGroupCol = '';
-      state.uniMetricCol = '__COUNT__';
+      state.uniMetricCol = '';
       renderUniversalLens(vp);
     });
     document.getElementById('uniGrpSel').addEventListener('change', e => { state.uniGroupCol = e.target.value; renderUniversalLens(vp); });
@@ -739,7 +749,7 @@
     if (aggEl) aggEl.addEventListener('change', e => { state.uniAgg = e.target.value; renderUniversalLens(vp); });
 
     document.getElementById('uniAskAiBtn').addEventListener('click', () => {
-      const q = `جدول «${tblData.source_sheet}» از فایل «${tblData.file_name}» (نام جدول SQL: ${tblData.table_name}) را به‌صورت کامل تحلیل آماری و مدیریتی کن.`;
+      const q = `جدول «${tblData.source_sheet}» از فایل «${tblData.file_name}» را به‌صورت کامل تحلیل آماری و مدیریتی کن.`;
       window.switchPageById && window.switchPageById('chat');
       window.sendQuickPrompt && window.sendQuickPrompt(q);
     });

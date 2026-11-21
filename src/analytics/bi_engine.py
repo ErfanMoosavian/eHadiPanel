@@ -7,6 +7,8 @@ import duckdb
 import lancedb
 
 from src.core.config import Config
+from src.core.db_manager import get_db_lock, is_summary_row_smart, parse_jalali_date, parse_number_strict
+from src.core.memory_engine import _clean_for_compare, load_brain_config, resolve_canonical_map, split_joint_names
 
 PERSIAN_TO_EN = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
 
@@ -132,22 +134,13 @@ def teacher_group_key(name: str) -> str:
 
 
 def extract_period_label(raw_date: str, fallback: str) -> str:
+    jd = parse_jalali_date(raw_date, fallback_text=fallback)
+    if jd.get("is_parsed"):
+        if jd["year"] and jd["month"]:
+            return f"{jd['year']}/{jd['month']:02d} ({jd['month_name']})"
+        if jd["canonical"]:
+            return jd["canonical"]
     s = norm_text(raw_date)
-    if not s:
-        return fallback
-    # الگوی 1403/08/12 یا 1404-02-05
-    m = re.search(r"(1[34]\d{2}|20\d{2})[/\-.](\d{1,2})", s)
-    if m:
-        return f"{m.group(1)}/{int(m.group(2)):02d}"
-    # نام ماه شمسی + سال
-    months = (
-        "فروردین", "اردیبهشت", "خرداد", "تیر", "مرداد", "شهریور",
-        "مهر", "آبان", "آذر", "دی", "بهمن", "اسفند"
-    )
-    for idx, mn in enumerate(months, start=1):
-        if mn in s:
-            ym = re.search(r"1[34]\d{2}", s)
-            return f"{ym.group(0)}/{idx:02d} ({mn})" if ym else mn
     return s[:16] if len(s) >= 4 else fallback
 
 
@@ -289,7 +282,21 @@ class BIDashboardEngine:
         return '"' + col.replace('"', '""') + '"'
 
     def get_analytics(self) -> dict[str, Any]:
-        con = duckdb.connect(self.duckdb_path)
+        _bcfg = load_brain_config(self.duckdb_path)
+        _t_alias = resolve_canonical_map("teacher", self.duckdb_path)
+        _lk = get_db_lock(self.duckdb_path)
+        _lk.acquire()
+        con = None
+        try:
+            con = duckdb.connect(self.duckdb_path)
+        except Exception:
+            _lk.release()
+            return {
+                "ok": True,
+                "education": {"has_data": False, "records": [], "workgroups": []},
+                "finance": {"has_data": False, "records": [], "categories": [], "unit": "تومان", "unstructured_hints": []},
+                "universal": {"tables": []},
+            }
         try:
             tables_meta = con.execute("""
                 SELECT table_name, file_name, source_sheet, rows_count, columns_json
@@ -298,6 +305,7 @@ class BIDashboardEngine:
             """).fetchall()
         except Exception:
             con.close()
+            _lk.release()
             return {
                 "ok": True,
                 "education": {"has_data": False, "records": [], "workgroups": []},
@@ -363,7 +371,7 @@ class BIDashboardEngine:
                         item_txt = re.sub(r"\s+", " ", str(get_v(row, "item") or "")).strip()
                         # حذف ردیف‌های جمع کل پایین فاکتور برای جلوگیری از دوباره‌شماری
                         item_norm = norm_text(item_txt)
-                        if item_norm in ("جمع", "جمع کل", "مجموع", "مجموع کل", "قابل پرداخت", "کل", "جمع نهایی", "تخفیف", "مالیات"):
+                        if is_summary_row_smart(list(row)) or item_norm in ("جمع", "جمع کل", "مجموع", "مجموع کل", "قابل پرداخت", "کل", "جمع نهایی", "تخفیف", "مالیات"):
                             continue
 
                         amt = parse_number(get_v(row, "amount"))
@@ -418,31 +426,25 @@ class BIDashboardEngine:
                         sample_courses = " ".join(str(r[0] or "") for r in rows[:5])
                         workgroup = self._detect_workgroup(file_name, source_sheet, slide_txt, sample_courses)
 
-                        for r in rows:
+                        for r_idx, r in enumerate(rows, start=1):
+                            if is_summary_row_smart(list(r)):
+                                continue
                             course_name = re.sub(r"\s+", " ", str(r[0] or "")).strip()
-                            if not course_name or course_name in ("-", "جمع", "مجموع", "کل"):
+                            if not course_name or course_name in ("-", "جمع", "مجموع", "کل", "جمع کل", "مجموع کل"):
                                 continue
                             teacher_raw = clean_teacher_name(str(r[1] or ""))
-                            num = parse_number(r[2])
+                            num = parse_number_strict(r[2])
                             participants = int(round(num)) if num is not None else None
-
-                            t_norm = norm_text(teacher_raw)
-                            is_collective = (
-                                not teacher_raw
-                                or any(k in t_norm for k in COLLECTIVE_KEYWORDS)
-                                or "،" in teacher_raw
-                                or " - " in teacher_raw
-                                or "/" in teacher_raw
-                            )
+                            mode, parts = split_joint_names(teacher_raw, "teacher", _bcfg)
+                            is_collective = (mode == "گروهی")
+                            resolved_teachers = [_t_alias.get(_clean_for_compare(pt, "teacher", _bcfg), pt) for pt in parts] if not is_collective else []
+                            primary_t = resolved_teachers[0] if len(resolved_teachers) == 1 else (" و ".join(resolved_teachers) if resolved_teachers else (teacher_raw or "ثبت‌نشده"))
                             edu_records.append({
-                                "course": course_name,
-                                "teacher": teacher_raw or "ثبت‌نشده",
-                                "teacher_key": teacher_group_key(teacher_raw) if not is_collective else "",
-                                "is_collective": is_collective,
-                                "participants": participants,
-                                "workgroup": workgroup,
-                                "file_name": file_name,
-                                "source": str(source_sheet or ""),
+                                "course": course_name, "teacher": primary_t, "teachers": resolved_teachers,
+                                "holding_mode": mode, "teacher_key": _clean_for_compare(resolved_teachers[0], "teacher", _bcfg) if len(resolved_teachers) == 1 else "",
+                                "is_collective": is_collective, "is_joint": (mode == "مشترک"),
+                                "participants": participants, "workgroup": workgroup,
+                                "file_name": file_name, "source": str(source_sheet or ""), "row_index": r_idx,
                             })
 
                 universal_tables.append({
@@ -455,6 +457,7 @@ class BIDashboardEngine:
                 })
         finally:
             con.close()
+            _lk.release()
 
         # مرتب‌سازی کارگروه‌های آموزشی
         wg_totals: dict[str, int] = defaultdict(int)
@@ -499,6 +502,10 @@ class BIDashboardEngine:
         if not re.fullmatch(r"tbl_[a-f0-9]+", str(table_name or "")):
             return {"ok": False, "error": "نام جدول نامعتبر است."}
 
+        with get_db_lock(self.duckdb_path):
+            return self._get_table_dynamic_data_locked(table_name, limit)
+
+    def _get_table_dynamic_data_locked(self, table_name: str, limit: int = 500) -> dict[str, Any]:
         con = duckdb.connect(self.duckdb_path)
         try:
             meta = con.execute(

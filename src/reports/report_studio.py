@@ -67,6 +67,10 @@ DEFAULT_BRANDING: dict[str, Any] = {
     "voice_tts": True,
     "whisper_model": "small",
     "ui_palette": "navy",
+    "include_summary_sheet": True,
+    "include_charts": True,
+    "include_transparency": True,
+    "excel_primary_color": "",
 }
 
 PERSIAN_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
@@ -213,7 +217,7 @@ def save_branding(payload: dict[str, Any]) -> dict[str, Any]:
         "contact_phone", "contact_handle", "contact_text", "signature_title",
         "excel_default_title", "theme", "show_bismillah", "show_signature",
         "logo_path", "pdf_font", "word_font", "excel_font", "custom_fonts",
-        "voice_engine", "voice_tts", "whisper_model", "ui_palette", "ui_density", "eitaa_templates", "ui_palette",
+        "voice_engine", "voice_tts", "whisper_model", "ui_palette", "ui_density", "eitaa_templates", "include_summary_sheet", "include_charts", "include_transparency", "excel_primary_color",
     )
     for k in allowed:
         if k in payload:
@@ -414,6 +418,10 @@ def _add_styled_table(doc: Document, headers: list[str], rows: list[list[Any]], 
     _set_rtl_table(tbl)
     _set_table_borders(tbl, "CBD5E1")
 
+    _trPr0 = tbl.rows[0]._tr.get_or_add_trPr()
+    _trPr0.append(OxmlElement("w:tblHeader"))
+    _trPr0.append(OxmlElement("w:cantSplit"))
+
     for idx, h in enumerate(headers):
         cell = tbl.rows[0].cells[idx]
         cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
@@ -424,6 +432,7 @@ def _add_styled_table(doc: Document, headers: list[str], rows: list[list[Any]], 
         _add_fa_run(p, str(h), font_name=font_name, size=9.5, bold=True, color_hex="FFFFFF")
 
     for r_idx, row in enumerate(rows):
+        tbl.rows[r_idx + 1]._tr.get_or_add_trPr().append(OxmlElement("w:cantSplit"))
         cells = tbl.rows[r_idx + 1].cells
         bg = theme["light"] if r_idx % 2 == 1 else "FFFFFF"
         for c_idx in range(len(headers)):
@@ -730,14 +739,14 @@ def _md_to_html(md_text: str) -> str:
         elif re.match(r"^[-*•]\s+", line):
             items = []
             while i < len(lines) and re.match(r"^[-*•]\s+", lines[i].strip()):
-                items.append(f"<li>{_inline_html(re.sub(r'^[-*•]\s+', '', lines[i].strip()))}</li>")
+                _li_txt = re.sub(r'^[-*•]\s+', '', lines[i].strip()); items.append(f'<li>{_inline_html(_li_txt)}</li>')
                 i += 1
             out.append("<ul>" + "".join(items) + "</ul>")
             continue
         elif re.match(r"^\d+[.)]\s+", line):
             items = []
             while i < len(lines) and re.match(r"^\d+[.)]\s+", lines[i].strip()):
-                items.append(f"<li>{_inline_html(re.sub(r'^\d+[.)]\s+', '', lines[i].strip()))}</li>")
+                _li_txt = re.sub(r'^\d+[.)]\s+', '', lines[i].strip()); items.append(f'<li>{_inline_html(_li_txt)}</li>')
                 i += 1
             out.append("<ol>" + "".join(items) + "</ol>")
             continue
@@ -856,7 +865,9 @@ def _build_pdf_shell(branding: dict[str, Any], theme: dict[str, str], title: str
   code {{ background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 8.6pt; color: #0f172a; }}
   .tbl-wrap {{ width: 100%; margin: 6px 0 12px; }}
   table {{ direction: rtl; width: 100%; border-collapse: collapse; font-size: 8.6pt; page-break-inside: auto; }}
-  tr {{ page-break-inside: avoid; }}
+  thead {{ display: table-header-group; }}
+  tr {{ page-break-inside: avoid; break-inside: avoid; }}
+  .transparency-box {{ direction: rtl; text-align: right; margin-top: 10px; padding: 8px 12px; border-radius: 6px; background: #f8fafc; border: 1px solid #cbd5e1; border-right: 3px solid #{p_hex}; font-size: 8.2pt; color: #475569; break-inside: avoid; }}
   th {{ background: #{p_hex}; color: #ffffff; font-weight: 700; padding: 5.5px 7px; border: 1px solid #cbd5e1; text-align: center; }}
   td {{ padding: 5.5px 7px; border: 1px solid #cbd5e1; text-align: right; color: #1e293b; }}
   td.center {{ text-align: center; }}
@@ -963,7 +974,11 @@ def export_official_pdf(payload: dict[str, Any], dest_path: Path) -> dict[str, A
         else ""
     )
 
-    inner = f'<div class="subject-bar">موضوع: {_esc(title)}</div>{intro_html}{kpis_html}{charts_html}{body_html}{tables_html}{cites_html}{sig_html}'
+    trans_note = str(payload.get("transparency_note") or "").strip()
+    trans_html = f'<div class="transparency-box"><strong>شفافیت آماری و سلامت داده:</strong> {_esc(trans_note)}</div>' if (trans_note and branding.get("include_transparency", True)) else ""
+    if not branding.get("include_charts", True):
+        charts_html = ""
+    inner = f'<div class="subject-bar">موضوع: {_esc(title)}</div>{intro_html}{kpis_html}{charts_html}{body_html}{tables_html}{cites_html}{trans_html}{sig_html}'
     html_doc = _build_pdf_shell(branding, theme, title, letter_no, has_attach, inner)
     res = _render_html_to_pdf(html_doc, dest_path)
     if res.get("ok"):
@@ -1017,101 +1032,346 @@ def export_attendance_sheet_pdf(payload: dict[str, Any], dest_path: Path) -> dic
     return res
 
 
+def _resolve_excel_palette(branding: dict[str, Any]) -> dict[str, str]:
+    theme = THEMES.get(branding.get("theme"), THEMES["emerald_beige"])
+    custom = re.sub(r"[^0-9A-Fa-f]", "", str(branding.get("excel_primary_color") or ""))
+    primary = custom.upper() if len(custom) == 6 else theme["primary"]
+    return {
+        "primary": primary, "dark": theme["dark"], "accent": theme["accent"],
+        "accent_soft": theme["accent_soft"], "zebra": theme["light"],
+        "border": "CBD5E1", "total_bg": "E2E8F0", "text": "0F172A", "muted": "475569",
+    }
+
+
+def _configure_sheet_print(ws, title_rows: str = "1:4", landscape: bool = True, org_name: str = "") -> None:
+    ws.views.sheetView[0].rightToLeft = True
+    ws.page_setup.orientation = ws.ORIENTATION_LANDSCAPE if landscape else ws.ORIENTATION_PORTRAIT
+    ws.page_setup.paperSize = ws.PAPERSIZE_A4
+    ws.sheet_properties.pageSetUpPr.fitToPage = True
+    ws.page_setup.fitToWidth = 1
+    ws.page_setup.fitToHeight = 0
+    if title_rows:
+        ws.print_title_rows = title_rows
+    ws.oddFooter.right.text = f"{org_name} | تاریخ: {today_jalali_str()}"
+    ws.oddFooter.left.text = "صفحه &P از &N"
+
+
+def _add_sheet_banner(ws, col_count: int, title: str, subtitle: str, font_name: str, pal: dict[str, str]) -> int:
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    span = max(2, col_count)
+    ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=span)
+    ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=span)
+    c1 = ws.cell(row=1, column=1, value=title)
+    c1.fill = PatternFill("solid", fgColor=pal["dark"])
+    c1.font = Font(name=font_name, size=13, bold=True, color="FFFFFF")
+    c1.alignment = Alignment(horizontal="right", vertical="center", indent=1)
+    ws.row_dimensions[1].height = 32
+
+    c2 = ws.cell(row=2, column=1, value=subtitle)
+    c2.fill = PatternFill("solid", fgColor=pal["accent_soft"])
+    c2.font = Font(name=font_name, size=9.5, color=pal["dark"])
+    c2.alignment = Alignment(horizontal="right", vertical="center", indent=1)
+    ws.row_dimensions[2].height = 22
+    ws.row_dimensions[3].height = 8
+    return 4
+
+
+def _auto_fit_columns(ws, start_row: int = 4, min_w: int = 12, max_w: int = 44) -> None:
+    from openpyxl.utils import get_column_letter
+    for col_idx in range(1, ws.max_column + 1):
+        max_len = 0
+        for r in range(start_row, ws.max_row + 1):
+            val = ws.cell(row=r, column=col_idx).value
+            if val is None:
+                continue
+            s = str(val)
+            max_len = max(max_len, 14 if s.startswith("=") else len(s))
+        ws.column_dimensions[get_column_letter(col_idx)].width = min(max_w, max(min_w, max_len + 6))
+
+
+def _apply_data_bar(ws, col_idx: int, start_row: int, end_row: int, color_hex: str) -> None:
+    if end_row < start_row:
+        return
+    try:
+        from openpyxl.formatting.rule import DataBarRule
+        from openpyxl.utils import get_column_letter
+        col_ltr = get_column_letter(col_idx)
+        ws.conditional_formatting.add(f"{col_ltr}{start_row}:{col_ltr}{end_row}", DataBarRule(start_type="min", end_type="max", color=color_hex, showValue=True))
+    except Exception:
+        pass
+
+
+def export_styled_table_excel(table_data: dict[str, Any], dest_path: Path) -> str:
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    branding = load_branding()
+    pal = _resolve_excel_palette(branding)
+    ef = str(branding.get("excel_font") or "Tahoma").strip() or "Tahoma"
+    org_name = str(branding.get("org_name") or "مؤسسه امام هادی")
+    raw_title = normalize_honorifics(str(table_data.get("title") or branding.get("excel_default_title") or "گزارش جدولی").strip())
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = re.sub(r'[\\/*?:\[\]]', '', raw_title)[:28].strip() or "گزارش"
+
+    columns = list(table_data.get("columns") or [])
+    rows = list(table_data.get("rows") or [])
+    n_cols = max(1, len(columns))
+    hdr_row = _add_sheet_banner(ws, n_cols, f"{org_name} — {raw_title}", f"تاریخ گزارش: {today_jalali_str()}  |  تعداد رکوردها: {to_fa_digits(len(rows))}", ef, pal)
+
+    thin, med_top = Side(border_style="thin", color=pal["border"]), Side(border_style="medium", color=pal["primary"])
+    border, total_border = Border(left=thin, right=thin, top=thin, bottom=thin), Border(left=thin, right=thin, top=med_top, bottom=med_top)
+    hdr_fill, zebra_fill, tot_fill = PatternFill("solid", fgColor=pal["primary"]), PatternFill("solid", fgColor=pal["zebra"]), PatternFill("solid", fgColor=pal["total_bg"])
+    hdr_font, body_font, tot_font = Font(name=ef, size=10.5, bold=True, color="FFFFFF"), Font(name=ef, size=10, color=pal["text"]), Font(name=ef, size=10, bold=True, color=pal["dark"])
+    en_trans = str.maketrans("۰۱۲۳۴۵۶۷۸۹٠١٢٣٤٥٦٧٨٩", "01234567890123456789")
+
+    ws.row_dimensions[hdr_row].height = 28
+    for c_i, col_name in enumerate(columns, start=1):
+        c = ws.cell(row=hdr_row, column=c_i, value=str(col_name))
+        c.fill, c.font, c.alignment, c.border = hdr_fill, hdr_font, Alignment(horizontal="center", vertical="center", wrap_text=True), border
+
+    numeric_hits = [0] * n_cols
+    data_start = hdr_row + 1
+    for offset, row in enumerate(rows):
+        r_idx = data_start + offset
+        ws.row_dimensions[r_idx].height = 23
+        for c_i in range(1, n_cols + 1):
+            val = row[c_i - 1] if (c_i - 1) < len(row) else ""
+            parsed_val, is_num = val, False
+            if isinstance(val, (int, float)) and not isinstance(val, bool):
+                is_num = True
+            else:
+                s_en = (str(val).strip() if val is not None else "").translate(en_trans).replace(",", "").replace("٬", "")
+                if re.fullmatch(r"-?\d+", s_en):
+                    parsed_val, is_num = int(s_en), True
+                elif re.fullmatch(r"-?\d+\.\d+", s_en):
+                    parsed_val, is_num = float(s_en), True
+            cell = ws.cell(row=r_idx, column=c_i, value=parsed_val)
+            cell.font, cell.border = body_font, border
+            if offset % 2 == 1:
+                cell.fill = zebra_fill
+            if is_num:
+                numeric_hits[c_i - 1] += 1
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.number_format = "#,##0" if isinstance(parsed_val, int) else "#,##0.##"
+            else:
+                cell.alignment = Alignment(horizontal="right", vertical="center", wrap_text=True, indent=1)
+
+    data_end = data_start + len(rows) - 1
+    if rows:
+        ws.auto_filter.ref = f"A{hdr_row}:{get_column_letter(n_cols)}{data_end}"
+        ws.freeze_panes = f"A{data_start}"
+        skip_sum = ("ردیف", "سال", "شماره", "کد", "موبایل", "تلفن", "درصد", "نرخ", "میانگین", "میانه")
+        num_cols_to_sum = [idx for idx, cnt in enumerate(numeric_hits, start=1) if cnt >= max(1, int(len(rows) * 0.6)) and not any(h in str(columns[idx - 1]) for h in skip_sum)]
+        if num_cols_to_sum:
+            tot_row = data_end + 1
+            ws.row_dimensions[tot_row].height = 26
+            for c_i in range(1, n_cols + 1):
+                cell = ws.cell(row=tot_row, column=c_i)
+                cell.fill, cell.font, cell.border = tot_fill, tot_font, total_border
+                if c_i == 1:
+                    cell.value, cell.alignment = "جمع کل", Alignment(horizontal="center", vertical="center")
+                elif c_i in num_cols_to_sum:
+                    col_l = get_column_letter(c_i)
+                    cell.value, cell.alignment, cell.number_format = f"=SUM({col_l}{data_start}:{col_l}{data_end})", Alignment(horizontal="center", vertical="center"), "#,##0.##"
+            _apply_data_bar(ws, num_cols_to_sum[0], data_start, data_end, pal["primary"])
+
+    _auto_fit_columns(ws, start_row=hdr_row)
+    _configure_sheet_print(ws, title_rows=f"1:{hdr_row}", landscape=(n_cols > 5), org_name=org_name)
+    wb.save(dest_path)
+    return str(dest_path)
+
+
 def export_analytics_excel(analytics: dict[str, Any], dest_path: Path) -> dict[str, Any]:
     try:
         from openpyxl import Workbook
-        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.chart import BarChart, Reference
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from openpyxl.utils import get_column_letter
     except Exception as exc:
         return {"ok": False, "error": f"کتابخانه openpyxl در دسترس نیست: {exc}"}
 
     branding = load_branding()
+    pal = _resolve_excel_palette(branding)
     ef = str(branding.get("excel_font") or "Tahoma").strip() or "Tahoma"
+    org_name = str(branding.get("org_name") or "مؤسسه امام هادی")
+    title_main = str(branding.get("excel_default_title") or "گزارش تحلیلی مدیریتی")
+
     wb = Workbook()
+    thin, med = Side(border_style="thin", color=pal["border"]), Side(border_style="medium", color=pal["primary"])
+    border, tot_border = Border(left=thin, right=thin, top=thin, bottom=thin), Border(left=thin, right=thin, top=med, bottom=med)
+    hdr_fill, zebra_fill, tot_fill, card_lbl_fill = PatternFill("solid", fgColor=pal["primary"]), PatternFill("solid", fgColor=pal["zebra"]), PatternFill("solid", fgColor=pal["total_bg"]), PatternFill("solid", fgColor=pal["accent_soft"])
+    hdr_font, body_font, tot_font = Font(name=ef, size=10, bold=True, color="FFFFFF"), Font(name=ef, size=9.8, color=pal["text"]), Font(name=ef, size=10, bold=True, color=pal["dark"])
 
-    hdr_fill = PatternFill("solid", fgColor="0B8443")
-    hdr_font = Font(name=ef, size=10, bold=True, color="FFFFFF")
-    body_font = Font(name=ef, size=10, color="1E293B")
-    alt_fill = PatternFill("solid", fgColor="F4F8F5")
+    def build_data_sheet(ws, banner_title, banner_sub, headers, rows, sum_cols=(), avg_cols=(), bar_col=None, int_cols=(), dec_cols=()):
+        hdr_row = _add_sheet_banner(ws, len(headers), banner_title, banner_sub, ef, pal)
+        ws.row_dimensions[hdr_row].height = 28
+        for ci, h in enumerate(headers, start=1):
+            c = ws.cell(row=hdr_row, column=ci, value=h)
+            c.fill, c.font, c.alignment, c.border = hdr_fill, hdr_font, Alignment(horizontal="center", vertical="center", wrap_text=True), border
+        data_start = hdr_row + 1
+        for off, r in enumerate(rows):
+            ri = data_start + off
+            ws.row_dimensions[ri].height = 23
+            for ci in range(1, len(headers) + 1):
+                val = r[ci - 1] if (ci - 1) < len(r) else ""
+                c = ws.cell(row=ri, column=ci, value=val)
+                c.font, c.border = body_font, border
+                if off % 2 == 1:
+                    c.fill = zebra_fill
+                if ci in int_cols:
+                    c.alignment, c.number_format = Alignment(horizontal="center", vertical="center"), "#,##0"
+                elif ci in dec_cols:
+                    c.alignment, c.number_format = Alignment(horizontal="center", vertical="center"), "#,##0.0"
+                else:
+                    c.alignment = Alignment(horizontal="right", vertical="center", wrap_text=True, indent=1)
+        data_end = data_start + len(rows) - 1
+        if rows:
+            ws.auto_filter.ref = f"A{hdr_row}:{get_column_letter(len(headers))}{data_end}"
+            ws.freeze_panes = f"A{data_start}"
+            if sum_cols or avg_cols:
+                tr = data_end + 1
+                ws.row_dimensions[tr].height = 26
+                for ci in range(1, len(headers) + 1):
+                    c = ws.cell(row=tr, column=ci)
+                    c.fill, c.font, c.border = tot_fill, tot_font, tot_border
+                    col_l = get_column_letter(ci)
+                    if ci == 1:
+                        c.value, c.alignment = "جمع کل / میانگین", Alignment(horizontal="center", vertical="center")
+                    elif ci in sum_cols:
+                        c.value, c.alignment, c.number_format = f"=SUM({col_l}{data_start}:{col_l}{data_end})", Alignment(horizontal="center", vertical="center"), "#,##0.##"
+                    elif ci in avg_cols:
+                        c.value, c.alignment, c.number_format = f"=IFERROR(AVERAGE({col_l}{data_start}:{col_l}{data_end}),0)", Alignment(horizontal="center", vertical="center"), "#,##0.0"
+            if bar_col:
+                _apply_data_bar(ws, bar_col, data_start, data_end, pal["primary"])
+        _auto_fit_columns(ws, start_row=hdr_row)
+        _configure_sheet_print(ws, title_rows=f"1:{hdr_row}", landscape=(len(headers) > 5), org_name=org_name)
+        return data_start, data_end
 
-    def style_sheet(ws, headers: list[str], rows: list[list[Any]]):
-        ws.views.sheetView[0].rightToLeft = True
-        ws.append(headers)
-        for col_i in range(1, len(headers) + 1):
-            c = ws.cell(row=1, column=col_i)
-            c.fill = hdr_fill
-            c.font = hdr_font
-            c.alignment = Alignment(horizontal="center", vertical="center")
-        for r_i, row in enumerate(rows, 2):
-            ws.append(row)
-            for col_i in range(1, len(headers) + 1):
-                c = ws.cell(row=r_i, column=col_i)
-                c.font = body_font
-                c.alignment = Alignment(horizontal="right", vertical="center")
-                if r_i % 2 == 1:
-                    c.fill = alt_fill
-        for col in ws.columns:
-            max_len = max((len(str(cell.value or "")) for cell in col), default=10)
-            ws.column_dimensions[col[0].column_letter].width = min(45, max(12, max_len + 5))
+    include_summary = bool(branding.get("include_summary_sheet", True))
+    ws_dash = wb.active
+    if include_summary:
+        ws_dash.title = "داشبورد خلاصه مدیریتی"
+        ws_grp = wb.create_sheet("تفکیک کارگروه‌ها")
+    else:
+        ws_grp = ws_dash
+        ws_grp.title = "تفکیک کارگروه‌ها"
 
-    ws1 = wb.active
-    ws1.title = "خلاصه شاخص‌ها"
-    k = analytics.get("kpis") or {}
-    style_sheet(
-        ws1,
-        ["شاخص مدیریتی", "مقدار"],
-        [
-            ["تعداد کل دوره‌ها و رویدادها", k.get("total_courses", 0)],
-            ["مجموع شرکت‌کنندگان (کل حضور)", k.get("total_attendance", 0)],
-            ["شرکت‌کنندگان یکتا (غیرتکراری)", k.get("unique_participants", 0)],
-            ["نرخ بازگشت و وفاداری (%)", k.get("repeat_rate", 0)],
-            ["میانگین شرکت‌کننده در هر دوره", k.get("avg_per_course", 0)],
-            ["تعداد اساتید فعال", k.get("total_teachers", 0)],
-            ["تعداد کارگروه‌ها", k.get("total_groups", 0)],
-            ["مجموع هزینه‌ها (تومان)", k.get("total_cost", 0)],
-            ["هزینه به ازای هر مخاطب (تومان)", k.get("cost_per_attendee", 0)],
-            ["امتیاز سلامت داده‌ها (%)", k.get("data_health_score", 100)],
-        ],
+    groups = list(analytics.get("groups") or [])
+    grp_start, grp_end = build_data_sheet(
+        ws_grp, f"{org_name} — عملکرد تفکیکی کارگروه‌ها", f"تاریخ گزارش: {today_jalali_str()}  |  تعداد کارگروه‌ها: {to_fa_digits(len(groups))}",
+        ["کارگروه", "تعداد دوره‌ها", "مجموع نفر-دوره", "مخاطبان یکتا", "میانگین جذب", "میانه جذب", "مجموع ساعات", "نرخ بازگشت (%)", "هزینه (تومان)"],
+        [[g["name"], g["courses"], g["attendance"], g.get("unique", 0), g.get("avg_attendance", 0), g.get("median_attendance", 0), g.get("hours", 0), g.get("repeat_rate", 0), g.get("cost", 0)] for g in groups],
+        sum_cols=(2, 3, 7, 9), avg_cols=(5, 6, 8), bar_col=3, int_cols=(2, 3, 4, 9), dec_cols=(5, 6, 7, 8),
     )
 
-    ws2 = wb.create_sheet("تفکیک کارگروه‌ها")
-    style_sheet(
-        ws2,
-        ["کارگروه", "تعداد دوره‌ها", "مجموع حضور", "شرکت‌کنندگان یکتا", "میانگین هر دوره", "نرخ بازگشت (%)", "هزینه (تومان)"],
-        [
-            [g["name"], g["courses"], g["attendance"], g["unique"], g["avg_attendance"], g["repeat_rate"], g["cost"]]
-            for g in (analytics.get("groups") or [])
-        ],
+    teachers = list(analytics.get("teachers") or [])
+    pol_lbl = {"equal": "تقسیم مساوی", "full": "ساعت کامل", "split": "تفکیکی"}.get(str(analytics.get("hours_policy") or "equal"), "تقسیم مساوی")
+    ws_tch = wb.create_sheet("عملکرد اساتید")
+    tch_start, tch_end = build_data_sheet(
+        ws_tch, f"{org_name} — کارنامه تفکیکی اساتید", f"تاریخ گزارش: {today_jalali_str()}  |  تعداد اساتید فعال: {to_fa_digits(len(teachers))}  |  سیاست ساعات مشترک: {pol_lbl}",
+        ["نام استاد", "کل دوره‌ها", "دوره مستقل", "دوره مشترک", "نفر-دوره (خام)", "سهم تعدیل‌شده مخاطب", "میانگین جذب", "میانه جذب", "جلسات", "ساعت مؤثر", "ساعت مستقل", "ساعت مشترک", "کارگروه‌ها"],
+        [[t["name"], t["courses"], t.get("independent_courses", t["courses"]), t.get("joint_courses", 0), t["attendance"], t.get("adjusted_attendance", t["attendance"]), t.get("avg_attendance", 0), t.get("median_attendance", 0), t.get("sessions", 0), t.get("hours_effective", 0), t.get("hours_independent", 0), t.get("hours_joint", 0), "، ".join(t.get("groups") or [])] for t in teachers],
+        sum_cols=(2, 3, 4, 6, 9, 10), avg_cols=(7, 8), bar_col=2, int_cols=(2, 3, 4, 5, 9), dec_cols=(6, 7, 8, 10, 11, 12),
     )
 
-    ws3 = wb.create_sheet("عملکرد اساتید")
-    style_sheet(
-        ws3,
-        ["نام استاد", "تعداد دوره‌ها", "مجموع مخاطبان", "مخاطبان یکتا", "میانگین جذب", "کارگروه‌ها"],
-        [
-            [t["name"], t["courses"], t["attendance"], t["unique"], t["avg_attendance"], "، ".join(t.get("groups") or [])]
-            for t in (analytics.get("teachers") or [])
-        ],
-    )
-
-    ws4 = wb.create_sheet("مخاطبان یکتا")
-    style_sheet(
-        ws4,
+    participants = list(analytics.get("participants") or [])
+    ws_prs = wb.create_sheet("مخاطبان یکتا")
+    build_data_sheet(
+        ws_prs, f"{org_name} — فهرست مخاطبان یکتا", f"تاریخ گزارش: {today_jalali_str()}  |  مخاطبان ثبت‌شده: {to_fa_digits(len(participants))}",
         ["نام و نام خانوادگی", "شماره تماس", "سطح", "تعداد دوره‌ها", "وضعیت وفاداری", "کارگروه‌ها", "عناوین دوره‌ها"],
-        [
-            [
-                p["name"],
-                p.get("phone") or "—",
-                p.get("level") or "—",
-                p.get("courses_count", 1),
-                p.get("loyalty") or "جدید",
-                "، ".join(p.get("groups") or []),
-                " | ".join(p.get("courses") or []),
-            ]
-            for p in (analytics.get("participants") or [])
-        ],
+        [[p["name"], p.get("phone") or "—", p.get("level") or "—", p.get("courses_count", 1), p.get("loyalty") or "جدید", "، ".join(p.get("groups") or []), " | ".join(p.get("courses") or [])] for p in participants],
+        sum_cols=(4,), bar_col=4, int_cols=(4,),
     )
+
+    if branding.get("include_transparency", True):
+        ws_tr = wb.create_sheet("شفافیت آماری و ادغام‌ها")
+        k = analytics.get("kpis") or {}
+        dh = analytics.get("data_health") or {}
+        tr_rows: list[list[Any]] = [
+            ["شاخص اطمینان داده", f"{k.get('data_confidence_pct', 100)}٪", "بر اساس تکمیل بودن آمار حضور، تاریخ‌های شمسی و سلامت فایل‌ها"],
+            ["امتیاز سلامت داده‌ها", f"{k.get('data_health_score', 100)}٪", f"دوره‌های بدون عدد حضور ثبت‌شده: {k.get('missing_attendance_courses', 0)}"],
+            ["حالت محاسبه داده‌ها", "داده‌های تمیزشده" if analytics.get("data_mode", "clean") == "clean" else "داده‌های خام", "تفکیک دوره‌های مشترک، حذف ردیف جمع کل و اعمال قوانین ادغام"],
+            ["سیاست ساعات دوره‌های مشترک", pol_lbl, "قابل تغییر در تنظیمات هسته هوشمند"],
+            ["تفکیک مخاطب یکتا", "تأییدشده با لیست اسامی/تماس" if k.get("unique_verified") else "لیست اسامی مخاطبان بارگذاری نشده (فقط نفر-دوره گزارش شده)", "بدون هرگونه ضریب تخمینی"],
+        ]
+        for df in (dh.get("duplicate_files") or []):
+            tr_rows.append(["هشدار فایل مشابه/تکراری", " ، ".join(df.get("files") or []), df.get("reason", "")])
+        try:
+            from src.core.memory_engine import list_aliases, load_brain_config
+            bcfg = load_brain_config()
+            for cn in (bcfg.get("compound_names") or []):
+                tr_rows.append(["نام مرکب محافظت‌شده", cn, "به‌عنوان نام واحد حفظ می‌شود"])
+            for al in list_aliases(status="approved")[:60]:
+                tr_rows.append([f"ادغام تأییدشده ({al['entity_type']})", f"{al['alias_name']}  ←  {al['canonical_name']}", al.get("created_at", "")])
+            for rj in list_aliases(status="rejected")[:30]:
+                tr_rows.append(["قانون منع ادغام", f"{rj['canonical_name']}  ≠  {rj['alias_name']}", rj.get("created_at", "")])
+        except Exception:
+            pass
+        build_data_sheet(ws_tr, f"{org_name} — گزارش شفافیت ادغام‌ها و سلامت داده", f"تاریخ تهیه: {today_jalali_str()}", ["موضوع / نوع قانون", "مقدار / شرح", "توضیحات"], tr_rows)
+
+    if include_summary:
+        ws_dash.views.sheetView[0].rightToLeft = True
+        ws_dash.views.sheetView[0].showGridLines = False
+        k = analytics.get("kpis") or {}
+        wb_bal = k.get("workload_balance") or {}
+        hdr_r = _add_sheet_banner(ws_dash, 7, f"{org_name} — {title_main}", f"داشبورد خلاصه مدیریتی  |  تاریخ شمسی: {today_jalali_str()}  |  سیاست ساعات مشترک: {pol_lbl}", ef, pal)
+        has_grp, has_tch = len(groups) > 0, len(teachers) > 0
+        kpi_rows = [
+            ("تعداد کل دوره‌ها و رویدادها", f"=SUM('تفکیک کارگروه‌ها'!B{grp_start}:B{grp_end})" if has_grp else k.get("total_courses", 0), "#,##0", f"دوره‌های مشترک: {k.get('joint_courses', 0)}"),
+            ("مجموع نفر-دوره (کل حضور)", f"=SUM('تفکیک کارگروه‌ها'!C{grp_start}:C{grp_end})" if has_grp else k.get("total_attendance", 0), "#,##0", "جمع دقیق بدون دوباره‌شماری دوره‌های مشترک"),
+            ("مخاطبان یکتا (غیرتکراری)", k.get("unique_participants", 0) if k.get("unique_verified") else "ثبت‌نشده", "#,##0", "تأییدشده با لیست اسامی" if k.get("unique_verified") else "نیازمند فایل لیست مخاطبان"),
+            ("میانگین جذب در هر دوره", f"=IFERROR(AVERAGE('تفکیک کارگروه‌ها'!E{grp_start}:E{grp_end}),0)" if has_grp else k.get("avg_per_course", 0), "#,##0.0", f"میانه (Median): {k.get('median_per_course', 0)}"),
+            ("تعداد اساتید فعال", f"=COUNTA('عملکرد اساتید'!A{tch_start}:A{tch_end})" if has_tch else k.get("total_teachers", 0), "#,##0", f"توازن بار کاری: {wb_bal.get('score', 100)}٪ ({wb_bal.get('label', '—')})"),
+            ("تعداد کارگروه‌های فعال", f"=COUNTA('تفکیک کارگروه‌ها'!A{grp_start}:A{grp_end})" if has_grp else k.get("total_groups", 0), "#,##0", f"همپوشانی مخاطبان بین کارگروه‌ها: {k.get('cross_group_overlap_count', 0)} نفر"),
+            ("مجموع ساعات آموزشی", f"=SUM('تفکیک کارگروه‌ها'!G{grp_start}:G{grp_end})" if has_grp else k.get("total_hours", 0), "#,##0.0", f"مجموع جلسات ثبت‌شده: {k.get('total_sessions', 0)}"),
+            ("نرخ بازگشت و وفاداری (%)", k.get("repeat_rate", 0), "#,##0.0", "مخاطبان حاضر در ۲ دوره یا بیشتر"),
+            ("مجموع هزینه‌ها (تومان)", f"=SUM('تفکیک کارگروه‌ها'!I{grp_start}:I{grp_end})" if has_grp else k.get("total_cost", 0), "#,##0", f"هزینه هر نفر-دوره: {k.get('cost_per_attendee', 0):,}"),
+            ("شاخص اطمینان داده (%)", k.get("data_confidence_pct", 100), "#,##0", f"امتیاز سلامت داده: {k.get('data_health_score', 100)}٪"),
+        ]
+        ws_dash.row_dimensions[hdr_r].height = 28
+        for ci, h in enumerate(["شاخص کلیدی مدیریتی", "مقدار (فرمول زنده)", "توضیح و معیار"], start=1):
+            c = ws_dash.cell(row=hdr_r, column=ci, value=h)
+            c.fill, c.font, c.alignment, c.border = hdr_fill, hdr_font, Alignment(horizontal="center", vertical="center"), border
+        for off, (lbl, val, num_fmt, note) in enumerate(kpi_rows):
+            ri = hdr_r + 1 + off
+            ws_dash.row_dimensions[ri].height = 25
+            c1, c2, c3 = ws_dash.cell(row=ri, column=1, value=lbl), ws_dash.cell(row=ri, column=2, value=val), ws_dash.cell(row=ri, column=3, value=note)
+            c1.fill, c1.font, c1.alignment, c1.border = card_lbl_fill, Font(name=ef, size=10, bold=True, color=pal["dark"]), Alignment(horizontal="right", vertical="center", indent=1), border
+            c2.fill, c2.font, c2.alignment, c2.border = PatternFill("solid", fgColor="FFFFFF"), Font(name=ef, size=11, bold=True, color=pal["primary"]), Alignment(horizontal="center", vertical="center"), border
+            if isinstance(val, (int, float)) or (isinstance(val, str) and val.startswith("=")):
+                c2.number_format = num_fmt
+            c3.fill, c3.font, c3.alignment, c3.border = (zebra_fill if off % 2 == 1 else PatternFill("solid", fgColor="FFFFFF")), Font(name=ef, size=9, color=pal["muted"]), Alignment(horizontal="right", vertical="center", indent=1), border
+        ws_dash.column_dimensions["A"].width, ws_dash.column_dimensions["B"].width, ws_dash.column_dimensions["C"].width = 30, 20, 38
+        if branding.get("include_charts", True):
+            try:
+                chart = BarChart()
+                chart.type, chart.style, chart.legend, chart.width, chart.height = "col", 10, None, 16, 10.5
+                if len(groups) >= 2:
+                    top_n = min(len(groups), 10)
+                    chart.title = "مقایسه مجموع نفر-دوره کارگروه‌ها"
+                    chart.add_data(Reference(ws_grp, min_col=3, min_row=grp_start - 1, max_row=grp_start + top_n - 1), titles_from_data=True)
+                    chart.set_categories(Reference(ws_grp, min_col=1, min_row=grp_start, max_row=grp_start + top_n - 1))
+                    if chart.series:
+                        chart.series[0].graphicalProperties.solidFill = pal["primary"]
+                    ws_dash.add_chart(chart, "E4")
+                elif len(teachers) >= 2:
+                    top_n = min(len(teachers), 10)
+                    chart.title = "مقایسه تعداد دوره‌های اساتید برتر"
+                    chart.add_data(Reference(ws_tch, min_col=2, min_row=tch_start - 1, max_row=tch_start + top_n - 1), titles_from_data=True)
+                    chart.set_categories(Reference(ws_tch, min_col=1, min_row=tch_start, max_row=tch_start + top_n - 1))
+                    if chart.series:
+                        chart.series[0].graphicalProperties.solidFill = pal["primary"]
+                    ws_dash.add_chart(chart, "E4")
+            except Exception:
+                pass
+        _configure_sheet_print(ws_dash, title_rows="1:3", landscape=True, org_name=org_name)
 
     wb.save(dest_path)
+    register_exported_letter(title_main, "XLSX", str(dest_path), _next_letter_number(), "مدیریت / واحد آموزش")
     return {"ok": True, "path": str(dest_path)}
 
 

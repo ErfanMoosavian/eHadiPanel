@@ -250,7 +250,10 @@ class SemanticSchemaEngine:
             return self._cached_profiles
 
         import duckdb  # type: ignore
+        from src.core.db_manager import get_db_lock
 
+        _lk = get_db_lock(db_path)
+        _lk.acquire()
         profiles: list[dict[str, Any]] = []
         con = None
         try:
@@ -259,10 +262,8 @@ class SemanticSchemaEngine:
             except Exception:
                 con = duckdb.connect(str(db_path), read_only=True)
 
-            INTERNAL_TABLES = {
-                "chat_history", "processed_files", "tabular_catalog",
-                "user_rules", "entity_aliases", "app_settings", "diagnostics_log", "smart_teachers_exploded"
-            }
+            from src.core.db_manager import INTERNAL_TABLES as _CORE_INTERNAL
+            INTERNAL_TABLES = set(_CORE_INTERNAL)
             catalog_map: dict[str, dict[str, str]] = {}
             tables = [str(r[0]) for r in con.execute("SHOW TABLES").fetchall()]
             if "tabular_catalog" in tables:
@@ -357,6 +358,10 @@ class SemanticSchemaEngine:
                     con.close()
                 except Exception:
                     pass
+            try:
+                _lk.release()
+            except Exception:
+                pass
 
     def build_prompt_context(self, question: str = "", max_detailed_tables: int = 12) -> str:
         profiles = self.get_profiles()
@@ -479,12 +484,16 @@ class SafeDuckDBExecutor:
                         nums.append(v)
             if len(nums) >= max(1, int(len(rows) * 0.6)):
                 total = sum(nums)
+                s_nums = sorted(nums)
+                mid = len(s_nums) // 2
+                med = (s_nums[mid] if len(s_nums) % 2 == 1 else (s_nums[mid - 1] + s_nums[mid]) / 2.0)
                 stats["numeric_columns"][cname] = {
                     "count": len(nums),
                     "sum": round(total, 2),
                     "avg": round(total / len(nums), 2),
-                    "min": round(min(nums), 2),
-                    "max": round(max(nums), 2),
+                    "median": round(med, 2),
+                    "min": round(s_nums[0], 2),
+                    "max": round(s_nums[-1], 2),
                 }
         return stats
 
@@ -501,7 +510,10 @@ class SafeDuckDBExecutor:
             return QueryExecutionResult(ok=False, sql=clean_or_err, error="فایل پایگاه‌داده DuckDB یافت نشد.")
 
         import duckdb  # type: ignore
+        from src.core.db_manager import get_db_lock
 
+        _lk = get_db_lock(db_path)
+        _lk.acquire()
         con = None
         try:
             try:
@@ -534,6 +546,10 @@ class SafeDuckDBExecutor:
                     con.close()
                 except Exception:
                     pass
+            try:
+                _lk.release()
+            except Exception:
+                pass
 
 
 def _extract_sql_from_llm(raw_text: str) -> tuple[str, bool]:

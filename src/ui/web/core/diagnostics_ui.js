@@ -155,6 +155,11 @@
       }
       return res;
     } catch (e) {
+      const mSum = document.getElementById('ehDiagModalSummary');
+      if (mSum) {
+        mSum.className = 'eh-diag-summary eh-diag-st-error';
+        mSum.textContent = `خطا در بررسی سلامت: ${e?.message || e}`;
+      }
       if (!silent) showDiagNotice('خطا در اجرای تست سلامت.', 'error');
       return null;
     }
@@ -238,6 +243,7 @@
         <div class="eh-diag-actions">
           <button type="button" class="eh-diag-btn-primary" id="ehDiagExportBtn">ساخت فایل گزارش خطا (.zip)</button>
           <button type="button" class="eh-diag-btn-sec" id="ehDiagRecheckBtn">اجرای تست سلامت کامل (با شبکه)</button>
+          <button type="button" class="eh-diag-btn-sec" id="ehDiagClearErrBtn">پاکسازی لاگ خطاها</button>
         </div>
       </div>
     `;
@@ -256,6 +262,17 @@
       await loadRecentErrorsInto(document.getElementById('ehDiagErrList'));
       b.disabled = false;
       b.textContent = 'اجرای تست سلامت کامل (با شبکه)';
+    });
+    modal.querySelector('#ehDiagClearErrBtn').addEventListener('click', async (e) => {
+      const b = e.currentTarget;
+      const api = window.pywebview?.api;
+      if (!api || typeof api.clear_error_logs !== 'function') return;
+      b.disabled = true;
+      await api.clear_error_logs();
+      await runCheck(false, true);
+      await loadRecentErrorsInto(document.getElementById('ehDiagErrList'));
+      showDiagNotice('تاریخچه خطاهای قبلی پاکسازی شد.', 'healthy');
+      b.disabled = false;
     });
     modal.querySelector('#ehDiagErrDetails').addEventListener('toggle', (e) => {
       if (e.target.open) loadRecentErrorsInto(document.getElementById('ehDiagErrList'));

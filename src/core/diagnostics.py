@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime as _dt
+from src.core.db_manager import detect_duplicate_files, format_jalali_now, get_db_lock, iso_to_jalali
 import importlib.metadata as _meta
 import json
 import logging
@@ -18,7 +19,7 @@ import traceback
 import types
 import zipfile
 
-APP_VERSION = "v43.0 Pro"
+APP_VERSION = "Beta 0.2"
 _INSTALLED = False
 _FE_LOCK = threading.Lock()
 _JS_API_REF = None
@@ -233,6 +234,8 @@ def _audit_duckdb(collect_schema: bool = False) -> tuple[dict, list[dict]]:
     db_errors: list[str] = []
 
     for db_path in db_files:
+        _lk = get_db_lock(db_path)
+        _lk.acquire()
         con = None
         try:
             try:
@@ -248,6 +251,7 @@ def _audit_duckdb(collect_schema: bool = False) -> tuple[dict, list[dict]]:
             SYS_EMPTY_OK = {
                 "user_rules", "entity_aliases", "app_settings", "diagnostics_log",
                 "chat_history", "processed_files", "tabular_catalog", "smart_teachers_exploded",
+                "entity_brain_config", "entity_brain_history", "_meta_teacher_sig",
             }
             for tname in t_names:
                 safe_t = tname.replace('"', '""')
@@ -278,6 +282,10 @@ def _audit_duckdb(collect_schema: bool = False) -> tuple[dict, list[dict]]:
                     con.close()
                 except Exception:
                     pass
+            try:
+                _lk.release()
+            except Exception:
+                pass
 
     if db_errors or broken_tables:
         msg = "خطا در خواندن پایگاه‌داده: " + " | ".join((db_errors + broken_tables)[:3])
@@ -573,7 +581,24 @@ def run_health_check(check_network: bool = False) -> dict:
     ai_chk = _check_ai_connectivity(check_network=bool(check_network))
     err_chk = _check_recent_errors()
 
-    checks = [storage_chk, duck_chk, lance_chk, ai_chk, err_chk]
+    dup_alerts = []
+    try:
+        dup_alerts = detect_duplicate_files()
+    except Exception:
+        pass
+    dup_detail = (
+        "فایل تکراری یا هم‌نسخه یافت نشد."
+        if not dup_alerts
+        else f"{len(dup_alerts)} مورد فایل مشابه یا تکراری شناسایی شد: "
+        + " | ".join(" و ".join(a.get("files") or []) for a in dup_alerts[:3])
+    )
+    dup_chk = {
+        "id": "duplicate_files",
+        "title": "سلامت و عدم تکرار فایل‌ها",
+        "status": "healthy" if not dup_alerts else "warning",
+        "detail": dup_detail,
+    }
+    checks = [storage_chk, duck_chk, lance_chk, ai_chk, dup_chk, err_chk]
     statuses = [c["status"] for c in checks]
     if "error" in statuses:
         overall = "error"
@@ -590,23 +615,75 @@ def run_health_check(check_network: bool = False) -> dict:
         "status": overall,
         "summary": summary,
         "app_version": APP_VERSION,
-        "timestamp": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": format_jalali_now(include_time=True, fa_digits=True),
+        "timestamp_iso": _dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "checks": checks,
+        "duplicate_files": dup_alerts,
     }
+
+
+def _fmt_log_ts(raw_line: str) -> str:
+    return re.sub(
+        r"\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}(?::\d{2})?(?:[.,]\d{1,6})?",
+        lambda m: iso_to_jalali(m.group(0)[:16]),
+        raw_line,
+    )
 
 
 def get_recent_errors(limit: int = 12) -> dict:
     p = _paths()
     items: list[dict] = []
-    for line in _read_tail_lines(p["app_log"], 200):
+    py_lines = _read_tail_lines(p["app_log"], 300)
+    ts_rx = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}")
+    i = 0
+    while i < len(py_lines):
+        line = py_lines[i]
         if "| ERROR |" in line or "| WARNING |" in line:
-            items.append({"source": "Python", "text": line[:320]})
+            header = _fmt_log_ts(line)
+            detail_msg = ""
+            if "Traceback (most recent call last)" in line:
+                j = i + 1
+                last_non_empty = ""
+                while j < len(py_lines) and not ts_rx.match(py_lines[j]):
+                    s = py_lines[j].strip()
+                    if s:
+                        last_non_empty = s
+                    j += 1
+                if last_non_empty:
+                    detail_msg = last_non_empty
+                    header = header.replace("Traceback (most recent call last):", "").strip()
+                i = j
+            else:
+                i += 1
+            full_txt = f"{header} {detail_msg}".strip()
+            items.append({"source": "هسته برنامه", "text": full_txt[:320]})
+        else:
+            i += 1
+
     for line in _read_tail_lines(p["fe_log"], 200):
         if line.strip():
-            items.append({"source": "UI / JS", "text": line[:320]})
+            items.append({"source": "رابط کاربری", "text": _fmt_log_ts(line)[:320]})
+
     items = items[-max(1, int(limit)) :]
     items.reverse()
     return {"ok": True, "count": len(items), "items": items}
+
+
+def clear_error_logs() -> dict:
+    """Clears historical error logs cleanly so resolved warnings reset to healthy."""
+    try:
+        p = _paths()
+        with _FE_LOCK:
+            for key in ("app_log", "fe_log"):
+                fp = p.get(key)
+                if fp and fp.exists():
+                    try:
+                        fp.write_text("", encoding="utf-8")
+                    except Exception:
+                        pass
+        return {"ok": True}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 def _collect_pkg_versions() -> dict[str, str]:
@@ -644,7 +721,7 @@ def export_diagnostic_bundle() -> dict:
         }
 
         readme_fa = (
-            "بسته گزارش خطای فنی سامانه eHadiPanel Enterprise\n"
+            "بسته گزارش خطای فنی سامانه eHadiPanel Beta 0.2\n"
             "==============================================\n"
             f"نسخه برنامه: {APP_VERSION}\n"
             f"زمان تهیه گزارش: {health['timestamp']}\n\n"
@@ -692,6 +769,7 @@ def _bind_api_methods(js_api) -> None:
         "run_health_check": lambda self, check_network=False: run_health_check(check_network),
         "export_diagnostic_bundle": lambda self: export_diagnostic_bundle(),
         "get_recent_errors": lambda self, limit=12: get_recent_errors(limit),
+        "clear_error_logs": lambda self: clear_error_logs(),
     }
     for name, fn in methods.items():
         if hasattr(js_api, name):
@@ -705,7 +783,7 @@ def _bind_api_methods(js_api) -> None:
                 pass
 
 
-def install_diagnostics(app_version: str = "v43.0 Pro") -> None:
+def install_diagnostics(app_version: str = "Beta 0.2") -> None:
     global APP_VERSION, _INSTALLED
     APP_VERSION = app_version
     _setup_logging()

@@ -125,7 +125,7 @@
       return `
         <div class="pro-modal-box" role="dialog" aria-modal="true">
           <div class="pro-modal-header">
-            <div class="pro-modal-title">${ic('penTool', 17)}<span>تولید محتوای رسانه‌ای — ایتا و تلگرام (@emamhadi_qom)</span></div>
+            <div class="pro-modal-title eh-media-hdr-title"><span class="eh-modal-title-ico">${ic('penTool', 16)}</span><span>تولید محتوای رسانه‌ای</span><span class="eh-modal-sub-pill">ایتا و تلگرام</span><span class="eh-modal-handle-pill" dir="ltr">@emamhadi_qom</span></div>
             <div style="display:flex; align-items:center; gap:8px;">
               <span class="pro-kbd">ESC</span>
               <button type="button" class="pro-icon-btn" data-close-modal title="بستن">${ic('close', 15)}</button>
