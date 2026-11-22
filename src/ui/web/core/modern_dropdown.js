@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   // ===== ۱. تبدیل خودکار تمام منوهای بازشونده (<select>) به منوی مدرن داشبوردی =====
   let activePortal = null;
 
@@ -43,7 +43,13 @@
 
     const syncLabel = () => {
       const opt = sel.options[sel.selectedIndex];
-      lbl.textContent = opt ? opt.textContent.trim() : 'انتخاب...';
+      let txt = opt ? opt.textContent.trim() : 'انتخاب...';
+      if (sel.id === 'fltTeacher' && opt && opt.value && typeof window.formatTeacherShort === 'function') {
+        const shortTxt = window.formatTeacherShort(txt);
+        if (shortTxt) txt = shortTxt;
+      }
+      lbl.textContent = txt;
+      trigger.title = opt ? opt.textContent.trim() : '';
     };
     syncLabel();
 

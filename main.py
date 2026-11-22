@@ -1,3 +1,12 @@
+# _EHADI_FROZEN_PATCHED
+import os as _os, sys as _sys
+from pathlib import Path as _Path
+if getattr(_sys, 'frozen', False):
+    _APP_DIR = _Path(_sys.executable).resolve().parent
+    _os.chdir(str(_APP_DIR))
+    _os.environ['EHADI_BUNDLE_DIR'] = str(_Path(getattr(_sys, '_MEIPASS', _APP_DIR)))
+    _os.environ['EHADI_APP_DIR'] = str(_APP_DIR)
+
 # _EHADI_PROCESS_SPLASH_FIRST (launch splash BEFORE heavy imports for instant appearance)
 import os as _os, sys as _sys, subprocess as _subprocess, tempfile as _tempfile, threading as _threading, time as _time
 from pathlib import Path as _Path
@@ -8,16 +17,25 @@ if getattr(_sys, "frozen", False):
     _os.environ["EHADI_BUNDLE_DIR"] = str(_Path(getattr(_sys, "_MEIPASS", _APP_DIR)))
     _os.environ["EHADI_APP_DIR"] = str(_APP_DIR)
 
-if "--ehadi-splash" in _sys.argv:
-    _sp_dir = _Path(getattr(_sys, "_MEIPASS", ".")) / "build"
-    if not _sp_dir.exists():
-        _sp_dir = _Path("build").resolve()
-    _sys.path.insert(0, str(_sp_dir))
+if any(str(a).strip().lower() == "--ehadi-splash" for a in _sys.argv):
+    _sp_candidates = [
+        _Path(getattr(_sys, "_MEIPASS", "")) / "build" if getattr(_sys, "_MEIPASS", None) else None,
+        _Path(_sys.executable).resolve().parent / "build" if getattr(_sys, "frozen", False) else None,
+        _Path(__file__).resolve().parent / "build",
+        _Path("build").resolve(),
+    ]
+    for _cand in _sp_candidates:
+        if _cand and (_cand / "splash_runner.py").exists():
+            if str(_cand) not in _sys.path:
+                _sys.path.insert(0, str(_cand))
+            break
     import splash_runner as _sr
     _sr.main()
     _sys.exit(0)
 
 _SPLASH_READY_FILE = _Path(_tempfile.gettempdir()) / f"ehadi_splash_{_os.getpid()}.stage"
+_SPLASH_DONE_FILE = _Path(_tempfile.gettempdir()) / f"ehadi_splash_{_os.getpid()}.done"
+_SPLASH_SPAWNED = False
 
 def _set_splash_stage(stage: str) -> None:
     try:
@@ -25,18 +43,35 @@ def _set_splash_stage(stage: str) -> None:
     except Exception:
         pass
 
-try:
-    _set_splash_stage("0")
-    _sp_flags = 0x08000000 if _os.name == "nt" else 0
-    _sp_args = ["--ready-file", str(_SPLASH_READY_FILE), "--parent-pid", str(_os.getpid())]
-    if getattr(_sys, "frozen", False):
-        _subprocess.Popen([_sys.executable, "--ehadi-splash", *_sp_args], creationflags=_sp_flags)
-    else:
-        _runner = _Path(__file__).resolve().parent / "build" / "splash_runner.py"
-        if _runner.exists():
-            _subprocess.Popen([_sys.executable, str(_runner), *_sp_args], creationflags=_sp_flags)
-except Exception:
-    pass
+def _launch_ehadi_splash_proc() -> None:
+    global _SPLASH_SPAWNED
+    try:
+        _SPLASH_DONE_FILE.unlink(missing_ok=True)
+        _set_splash_stage("0")
+        _sp_args = ["--ready-file", str(_SPLASH_READY_FILE), "--parent-pid", str(_os.getpid())]
+        if getattr(_sys, "frozen", False):
+            _child_env = dict(_os.environ)
+            _child_env.pop("PYINSTALLER_RESET_ENVIRONMENT", None)
+            _child_env.pop("PYINSTALLER_STRICT_PACKED_LIBS", None)
+            # Run child splash from app directory without CREATE_NO_WINDOW suppressing GUI
+            _subprocess.Popen(
+                [_sys.executable, "--ehadi-splash", *_sp_args],
+                cwd=str(_Path(_sys.executable).resolve().parent),
+                env=_child_env,
+            )
+            _SPLASH_SPAWNED = True
+        else:
+            _runner = _Path(__file__).resolve().parent / "build" / "splash_runner.py"
+            if _runner.exists():
+                _subprocess.Popen(
+                    [_sys.executable, str(_runner), *_sp_args],
+                    cwd=str(_Path(__file__).resolve().parent),
+                )
+                _SPLASH_SPAWNED = True
+    except Exception:
+        _SPLASH_SPAWNED = False
+
+_launch_ehadi_splash_proc()
 
 # _EH_DIAGNOSTICS_V43_HOOK
 try:
@@ -176,6 +211,13 @@ class AppAPI:
 
     def get_bi_table_data(self, table_name: str):
         return self.bi.get_table_dynamic_data(table_name)
+
+    def save_finance_category_rule(self, item_key: str, category: str):
+        from src.core.memory_engine import save_finance_category_rule as _save_fcr
+        res = _save_fcr(item_key, category)
+        if res.get("ok"):
+            self._bi_cache = None
+        return res
 
     def scan_documents(self):
         self._bi_cache = None
@@ -359,9 +401,18 @@ class AppAPI:
         return {"api_key": key, "model": Config.GEMINI_MODEL}
 
     def save_settings(self, api_key: str, model: str):
-        env_path = BASE_DIR / ".env"
         content = f'GEMINI_API_KEY="{api_key}"\nGEMINI_MODEL="{model}"\n'
-        env_path.write_text(content, encoding="utf-8")
+        try:
+            Config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+            (Config.DATA_DIR / ".env").write_text(content, encoding="utf-8")
+        except Exception:
+            pass
+        try:
+            (BASE_DIR / ".env").write_text(content, encoding="utf-8")
+        except Exception:
+            pass
+        os.environ["GEMINI_API_KEY"] = api_key
+        os.environ["GEMINI_MODEL"] = model
         Config.GEMINI_API_KEY = api_key
         Config.GEMINI_MODEL = model
         self.agent.reset_client()
@@ -607,7 +658,7 @@ class AppAPI:
             return {"ok": False, "error": "پنجره آماده نیست."}
         try:
             dt = webview.FileDialog.OPEN if hasattr(webview, "FileDialog") else getattr(webview, "OPEN_DIALOG", 10)
-            sel = self._window.create_file_dialog(dt, allow_multiple=False, file_types=("Excel/CSV (*.xlsx;*.csv)",))
+            sel = self._window.create_file_dialog(dt, allow_multiple=False, file_types=("Excel and CSV Files (*.xlsx;*.xls;*.csv)", "All Files (*.*)"))
             if not sel:
                 return {"ok": False, "cancelled": True}
             return self.exec_engine.parse_porsline_file(str(sel[0]))
@@ -856,6 +907,7 @@ class AppAPI:
         return _lfe(payload)
 
 
+
 def _enable_native_dwm_animations(window, api=None):
     try:
         native = getattr(window, "native", None)
@@ -918,13 +970,49 @@ def main():
         frameless=True,
         resizable=True,
         easy_drag=False,
+        hidden=bool(_SPLASH_SPAWNED),
         background_color="#050811",
     )
     api.set_window(window)
     _set_splash_stage("3")
+
+    def _reveal_main_when_splash_done():
+        try:
+            _set_splash_stage("READY")
+            if _SPLASH_SPAWNED:
+                t_start = time.monotonic()
+                while (time.monotonic() - t_start) < 2.2:
+                    if _SPLASH_DONE_FILE.exists() or not _SPLASH_READY_FILE.exists():
+                        break
+                    time.sleep(0.025)
+                try:
+                    window.show()
+                except Exception:
+                    pass
+                try:
+                    native = getattr(window, "native", None)
+                    if native is not None:
+                        from System import Action
+                        def _bring_front():
+                            try:
+                                native.Show()
+                                native.BringToFront()
+                                native.Activate()
+                            except Exception:
+                                pass
+                        native.BeginInvoke(Action(_bring_front))
+                except Exception:
+                    pass
+        finally:
+            try:
+                _SPLASH_DONE_FILE.unlink(missing_ok=True)
+            except Exception:
+                pass
+
     def _on_window_shown():
-        _set_splash_stage("READY")
         _enable_native_dwm_animations(window, api)
+        if _SPLASH_SPAWNED:
+            threading.Thread(target=_reveal_main_when_splash_done, daemon=True).start()
         if not getattr(api, "_warmed_up", False):
             api._warmed_up = True
             threading.Thread(target=api.agent.warmup, daemon=True).start()

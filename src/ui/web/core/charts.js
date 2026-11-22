@@ -19,6 +19,7 @@ window.eHadiCharts = (() => {
       .replace(/(\.{2,}|\u2026)+$/g, '')
       .trim();
     if (!s) return '\u0646\u0627\u0645\u0634\u062e\u0635';
+    if (/^[\d\u06f0-\u06f9\u0660-\u0669.,/\-:]+$/.test(s)) return s;
 
     const collective = [
       '\u062c\u0645\u0639\u06cc \u0627\u0632', '\u06af\u0631\u0648\u0647\u06cc \u0627\u0632',
@@ -260,7 +261,7 @@ window.eHadiCharts = (() => {
       const ly = 50 + idx * 38;
       legend += `<g transform="translate(215, ${ly})">
         <rect x="225" y="-10" width="12" height="12" rx="3.5" fill="${col}"/>
-        <text x="217" y="0" direction="rtl" text-anchor="start" font-size="12.5" font-weight="700" fill="${tc.text}">${escXml(toFa(it.label))}</text>
+        <text x="217" y="0" direction="rtl" text-anchor="start" font-size="12.5" font-weight="700" fill="${tc.text}"><title>${escXml(it.label)}</title>${escXml(toFa(trimLabel(it.label, 20)))}</text>
         <text x="0" y="0" direction="ltr" text-anchor="start" font-size="12" fill="${tc.muted}">${fmtNum(val)} (${toFa(Math.round(frac * 100))}\u066a)</text>
       </g>`;
     });

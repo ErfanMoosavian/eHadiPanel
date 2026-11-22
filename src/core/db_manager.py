@@ -57,7 +57,7 @@ INTERNAL_TABLES = frozenset({
 SUMMARY_ROW_RX = re.compile(
     r"^(?:جمع\s*کل|مجموع(?:\s*کل)?|جمع\s*صفحه|جمع\s*نهایی|جمع\s*فرعی|تجمیع(?:\s*کل)?|"
     r"جمع|کل\s*مؤسسه|کل\s*موسسه|کل|میانگین\s*کل|میانگین|قابل\s*پرداخت|"
-    r"total|grand\s*total|subtotal|sum|average)$",
+    r"امضاء?(?:\s+.*)?|باقیمانده|مانده\s*نهایی|total|grand\s*total|subtotal|sum|average)$",
     re.IGNORECASE,
 )
 
@@ -431,3 +431,325 @@ def detect_duplicate_files(db_path: Path | str | None = None) -> list[dict[str, 
     except Exception as exc:
         logger.warning("detect_duplicate_files failed: %s", exc)
     return alerts[:20]
+
+
+# ==================== Smart Excel Banner-Header Promotion & Entity Guards ====================
+
+_PLACEHOLDER_COL_RX = re.compile(r"^(?:ستون[_\s]*\d+|unnamed[:\s]*\d*|column[_\s]*\d*|col[_\s]*\d*|f\d+)$", re.IGNORECASE)
+_PURE_NUM_OR_CODE_RX = re.compile(r"^[\s\d۰-۹٠-٩.,/\-:+()%#]+(?:ریال|تومان|نفر|جلسه|ساعت|روز|ماه)?\s*$")
+_DATE_OR_RANGE_RX = re.compile(
+    r"(?:از\s*تاریخ|تا\s*تاریخ|مورخ|الی\s*[\d۰-۹]|سال\s*[\d۰-۹]{4}|\b(?:13|14)\d{2}[/\-]\d{1,2}(?:[/\-]\d{1,2})?\b|\b\d{1,2}[/\-]\d{1,2}[/\-]\d{2,4}\b)"
+)
+_BANNER_PHRASE_RX = re.compile(
+    r"(?:لیست\s*حضور|فهرست\s*حضور|صورتحساب|صورت\s*حساب|گزارش\s*مالی|گزارش\s*عملکرد|از\s*تاریخ|بسمه\s*تعالی|مؤسسه\s*علمی|موسسه\s*علمی)"
+)
+
+KNOWN_HEADER_TOKENS = (
+    "ردیف", "شماره", "نام", "نام خانوادگی", "نام و نام خانوادگی", "موبایل", "همراه", "تلفن",
+    "کد ملی", "کدملی", "سطح", "پایه", "تحصیلات",
+    "شرح", "شرح کالا", "شرح هزینه", "کالا", "بابت", "موضوع", "عنوان", "عنوان دوره", "نام دوره", "دوره",
+    "مبلغ", "مبلغ کل", "جمع", "جمع کل", "قیمت", "قیمت واحد", "فی", "تعداد", "مقدار", "واحد",
+    "بدهکار", "بستانکار", "برداشت", "واریز", "مانده", "هزینه", "پرداخت", "پرداختی", "تنخواه", "خروجی",
+    "تاریخ", "سند", "شماره سند", "شماره فاکتور", "فاکتور", "فروشنده", "فروشگاه", "طرف حساب", "ذینفع",
+    "کارگروه", "بخش", "گروه", "دسته", "سرفصل", "استاد", "مدرس", "سخنران", "ارائه دهنده",
+    "مخاطب", "شرکت کننده", "شرکت کنندگان", "حاضرین", "ساعت", "جلسه", "جلسات", "توضیحات", "توضیح",
+    "row", "id", "name", "phone", "mobile", "date", "amount", "total", "price", "cost", "qty", "description", "category",
+)
+
+
+def is_placeholder_col(col_name: Any) -> bool:
+    s = normalize_persian(col_name)
+    return (not s) or bool(_PLACEHOLDER_COL_RX.match(s))
+
+
+def is_banner_header_col(col_name: Any) -> bool:
+    s = normalize_persian(col_name)
+    if not s:
+        return True
+    if len(s) > 42:
+        return True
+    if _BANNER_PHRASE_RX.search(s) or _DATE_OR_RANGE_RX.search(s):
+        return True
+    return False
+
+
+def is_non_entity_value(val: Any) -> bool:
+    """True if value is a date, date-range, pure number, phone, code, or banner sentence (NOT a teacher/group/vendor)."""
+    s = normalize_persian(val)
+    if not s or len(s) < 2:
+        return True
+    if _PURE_NUM_OR_CODE_RX.match(s):
+        return True
+    if _DATE_OR_RANGE_RX.search(s):
+        return True
+    if _BANNER_PHRASE_RX.search(s):
+        return True
+    # Reject phone numbers / national IDs
+    digits_only = re.sub(r"\D", "", s)
+    if len(digits_only) >= 7 and len(digits_only) >= len(s.replace(" ", "")) * 0.65:
+        return True
+    # Reject values with no letters at all
+    if not re.search(r"[آ-یa-zA-Z]", s):
+        return True
+    return False
+
+
+def is_valid_teacher_name(val: Any) -> bool:
+    s = normalize_persian(val)
+    if is_non_entity_value(s):
+        return False
+    if len(s) < 3 or len(s) > 75:
+        return False
+    low = s.lower()
+    if low in ("ردیف", "نام", "نام خانوادگی", "شماره", "موبایل", "تلفن", "شماره موبایل", "شرح", "مبلغ", "تاریخ", "توضیحات", "نامشخص", "ناشناس", "ندارد"):
+        return False
+    return True
+
+
+def _header_row_score(cells: list[Any]) -> tuple[float, int, int]:
+    """Returns (score, keyword_hits, non_empty_short_text_count)."""
+    non_empty = [normalize_persian(c) for c in cells if c is not None and str(c).strip() != ""]
+    if len(non_empty) < 2:
+        return 0.0, 0, len(non_empty)
+    kw_hits = 0
+    short_txt = 0
+    pure_num = 0
+    long_cells = 0
+    for s in non_empty:
+        if _PURE_NUM_OR_CODE_RX.match(s):
+            pure_num += 1
+            continue
+        if len(s) > 40:
+            long_cells += 1
+            continue
+        short_txt += 1
+        low = s.lower()
+        if any(k == low or (len(k) >= 3 and k in low) for k in KNOWN_HEADER_TOKENS):
+            kw_hits += 1
+    if pure_num > len(non_empty) * 0.5 or long_cells > len(non_empty) * 0.4:
+        return 0.0, kw_hits, short_txt
+    score = kw_hits * 3.0 + short_txt * 0.8 - pure_num * 1.5 - long_cells * 2.0
+    return score, kw_hits, short_txt
+
+
+def promote_banner_headers(cols: list[str], rows: list[tuple | list]) -> tuple[list[str], list[tuple], str]:
+    """
+    Detects Excel/tabular tables whose row 0 was a title/date banner (leaving col names as
+    ['لیست حضور و غیاب ...', 'ستون_2', 'ستون_3', ...]) and promotes the true header row
+    from rows[:8] cleanly while preserving the banner text as context metadata.
+    """
+    if not cols or not rows:
+        return list(cols or []), [tuple(r) for r in (rows or [])], ""
+
+    placeholder_cnt = sum(1 for c in cols if is_placeholder_col(c))
+    banner_cnt = sum(1 for c in cols if is_banner_header_col(c))
+    cur_score, cur_kw, _ = _header_row_score(cols)
+
+    needs_scan = (
+        placeholder_cnt >= max(1, int(len(cols) * 0.35))
+        or banner_cnt >= 1
+        or cur_kw == 0
+    )
+    if not needs_scan:
+        return list(cols), [tuple(r) for r in rows], ""
+
+    best_idx = -1
+    best_score = cur_score
+    best_kw = cur_kw
+    scan_limit = min(8, len(rows))
+    for i in range(scan_limit):
+        sc, kw, stxt = _header_row_score(list(rows[i]))
+        if kw >= 2 and sc > best_score + 1.5:
+            best_score = sc
+            best_kw = kw
+            best_idx = i
+        elif placeholder_cnt >= max(2, int(len(cols) * 0.45)) and best_idx == -1 and stxt >= 2 and sc >= 3.0:
+            best_score = sc
+            best_kw = kw
+            best_idx = i
+
+    if best_idx < 0:
+        return list(cols), [tuple(r) for r in rows], ""
+
+    # Gather banner text from original cols & rows above best_idx
+    banner_parts: list[str] = []
+    for c in cols:
+        sc = normalize_persian(c)
+        if sc and not is_placeholder_col(sc):
+            banner_parts.append(sc)
+    for r in rows[:best_idx]:
+        for cell in r:
+            sc = normalize_persian(cell)
+            if sc and len(sc) >= 3:
+                banner_parts.append(sc)
+    banner_ctx = " | ".join(dict.fromkeys(banner_parts))
+
+    # Build clean deduplicated column names from rows[best_idx]
+    raw_hdr = list(rows[best_idx])
+    new_cols: list[str] = []
+    seen: dict[str, int] = {}
+    for idx in range(len(cols)):
+        raw_v = raw_hdr[idx] if idx < len(raw_hdr) else ""
+        name = re.sub(r"\s+", " ", str(raw_v or "").replace("\r", " ").replace("\n", " ")).strip()
+        if not name or name.lower() in ("none", "nan"):
+            name = f"ستون_{idx + 1}"
+        if name in seen:
+            seen[name] += 1
+            name = f"{name}_{seen[name]}"
+        else:
+            seen[name] = 1
+        new_cols.append(name)
+
+    rem_rows = [tuple(r) for r in rows[best_idx + 1:]]
+    # Drop completely empty rows
+    rem_rows = [r for r in rem_rows if any(v is not None and str(v).strip() != "" for v in r)]
+
+    # Drop completely empty placeholder columns (e.g. trailing unnamed blank columns)
+    keep_idxs = []
+    for ci, cname in enumerate(new_cols):
+        if not is_placeholder_col(cname):
+            keep_idxs.append(ci)
+        else:
+            if any(ci < len(r) and r[ci] is not None and str(r[ci]).strip() != "" for r in rem_rows[:50]):
+                keep_idxs.append(ci)
+    if keep_idxs and len(keep_idxs) < len(new_cols):
+        new_cols = [new_cols[i] for i in keep_idxs]
+        rem_rows = [tuple(r[i] if i < len(r) else "" for i in keep_idxs) for r in rem_rows]
+
+    return new_cols, rem_rows, banner_ctx
+
+
+def extract_roster_banner_meta(banner_ctx: str, file_name: str = "", source_sheet: str = "") -> tuple[str, str]:
+    """Extracts (course_title, teacher_name) from attendance sheet banners like 'لیست حضور و غیاب «در آستان امام هادی» ( استاد توران و نصیری )'."""
+    combined = normalize_persian(f"{banner_ctx} {source_sheet} {Path(file_name).stem if file_name else ''}")
+    course_title = ""
+    teacher_name = ""
+
+    # Extract teacher inside parentheses e.g. "( استاد توران و نصیری )" or "(جمعی از اساتید)"
+    m_t = re.search(r"[\(\[]\s*([^)\]]{3,70})[\)\]]", combined)
+    if m_t:
+        inner = re.sub(r"\s+", " ", m_t.group(1)).strip()
+        if any(k in inner for k in ("جمعی از اساتید", "گروهی از اساتید", "اساتید")):
+            teacher_name = inner
+        elif any(k in inner for k in ("استاد", "دکتر", "حجت", "آیت", "مدرس", "سخنران")):
+            cand_t = re.sub(r"^(?:استاد|اساتید|مدرس|سخنران|ارائه\s*دهنده)\s*[:\-]?\s*", "", inner).strip()
+            if is_valid_teacher_name(cand_t):
+                teacher_name = cand_t
+
+    # Extract course inside guillemets «...» or after لیست حضور و غیاب
+    m_c = re.search(r"«([^»]{3,90})»", combined)
+    if m_c:
+        course_title = m_c.group(1).strip()
+    elif file_name:
+        stem = normalize_persian(Path(file_name).stem)
+        stem = re.sub(r"^\d+\s*[\-–—.]\s*", "", stem).strip()
+        course_title = stem
+
+    return course_title, teacher_name
+
+
+_OPENING_BAL_RX = re.compile(
+    r"^(?:مانده(?:\s*از)?\s*(?:ماه|دوره|سال|صفحه)?\s*قبل(?:ی)?|مانده\s*اول\s*دوره|"
+    r"نقل\s*(?:از|به)\s*(?:صفحه|قبل|بعد)|موجودی\s*اول\s*دوره|افتتاحیه)\b"
+)
+_FUNDING_EXACT_RX = re.compile(
+    r"^(?:تنخواه(?:\s*گردان)?|شارژ\s*تنخواه|واریز(?:ی)?\s*(?:تنخواه|وجه|نقدی|به\s*حساب|حساب)?|"
+    r"دریافت(?:ی)?\s*(?:تنخواه|وجه|نقدی|از\s*حساب)?|تامین\s*تنخواه|افزایش\s*تنخواه|"
+    r"برگشت\s*تنخواه|استرداد\s*تنخواه|تسویه\s*تنخواه|انتقال\s*وجه|وجه\s*تنخواه|تنخواه\s*(?:آبان|بهمن|مهر|دی|آذر|اسفند|فروردین|اردیبهشت|خرداد|تیر|مرداد|شهریور|ماه)?)(?:\s*[\d۰-۹/\-()]*)$"
+)
+
+
+def classify_non_expense_row(item_text: Any) -> str:
+    """
+    Returns:
+      - 'opening_balance' for carried-over balances like 'مانده از ماه قبل'
+      - 'funding' for petty-cash top-ups/inflows like 'تنخواه', 'شارژ تنخواه', 'واریز تنخواه'
+      - '' for genuine expenses (including purchases like 'خرید پذیرایی از تنخواه')
+    """
+    s = normalize_persian(item_text).strip(" :.-–—()[]،,")
+    if not s:
+        return ""
+    if _OPENING_BAL_RX.search(s):
+        return "opening_balance"
+    # Genuine purchase phrases even if mentioning تنخواه must stay expenses
+    if any(k in s for k in ("خرید", "پرداخت بابت", "بابت خرید", "کرایه", "پذیرایی", "چاپ", "حق التدریس", "تعمیر", "تجهیز", "هدیه", "ملزومات", "قبض", "اجاره")):
+        return ""
+    if _FUNDING_EXACT_RX.match(s):
+        return "funding"
+    if s.startswith(("شارژ تنخواه", "واریز تنخواه", "دریافت تنخواه", "دریافتی تنخواه", "تامین تنخواه", "افزایش تنخواه", "مانده تنخواه", "مانده از ماه", "مانده ماه قبل", "مانده دوره قبل")):
+        return "funding" if "تنخواه" in s else "opening_balance"
+    return ""
+
+
+def is_non_expense_accounting_row(item_text: Any) -> bool:
+    return bool(classify_non_expense_row(item_text))
+
+
+def clean_excel_cell_value(val: Any, font_name: str = "") -> Any:
+    """Normalizes Wingdings checkmarks ('ü' -> '✓'), trims trailing whitespace."""
+    if val is None:
+        return ""
+    if isinstance(val, str):
+        s = val.strip()
+        if not s:
+            return ""
+        if "ü" in s or (font_name.lower() == "wingdings" and s == "ü"):
+            s = s.replace("ü", "✓").strip()
+            s = re.sub(r"([^\s✓])✓", r"\1 ✓", s)
+        return s
+    return val
+
+
+def is_blank_numbered_row(values: list[Any]) -> bool:
+    """True if a row ONLY has a row index (e.g. 48, 49, 50) and all other columns are empty."""
+    non_empty = [(i, str(v).strip()) for i, v in enumerate(values) if v is not None and str(v).strip() not in ("", "nan", "None")]
+    if not non_empty:
+        return True
+    if len(non_empty) == 1 and non_empty[0][0] == 0:
+        s0 = normalize_persian(non_empty[0][1])
+        if re.fullmatch(r"\d+(?:\.0)?", s0):
+            return True
+    return False
+
+
+def detect_workgroup_unified(
+    file_name: str,
+    source_sheet: str,
+    slide_text: str = "",
+    sample_courses: str = "",
+    banner_ctx: str = "",
+) -> str:
+    """Unified workgroup detector shared across BI Dashboard, Executive Analytics & Boardroom."""
+    t_norm = normalize_persian(f"{slide_text} {banner_ctx}")
+    m = re.search(r"کارگروه\s+(دین\s*شناسی|فقه|تاریخ|قرآن|حدیث|[آ-یa-zA-Z0-9\s]{2,22})", t_norm)
+    if m:
+        wg = re.sub(r"\s+", " ", m.group(1)).strip()
+        for stop in ("تربیت", "حدیث خوانی", "دوره", "سطح", "ردیف", "مخاطبین"):
+            idx = wg.find(stop)
+            if idx > 1:
+                wg = wg[:idx].strip()
+        if wg:
+            return f"کارگروه {wg}"
+
+    courses_norm = normalize_persian(f"{sample_courses} {banner_ctx} {source_sheet} {file_name}")
+    if "انس با الکافی" in t_norm or "انس با الکافی" in courses_norm or "انس با کافی" in courses_norm or "کتاب التوحید" in courses_norm:
+        return "حدیث‌خوانی (انس با الکافی)"
+    if t_norm.count("تربیت سخنران و مبلغ") >= 2 or "تربیت سخنران" in courses_norm or "تربیت مبلغ" in courses_norm or any(k in courses_norm for k in ("پرچم", "منبر", "خطابه", "آگاهی بخشی")):
+        return "تربیت سخنران و مبلغ"
+
+    topic_map = (
+        (("قرآن", "تفسیر", "تدبر", "استنادهای قرآنی", "استناد های قرآنی"), "کارگروه قرآن"),
+        (("حدیث", "بحار", "الکافی", "کافی", "نهج البلاغه", "صحیفه", "روایت", "روایی"), "کارگروه حدیث"),
+        (("فقه", "اصول", "احکام", "اجتهاد", "استنباط"), "کارگروه فقه"),
+        (("تاریخ", "سیره", "در آستان", "بر آستان", "برآستان", "تشیع", "ائمه"), "کارگروه تاریخ"),
+        (("دین شناسی", "کلام", "عقاید", "اخلاق", "معارف", "فلسفه", "امامت"), "کارگروه دین‌شناسی"),
+    )
+    for kws, label in topic_map:
+        if any(kw in courses_norm for kw in kws):
+            return label
+
+    clean_sheet = re.sub(r"\s*\(جدول\s*\d+\)", "", str(source_sheet or "")).strip()
+    if clean_sheet and not is_non_entity_value(clean_sheet) and clean_sheet.lower() not in ("sheet1", "sheet2", "نهایی", "جدول", "اسلاید"):
+        if not any(tok in clean_sheet for tok in ("اسلاید", "جدول", "صفحه")):
+            return clean_sheet
+    return "دوره‌های عمومی"

@@ -15,12 +15,14 @@
     finCategory: 'ALL',
     finFile: 'ALL',
     finSearch: '',
+    finTopMode: 'grouped',
     // وضعیت کاوشگر پویا
     uniTable: '',
     uniCache: {},
     uniGroupCol: '',
     uniMetricCol: '__COUNT__',
     uniAgg: 'sum',
+    uniSearch: '',
   };
 
   const esc = s => String(s ?? '')
@@ -428,8 +430,34 @@
     const catTotal = catItems.reduce((s, x) => s + x.value, 0);
     const topCat = catItems[0];
 
-    // ۱۰ قلم/فاکتور بزرگ
-    const topItems = filtered.slice().sort((a, b) => b.amount - a.amount).slice(0, 10);
+    // ۱۰ قلم/فاکتور با بیشترین مبلغ — به‌صورت پیش‌فرض تجمیع‌شده بر اساس عنوان قلم (اصولی) با امکان سوییچ به تک‌فاکتور
+    let topItems = [];
+    if (state.finTopMode === 'single') {
+      topItems = filtered.slice().sort((a, b) => b.amount - a.amount).slice(0, 10).map(r => ({
+        item: r.item,
+        category: r.category,
+        amount: Number(r.amount || 0),
+        count: 1,
+        date: r.date || '—',
+        vendor: r.vendor || '',
+        file_name: r.file_name || '',
+      }));
+    } else {
+      const grpItems = {};
+      filtered.forEach(r => {
+        const key = (r.item_key || r.item || 'سایر').trim();
+        if (!grpItems[key]) {
+          grpItems[key] = { item: r.item, category: r.category, amount: 0, count: 0, date: r.date || '—', vendor: r.vendor || '', files: new Set() };
+        }
+        grpItems[key].amount += Number(r.amount || 0);
+        grpItems[key].count += 1;
+        if (r.file_name) grpItems[key].files.add(r.file_name);
+      });
+      topItems = Object.values(grpItems).sort((a, b) => b.amount - a.amount).slice(0, 10).map(x => ({
+        ...x,
+        file_name: Array.from(x.files).join('، '),
+      }));
+    }
     const maxItem = Math.max(...topItems.map(x => x.amount), 1);
 
     // روند بر اساس دوره زمانی / فایل
@@ -473,6 +501,43 @@
         </div>
       </div>
 
+      ${(() => {
+        const revItems = (fin.needs_review_items || []).slice(0, 6);
+        if (!revItems.length) return '';
+        const allCats = fin.all_categories || ['ایاب‌وذهاب و حمل‌ونقل', 'پذیرایی و تشریفات', 'چاپ، تبلیغات و انتشارات', 'تجهیزات، فناوری و سامانه‌های مجازی', 'تأسیسات، تعمیرات و پشتیبانی', 'نوشت‌افزار و ملزومات اداری', 'حق‌التدریس، پژوهش و هدایا', 'سایر هزینه‌ها'];
+        return `
+          <div class="glass-card eh-fin-review-box">
+            <div class="eh-fin-review-hdr">
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span class="eh-fin-review-dot"></span>
+                <strong>نیاز به نظر شما برای دسته‌بندی دقیق‌تر (${faNum(fin.needs_review_items.length)} مورد مبهم)</strong>
+              </div>
+              <span class="bi-hint">انتخاب شما در حافظه سامانه ذخیره می‌شود و در ماه‌های بعدی خودکار اعمال خواهد شد</span>
+            </div>
+            <div class="eh-fin-review-list">
+              ${revItems.map(rv => `
+                <div class="eh-fin-review-row" data-rev-item="${esc(rv.item_key)}">
+                  <div class="eh-fin-review-info">
+                    <div class="eh-fin-review-title">
+                      <strong>${esc(rv.item)}</strong>
+                      <span class="stat-pill">${faNum(Math.round(rv.total_amount))} ${esc(unit)}</span>
+                      ${rv.count > 1 ? `<span class="stat-pill">${faNum(rv.count)} ردیف</span>` : ''}
+                    </div>
+                    <div class="eh-fin-review-reason">${esc(rv.reason)}</div>
+                  </div>
+                  <div class="eh-fin-review-actions">
+                    <button type="button" class="primary-btn bi-mini-btn eh-fin-confirm-btn" data-item-key="${esc(rv.item_key)}" data-cat="${esc(rv.suggested_category)}">تأیید «${esc(rv.suggested_category)}» ✓</button>
+                    <select class="glass-select eh-fin-pick-cat" data-item-key="${esc(rv.item_key)}" title="تغییر سرفصل این قلم">
+                      <option value="" selected>تغییر به سرفصل دیگر...</option>
+                      ${allCats.map(c => `<option value="${esc(c)}">${esc(c)}</option>`).join('')}
+                    </select>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>`;
+      })()}
+
       <div class="bi-kpi-row">
         <div class="glass-card bi-kpi">
           <div class="bi-kpi-label">جمع کل هزینه‌ها (${esc(unit)})</div>
@@ -503,14 +568,22 @@
         </div>
 
         <div class="glass-card bi-card">
-          <div class="card-title"><span>۱۰ قلم / فاکتور با بیشترین مبلغ</span><span class="bi-hint">${esc(unit)}</span></div>
+          <div class="card-title" style="gap:8px; flex-wrap:wrap;">
+            <span>${state.finTopMode === 'single' ? '۱۰ فاکتور تکی با بیشترین مبلغ' : '۱۰ قلم هزینه برتر (تجمیعی)'}</span>
+            <div style="display:flex; align-items:center; gap:5px;">
+              <button type="button" class="eh-mini-btn eh-top-mode-btn ${state.finTopMode !== 'single' ? 'active' : ''}" data-top-mode="grouped">تجمیعی</button>
+              <button type="button" class="eh-mini-btn eh-top-mode-btn ${state.finTopMode === 'single' ? 'active' : ''}" data-top-mode="single">تک‌فاکتور</button>
+              <span class="bi-hint" style="margin-right:4px;">${esc(unit)}</span>
+            </div>
+          </div>
           <div class="bi-bars">
             ${topItems.map((it, idx) => `
-              <div class="bi-bar-row" title="${esc(it.item)} | ${esc(it.vendor)} | ${esc(it.date)}">
+              <div class="bi-bar-row" title="${esc(it.item)} | ${esc(it.category)}${it.count > 1 ? ' | ' + faNum(it.count) + ' خرید' : (it.date && it.date !== '—' ? ' | ' + esc(it.date) : '')}">
                 <div class="bi-bar-head">
                   <span class="bi-bar-rank">${faNum(idx + 1)}</span>
                   <span class="bi-bar-name">${esc(it.item)}</span>
-                  <span class="stat-pill">${esc(it.category)}</span>
+                  ${it.count > 1 ? `<span class="stat-pill">${faNum(it.count)} خرید</span>` : (state.finTopMode === 'single' && it.date && it.date !== '—' ? `<span class="stat-pill">${esc(it.date)}</span>` : '')}
+                  ${state.finCategory === 'ALL' ? `<span class="stat-pill">${esc(it.category)}</span>` : ''}
                   <span class="bi-bar-num" style="color:#34d399;">${faNum(Math.round(it.amount))}</span>
                 </div>
                 <div class="bi-bar-track"><div class="bi-bar-fill" style="width:${Math.max(4, Math.round(it.amount / maxItem * 100))}%; background:linear-gradient(90deg, ${COLORS[idx % COLORS.length]}cc, ${COLORS[idx % COLORS.length]});"></div></div>
@@ -536,20 +609,59 @@
         </div>
 
         <div class="glass-card bi-card">
-          <div class="card-title"><span>تأمین‌کنندگان و فروشندگان برتر</span><span class="bi-hint">بر اساس مجموع خرید</span></div>
-          <div class="bi-teachers">
-            ${vendors.length ? vendors.map((v, idx) => `
-              <div class="bi-teacher-row">
-                <div class="bi-bar-head">
-                  <span class="bi-bar-rank">${faNum(idx + 1)}</span>
-                  <span class="bi-bar-name">${esc(v.name)}</span>
-                  <span class="stat-pill">${faNum(v.count)} تراکنش</span>
-                  <span class="bi-bar-num" style="color:#f59e0b;">${faNum(Math.round(v.value))}</span>
-                </div>
-                <div class="bi-bar-track"><div class="bi-bar-fill" style="width:${Math.max(6, Math.round(v.value / maxV * 100))}%; background:linear-gradient(90deg, #d97706cc, #f59e0b);"></div></div>
+          ${(() => {
+            if (vendors.length) {
+              return `
+                <div class="card-title"><span>تأمین‌کنندگان و فروشندگان برتر</span><span class="bi-hint">بر اساس مجموع خرید</span></div>
+                <div class="bi-teachers">
+                  ${vendors.map((v, idx) => `
+                    <div class="bi-teacher-row">
+                      <div class="bi-bar-head">
+                        <span class="bi-bar-rank">${faNum(idx + 1)}</span>
+                        <span class="bi-bar-name">${esc(v.name)}</span>
+                        <span class="stat-pill">${faNum(v.count)} تراکنش</span>
+                        <span class="bi-bar-num" style="color:#f59e0b;">${faNum(Math.round(v.value))}</span>
+                      </div>
+                      <div class="bi-bar-track"><div class="bi-bar-fill" style="width:${Math.max(6, Math.round(v.value / maxV * 100))}%; background:linear-gradient(90deg, #d97706cc, #f59e0b);"></div></div>
+                    </div>
+                  `).join('')}
+                </div>`;
+            }
+            const fMap = {};
+            filtered.forEach(r => {
+              const fn = r.file_name || 'فایل مالی';
+              if (!fMap[fn]) fMap[fn] = { name: fn, value: 0, count: 0 };
+              fMap[fn].value += Number(r.amount || 0);
+              fMap[fn].count += 1;
+            });
+            const fList = Object.values(fMap).sort((a, b) => b.value - a.value);
+            const maxF = Math.max(...fList.map(x => x.value), 1);
+            const fundTot = Number(fin.funding_total || 0);
+            const openBal = Number(fin.opening_balance_total || 0);
+            const feeTot = Number(fin.transfer_fee_total || 0);
+            const fundBox = (fundTot > 0 || openBal > 0 || feeTot > 0) ? `
+              <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.08); font-size:11.5px;">
+                ${fundTot > 0 ? `<span class="stat-pill" style="border-color:rgba(56,189,248,0.35); color:#38bdf8;">واریزی تنخواه (جدا از هزینه): ${faNum(Math.round(fundTot))} ${esc(unit)}</span>` : ''}
+                ${openBal > 0 ? `<span class="stat-pill" style="border-color:rgba(148,163,184,0.32); color:#cbd5e1;">مانده انتقالی ماه قبل: ${faNum(Math.round(openBal))} ${esc(unit)}</span>` : ''}
+                ${feeTot > 0 ? `<span class="stat-pill" style="border-color:rgba(245,158,11,0.35); color:#fbbf24;">کارمزد انتقال بانکی: ${faNum(Math.round(feeTot))} ${esc(unit)}</span>` : ''}
+              </div>` : '';
+            return `
+              <div class="card-title"><span>تفکیک هزینه به ازای فایل‌های مالی و تنخواه</span><span class="bi-hint">${esc(unit)}</span></div>
+              <div class="bi-teachers">
+                ${fList.map((f, idx) => `
+                  <div class="bi-teacher-row">
+                    <div class="bi-bar-head">
+                      <span class="bi-bar-rank">${faNum(idx + 1)}</span>
+                      <span class="bi-bar-name">${esc(f.name)}</span>
+                      <span class="stat-pill">${faNum(f.count)} قلم</span>
+                      <span class="bi-bar-num" style="color:#f59e0b;">${faNum(Math.round(f.value))}</span>
+                    </div>
+                    <div class="bi-bar-track"><div class="bi-bar-fill" style="width:${Math.max(6, Math.round(f.value / maxF * 100))}%; background:linear-gradient(90deg, #d97706cc, #f59e0b);"></div></div>
+                  </div>
+                `).join('')}
               </div>
-            `).join('') : '<div class="empty-state"><p>ستون فروشنده در فاکتورها ثبت نشده است.</p></div>'}
-          </div>
+              ${fundBox}`;
+          })()}
         </div>
       </div>
 
@@ -559,14 +671,25 @@
           <table class="glass-table">
             <thead><tr><th>شرح کالا / خدمت</th><th>سرفصل</th><th>مبلغ (${esc(unit)})</th><th>فروشنده</th><th>تاریخ</th><th>فایل منبع</th></tr></thead>
             <tbody>
-              ${filtered.slice(0, 50).map(r => `<tr>
-                <td><strong>${esc(r.item)}</strong></td>
-                <td><span class="fmt-badge">${esc(r.category)}</span></td>
-                <td style="color:#34d399; font-weight:700;">${faNum(Math.round(r.amount))}</td>
-                <td>${esc(r.vendor)}</td>
-                <td>${esc(r.date)}</td>
-                <td>${esc(r.file_name)}</td>
-              </tr>`).join('')}
+              ${filtered.slice(0, 80).map(r => {
+                const allCats = fin.all_categories || ['ایاب‌وذهاب و حمل‌ونقل', 'پذیرایی و تشریفات', 'چاپ، تبلیغات و انتشارات', 'تجهیزات، فناوری و سامانه‌های مجازی', 'تأسیسات، تعمیرات و پشتیبانی', 'نوشت‌افزار و ملزومات اداری', 'حق‌التدریس، پژوهش و هدایا', 'سایر هزینه‌ها'];
+                return `<tr>
+                  <td>
+                    <strong>${esc(r.item)}</strong>
+                    ${r.no_invoice ? '<span class="eh-noinv-pill">بدون فاکتور</span>' : ''}
+                    ${r.needs_review ? '<span class="eh-rev-pill" title="' + esc(r.review_reason || '') + '">نیاز به تأیید</span>' : ''}
+                  </td>
+                  <td>
+                    <select class="eh-inline-cat-sel" data-item-key="${esc(r.item_key || r.item)}" title="تغییر دائمی سرفصل این قلم">
+                      ${allCats.map(c => `<option value="${esc(c)}" ${c === r.category ? 'selected' : ''}>${esc(c)}</option>`).join('')}
+                    </select>
+                  </td>
+                  <td style="color:#34d399; font-weight:700;">${faNum(Math.round(r.amount))}</td>
+                  <td>${esc(r.vendor)}</td>
+                  <td>${esc(r.date)}</td>
+                  <td>${esc(r.file_name)}</td>
+                </tr>`;
+              }).join('')}
             </tbody>
           </table>
         </div>
@@ -591,6 +714,42 @@
         renderFinanceLens(vp);
       });
     });
+    async function saveFinCatOverride(itemKey, catName) {
+      if (!itemKey || !catName) return;
+      try {
+        const res = await window.pywebview?.api?.save_finance_category_rule?.(itemKey, catName);
+        if (res && res.ok) {
+          window.showToast && window.showToast(`سرفصل «${itemKey}» به «${catName}» ثبت و در حافظه ذخیره شد.`);
+          await loadBiData(true);
+        } else {
+          window.showToast && window.showToast('خطا در ذخیره سرفصل: ' + (res?.error || ''));
+        }
+      } catch (err) {
+        window.showToast && window.showToast('خطا در ذخیره سرفصل: ' + err);
+      }
+    }
+
+    vp.querySelectorAll('.eh-top-mode-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.finTopMode = btn.dataset.topMode === 'single' ? 'single' : 'grouped';
+        renderFinanceLens(vp);
+      });
+    });
+
+    vp.querySelectorAll('.eh-fin-confirm-btn').forEach(btn => {
+      btn.addEventListener('click', () => saveFinCatOverride(btn.dataset.itemKey, btn.dataset.cat));
+    });
+    vp.querySelectorAll('.eh-fin-pick-cat').forEach(sel => {
+      sel.addEventListener('change', () => {
+        if (sel.value) saveFinCatOverride(sel.dataset.itemKey, sel.value);
+      });
+    });
+    vp.querySelectorAll('.eh-inline-cat-sel').forEach(sel => {
+      sel.addEventListener('change', () => {
+        if (sel.value) saveFinCatOverride(sel.dataset.itemKey, sel.value);
+      });
+    });
+
     document.getElementById('finAskAiBtn').addEventListener('click', () => {
       const scope = state.finCategory === 'ALL' ? 'تمامی هزینه‌ها و فاکتورهای خرید مؤسسه' : `سرفصل هزینه «${state.finCategory}»`;
       const q = `یک گزارش ممیزی و تحلیل مالی دقیق از ${scope} شامل جمع کل، بزرگ‌ترین اقلام، روند هزینه‌ها و پیشنهادهای بهینه‌سازی بودجه ارائه کن.`;
@@ -634,15 +793,22 @@
     const cols = tblData.columns || [];
     const textCols = tblData.text_columns && tblData.text_columns.length ? tblData.text_columns : cols;
     const numCols = tblData.numeric_columns || [];
+    const allRows = tblData.rows || [];
 
-    const skipAxisRx = /^(ردیف|شماره|id|no|index)$/i;
-    const skipMetricRx = /(ردیف|سال|کد\s*ملی|موبایل|تلفن|شماره|تاریخ|id)/i;
+    const skipAxisRx = /^(ردیف|شماره|کد|کد\s*ملی|موبایل|همراه|تلفن|id|no|index|ستون_\d+)$/i;
+    const skipMetricRx = /(ردیف|سال|کد\s*ملی|موبایل|تلفن|همراه|شماره|تاریخ|مانده|id)/i;
+    const realMetricRx = /(مبلغ|بدهکار|بستانکار|برداشت|واریز|هزینه|قیمت|جمع|شرکت|مخاطب|تعداد|ساعت|نفر)/i;
+
     const smartNumCols = numCols.filter(c => !skipMetricRx.test(String(c || '').trim()));
     if (!cols.includes(state.uniGroupCol)) {
-      state.uniGroupCol = textCols.find(c => !skipAxisRx.test(String(c || '').trim())) || textCols[0] || cols[0] || '';
+      state.uniGroupCol =
+        textCols.find(c => !skipAxisRx.test(String(c || '').trim())) ||
+        cols.find(c => !skipAxisRx.test(String(c || '').trim())) ||
+        textCols[0] || cols[0] || '';
     }
     if (!state.uniMetricCol || (state.uniMetricCol !== '__COUNT__' && !numCols.includes(state.uniMetricCol))) {
-      state.uniMetricCol = smartNumCols[0] || numCols[0] || '__COUNT__';
+      const preferred = smartNumCols.find(c => realMetricRx.test(String(c || '')));
+      state.uniMetricCol = preferred || '__COUNT__';
     }
 
     const gIdx = cols.indexOf(state.uniGroupCol);
@@ -651,9 +817,11 @@
     const groups = {};
     let totalMetric = 0;
     let validRows = 0;
-    const sumRowRx = /^(جمع\s*کل|مجموع(\s*کل)?|جمع|کل|میانگین|total|grand\s*total|subtotal)$/i;
-    (tblData.rows || []).forEach(r => {
-      const k = (gIdx >= 0 ? String(r[gIdx] || '').trim() : '') || 'نامشخص';
+    const sumRowRx = /^(جمع\s*کل|مجموع(\s*کل)?|جمع|کل|میانگین|مانده\s*از\s*قبل|total|grand\s*total|subtotal)$/i;
+    allRows.forEach(r => {
+      const firstNonEmpty = r.find(v => String(v || '').trim() !== '') || '';
+      if (sumRowRx.test(String(firstNonEmpty).trim())) return;
+      const k = (gIdx >= 0 ? String(r[gIdx] || '').trim() : '') || 'ثبت‌نشده';
       if (sumRowRx.test(k)) return;
       if (!groups[k]) groups[k] = { name: k, sum: 0, count: 0 };
       if (mIdx >= 0) {
@@ -672,6 +840,7 @@
       }
     });
 
+    const uniqueGroupsCount = Object.keys(groups).length;
     const chartItems = Object.values(groups).map(g => ({
       name: g.name,
       value: (state.uniAgg === 'avg' && g.count > 0) ? (g.sum / g.count) : g.sum,
@@ -680,11 +849,21 @@
 
     const maxVal = Math.max(...chartItems.map(x => x.value), 1);
     const domainTag = d => d === 'finance' ? 'مالی' : (d === 'education' ? 'آموزشی' : 'عمومی');
+    const metricLabel = state.uniMetricCol === '__COUNT__' ? 'تعداد رکورد' : state.uniMetricCol;
+
+    const q = (state.uniSearch || '').trim().toLowerCase();
+    const previewRows = q
+      ? allRows.filter(r => r.some(cell => String(cell || '').toLowerCase().includes(q)))
+      : allRows;
+
+    const bannerHtml = tblData.banner_title
+      ? `<div class="eh-uni-banner-pill"><span>عنوان ثبت‌شده فایل:</span><strong>${esc(tblData.banner_title)}</strong></div>`
+      : '';
 
     vp.innerHTML = `
-      <div class="glass-card bi-toolbar">
-        <div class="bi-toolbar-controls" style="flex:1;">
-          <select id="uniTblSel" class="glass-select bi-select" style="min-width:230px;">
+      <div class="glass-card bi-toolbar eh-uni-toolbar">
+        <div class="bi-toolbar-controls eh-uni-selects">
+          <select id="uniTblSel" class="glass-select bi-select">
             ${tables.map(t => `<option value="${esc(t.table_name)}" ${t.table_name === state.uniTable ? 'selected' : ''}>[${domainTag(t.domain)}] ${esc(t.file_name)} — ${esc(t.source_sheet)} (${faNum(t.rows_count)} ردیف)</option>`).join('')}
           </select>
           <select id="uniGrpSel" class="glass-select bi-select">
@@ -695,24 +874,36 @@
             ${numCols.map(c => `<option value="${esc(c)}" ${c === state.uniMetricCol ? 'selected' : ''}>شاخص: ${esc(c)}</option>`).join('')}
           </select>
           ${state.uniMetricCol !== '__COUNT__' ? `
-            <select id="uniAggSel" class="glass-select bi-select" style="min-width:110px;">
+            <select id="uniAggSel" class="glass-select bi-select">
               <option value="sum" ${state.uniAgg === 'sum' ? 'selected' : ''}>مجموع (Sum)</option>
               <option value="avg" ${state.uniAgg === 'avg' ? 'selected' : ''}>میانگین (Avg)</option>
             </select>
           ` : ''}
         </div>
-        <div class="bi-toolbar-controls">
+        <div class="bi-toolbar-controls eh-uni-actions">
           <button class="ghost-btn bi-mini-btn" id="uniAskAiBtn">تحلیل جدول با AI ✦</button>
-          <button class="excel-btn" id="uniExportBtn">خروجی اکسل جدول (.xlsx)</button>
+          <button class="excel-btn" id="uniExportBtn">خروجی اکسل (.xlsx)</button>
         </div>
       </div>
 
-      <div class="bi-grid">
-        <div class="glass-card bi-card">
-          <div class="card-title"><span>نمودار پویا (${esc(state.uniGroupCol)})</span><span class="stat-pill">مجموع کل: ${faDec(totalMetric)}</span></div>
+      ${bannerHtml}
+
+      <div class="bi-kpi-row eh-uni-kpi-row">
+        <div class="glass-card bi-kpi"><div class="bi-kpi-label">تعداد ردیف‌ها</div><div class="bi-kpi-val">${faNum(tblData.total_rows)}</div><div class="bi-kpi-sub">${faNum(cols.length)} ستون شناسایی‌شده</div></div>
+        <div class="glass-card bi-kpi"><div class="bi-kpi-label">مقادیر یکتای محور</div><div class="bi-kpi-val">${faNum(uniqueGroupsCount)}</div><div class="bi-kpi-sub">ستون «${esc(state.uniGroupCol)}»</div></div>
+        <div class="glass-card bi-kpi"><div class="bi-kpi-label">${state.uniAgg === 'avg' && mIdx >= 0 ? 'میانگین شاخص' : 'مجموع کل شاخص'}</div><div class="bi-kpi-val">${faDec(state.uniAgg === 'avg' && validRows > 0 ? (totalMetric / validRows) : totalMetric)}</div><div class="bi-kpi-sub">${esc(metricLabel)}</div></div>
+        <div class="glass-card bi-kpi"><div class="bi-kpi-label">بیشترین مقدار در نمودار</div><div class="bi-kpi-val">${chartItems.length ? faDec(chartItems[0].value) : '۰'}</div><div class="bi-kpi-sub">${chartItems.length ? esc(chartItems[0].name) : 'بدون داده'}</div></div>
+      </div>
+
+      <div class="bi-grid eh-uni-grid">
+        <div class="glass-card bi-card eh-uni-chart-card">
+          <div class="card-title">
+            <span>تحلیل «${esc(metricLabel)}» به تفکیک «${esc(state.uniGroupCol)}»</span>
+            <span class="stat-pill">مجموع: ${faDec(totalMetric)}</span>
+          </div>
           <div class="bi-bars">
             ${chartItems.length ? chartItems.map((it, idx) => `
-              <div class="bi-bar-row">
+              <div class="bi-bar-row" title="${esc(it.name)} — ${faDec(it.value)}">
                 <div class="bi-bar-head">
                   <span class="bi-bar-rank">${faNum(idx + 1)}</span>
                   <span class="bi-bar-name">${esc(it.name)}</span>
@@ -720,16 +911,22 @@
                 </div>
                 <div class="bi-bar-track"><div class="bi-bar-fill" style="width:${Math.max(4, Math.round(it.value / maxVal * 100))}%; background:linear-gradient(90deg, ${COLORS[idx % COLORS.length]}cc, ${COLORS[idx % COLORS.length]});"></div></div>
               </div>
-            `).join('') : '<div class="empty-state"><p>مقدار عددی برای ترسیم یافت نشد.</p></div>'}
+            `).join('') : '<div class="empty-state"><p>مقدار عددی معناداری برای این ترکیب محور و شاخص یافت نشد.</p></div>'}
           </div>
         </div>
 
-        <div class="glass-card bi-card">
-          <div class="card-title"><span>پیش‌نمایش زنده داده‌های جدول</span><span class="stat-pill">${faNum(tblData.total_rows)} ردیف / ${faNum(cols.length)} ستون</span></div>
-          <div class="ai-table-scroll" style="max-height:270px;">
-            <table class="glass-table">
-              <thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
-              <tbody>${(tblData.rows || []).slice(0, 40).map(r => `<tr>${r.map(v => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody>
+        <div class="glass-card bi-card eh-uni-table-card">
+          <div class="card-title" style="gap:10px; flex-wrap:wrap;">
+            <span>پیش‌نمایش زنده داده‌های جدول</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <input id="uniSearchInp" class="glass-input eh-uni-search" type="text" placeholder="جست‌وجو در جدول..." value="${esc(state.uniSearch)}" />
+              <span class="stat-pill">${faNum(previewRows.length)} / ${faNum(tblData.total_rows)} ردیف</span>
+            </div>
+          </div>
+          <div class="ai-table-scroll eh-uni-table-scroll">
+            <table class="glass-table eh-uni-table">
+              <thead><tr>${cols.map(c => `<th title="${esc(c)}">${esc(c)}</th>`).join('')}</tr></thead>
+              <tbody>${previewRows.slice(0, 100).map(r => `<tr>${cols.map((_, ci) => `<td title="${esc(r[ci] ?? '')}">${esc(r[ci] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${Math.max(1, cols.length)}" style="text-align:center; padding:18px;">موردی یافت نشد.</td></tr>`}</tbody>
             </table>
           </div>
         </div>
@@ -741,6 +938,7 @@
       state.uniTable = e.target.value;
       state.uniGroupCol = '';
       state.uniMetricCol = '';
+      state.uniSearch = '';
       renderUniversalLens(vp);
     });
     document.getElementById('uniGrpSel').addEventListener('change', e => { state.uniGroupCol = e.target.value; renderUniversalLens(vp); });
@@ -748,16 +946,32 @@
     const aggEl = document.getElementById('uniAggSel');
     if (aggEl) aggEl.addEventListener('change', e => { state.uniAgg = e.target.value; renderUniversalLens(vp); });
 
+    const searchEl = document.getElementById('uniSearchInp');
+    if (searchEl) {
+      let stmr = null;
+      searchEl.addEventListener('input', e => {
+        state.uniSearch = e.target.value;
+        clearTimeout(stmr);
+        stmr = setTimeout(() => {
+          const curPos = searchEl.selectionStart;
+          renderUniversalLens(vp).then(() => {
+            const inp2 = document.getElementById('uniSearchInp');
+            if (inp2) { inp2.focus(); try { inp2.setSelectionRange(curPos, curPos); } catch (_) {} }
+          });
+        }, 160);
+      });
+    }
+
     document.getElementById('uniAskAiBtn').addEventListener('click', () => {
-      const q = `جدول «${tblData.source_sheet}» از فایل «${tblData.file_name}» را به‌صورت کامل تحلیل آماری و مدیریتی کن.`;
+      const qTxt = `جدول «${tblData.source_sheet}» از فایل «${tblData.file_name}» را به‌صورت کامل تحلیل آماری و مدیریتی کن.`;
       window.switchPageById && window.switchPageById('chat');
-      window.sendQuickPrompt && window.sendQuickPrompt(q);
+      window.sendQuickPrompt && window.sendQuickPrompt(qTxt);
     });
     document.getElementById('uniExportBtn').addEventListener('click', () => {
       exportExcel({
         title: `${tblData.file_name}_${tblData.source_sheet}`,
         columns: cols,
-        rows: tblData.rows || [],
+        rows: previewRows,
       });
     });
   }
@@ -785,11 +999,11 @@
     else renderUniversalLens(vp);
   }
 
-  async function loadBiData() {
+  async function loadBiData(force = false) {
     ensureShell();
     state.uniCache = {};
     try {
-      const res = await pywebview.api.get_bi_analytics();
+      const res = await pywebview.api.get_bi_analytics(Boolean(force));
       if (!res || !res.ok) return;
       state.data = res;
 

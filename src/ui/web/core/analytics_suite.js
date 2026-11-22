@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   const App = window.eHadiApp;
   const Ch = window.eHadiCharts;
   const ic = App.icon;
@@ -168,9 +168,10 @@
 
       bd.querySelector('#btnResetFilters').addEventListener('click', () => {
         currentFilters = { group: '', teacher: '', year: '' };
-        bd.querySelector('#fltGroup').value = '';
-        bd.querySelector('#fltTeacher').value = '';
-        bd.querySelector('#fltYear').value = '';
+        ['fltGroup', 'fltTeacher', 'fltYear'].forEach(id => {
+          const el = bd.querySelector('#' + id);
+          if (el) el.value = '';
+        });
         loadAndDrawAnalytics(bd);
       });
 
@@ -199,45 +200,126 @@
     if (!res || !res.ok) return;
     lastAnalytics = res;
 
-    // پر کردن سلکت‌های فیلتر
+    // پر کردن ایمن سلکت‌های فیلتر (بدون شکستن کاراکترهای خاص و با حفظ دقیق مقدار انتخاب‌شده)
     const fillSel = (id, list, allLbl, curVal) => {
       const sel = bd.querySelector('#' + id);
       if (!sel) return;
-      sel.innerHTML = `<option value="">${allLbl}</option>` + (list || []).map(x => `<option value="${x}" ${x === curVal ? 'selected' : ''}>${x}</option>`).join('');
+      sel.textContent = '';
+      const defOpt = document.createElement('option');
+      defOpt.value = '';
+      defOpt.textContent = allLbl;
+      sel.appendChild(defOpt);
+      const items = Array.isArray(list) ? list : [];
+      let matched = false;
+      items.forEach(x => {
+        const val = String(x ?? '');
+        const opt = document.createElement('option');
+        opt.value = val;
+        opt.textContent = val;
+        if (curVal && val === curVal) {
+          opt.selected = true;
+          matched = true;
+        }
+        sel.appendChild(opt);
+      });
+      if (curVal && !matched) {
+        const extra = document.createElement('option');
+        extra.value = curVal;
+        extra.textContent = curVal;
+        extra.selected = true;
+        sel.appendChild(extra);
+      }
+      sel.value = curVal || '';
     };
     fillSel('fltGroup', res.filters_meta.groups, 'همه کارگروه‌ها', currentFilters.group);
     fillSel('fltTeacher', res.filters_meta.teachers, 'همه اساتید', currentFilters.teacher);
     fillSel('fltYear', res.filters_meta.years, 'همه سال‌ها', currentFilters.year);
 
     const k = res.kpis;
-    const uniqNote = res.has_person_level ? 'محاسبه دقیق فردی' : 'تخمین از جداول تجمیعی';
+    const uniqNote = res.has_person_level ? 'محاسبه دقیق فردی' : 'آمار تجمیعی دوره‌ها';
     bd.querySelector('#execKpiGrid').innerHTML = [
-      ['شرکت‌کنندگان یکتا', Ch.fmtNum(k.unique_participants), uniqNote],
+      ['شرکت‌کنندگان یکتا', res.has_person_level ? Ch.fmtNum(k.unique_participants) : '—', uniqNote],
       ['مجموع حضور کل', Ch.fmtNum(k.total_attendance), `در ${Ch.fmtNum(k.total_courses)} دوره و رویداد`],
-      ['نرخ بازگشت و وفاداری', `${Ch.toFa(k.repeat_rate)}٪`, `میانگین ${Ch.toFa(k.avg_per_course)} نفر/دوره`],
+      ['نرخ بازگشت و وفاداری', res.has_person_level ? `${Ch.toFa(k.repeat_rate)}٪` : `${Ch.toFa(k.avg_per_course)} نفر`, `میانگین ${Ch.toFa(k.avg_per_course)} نفر/دوره`],
       ['اساتید و کارگروه‌ها', `${Ch.fmtNum(k.total_teachers)} / ${Ch.fmtNum(k.total_groups)}`, `سلامت داده: ${Ch.toFa(k.data_health_score)}٪`],
       ['هزینه هر مخاطب', k.cost_per_attendee ? `${Ch.fmtNum(k.cost_per_attendee)} ت` : 'ثبت نشده', `کل هزینه: ${Ch.fmtNum(k.total_cost)} ت`],
     ].map(([l, v, s]) => `<div class="eh-kpi glass-card"><div class="eh-kpi-l">${l}</div><div class="eh-kpi-v">${v}</div><div class="eh-kpi-s">${s}</div></div>`).join('');
 
     const tl = res.timeline || [];
-    Ch.renderSplineArea(
-      bd.querySelector('#chTimeline'),
-      [
-        { name: 'مخاطبان جدید', values: tl.map(x => x.new_participants), color: '#10b981' },
-        { name: 'مخاطبان قدیمی', values: tl.map(x => x.returning_participants), color: '#0ea5e9' },
-      ],
-      tl.map(x => x.label),
-      { id: 'tl' }
-    );
-    Ch.renderDonut(
-      bd.querySelector('#chRetention'),
-      (res.retention || []).map(x => ({ label: x.label, value: x.count })),
-      'مخاطبان یکتا'
-    );
-    Ch.renderRadar(
-      bd.querySelector('#chRadar'),
-      (res.groups || []).map(g => ({ label: g.name, value: g.attendance }))
-    );
+    const hasPersonTl = res.has_person_level && tl.some(x => (x.new_participants || 0) + (x.returning_participants || 0) > 0);
+    const fCourses = res.filtered_courses || [];
+
+    // نمودار ۱: اگر داده فردی وجود داشت جدید/قدیمی؛ در غیر این صورت روند مخاطبان و دوره‌ها
+    if (hasPersonTl) {
+      Ch.renderSplineArea(
+        bd.querySelector('#chTimeline'),
+        [
+          { name: 'مخاطبان جدید', values: tl.map(x => x.new_participants), color: '#10b981' },
+          { name: 'مخاطبان قدیمی', values: tl.map(x => x.returning_participants), color: '#0ea5e9' },
+        ],
+        tl.map(x => x.label),
+        { id: 'tl' }
+      );
+    } else if (tl.length) {
+      Ch.renderSplineArea(
+        bd.querySelector('#chTimeline'),
+        [
+          { name: 'مجموع مخاطبان', values: tl.map(x => x.attendance || 0), color: '#10b981' },
+          { name: 'تعداد دوره‌ها', values: tl.map(x => x.courses || 0), color: '#38bdf8' },
+        ],
+        tl.map(x => x.label),
+        { id: 'tl' }
+      );
+    } else if (fCourses.length) {
+      Ch.renderHBar(
+        bd.querySelector('#chTimeline'),
+        fCourses.slice(0, 8).map(c => ({ label: c.title, v1: c.attendance || 0 })),
+        { c1: '#10b981' }
+      );
+    } else {
+      Ch.renderSplineArea(bd.querySelector('#chTimeline'), [], [], { id: 'tl' });
+    }
+
+    // نمودار ۲: وفاداری فردی؛ و در نبود فایل فردی، سهم کارگروه‌ها یا دوره‌های استاد انتخاب‌شده
+    const retItems = (res.retention || []).map(x => ({ label: x.label, value: x.count }));
+    const retTotal = retItems.reduce((a, b) => a + Number(b.value || 0), 0);
+    if (retTotal > 0) {
+      Ch.renderDonut(bd.querySelector('#chRetention'), retItems, 'مخاطبان یکتا');
+    } else if (currentFilters.teacher && fCourses.length) {
+      Ch.renderDonut(
+        bd.querySelector('#chRetention'),
+        fCourses.slice(0, 6).map(c => ({ label: c.title, value: c.attendance || 1 })),
+        'مخاطب دوره‌ها'
+      );
+    } else if ((res.groups || []).length) {
+      Ch.renderDonut(
+        bd.querySelector('#chRetention'),
+        (res.groups || []).slice(0, 6).map(g => ({ label: g.name, value: g.attendance || g.courses })),
+        'مخاطب کل'
+      );
+    } else {
+      Ch.renderDonut(bd.querySelector('#chRetention'), retItems, 'مخاطبان یکتا');
+    }
+
+    // نمودار ۳: رادار برای ۳+ کارگروه؛ و هنگام فیلتر روی یک استاد (۱ یا ۲ کارگروه)، نمایش نمودار میله‌ای دوره‌ها/کارگروه‌های همان استاد
+    if ((res.groups || []).length >= 3) {
+      Ch.renderRadar(
+        bd.querySelector('#chRadar'),
+        (res.groups || []).map(g => ({ label: g.name, value: g.attendance }))
+      );
+    } else if (fCourses.length) {
+      Ch.renderHBar(
+        bd.querySelector('#chRadar'),
+        fCourses.slice(0, 8).map(c => ({ label: c.title, v1: c.attendance || 0 })),
+        { c1: '#38bdf8' }
+      );
+    } else {
+      Ch.renderHBar(
+        bd.querySelector('#chRadar'),
+        (res.groups || []).map(g => ({ label: g.name, v1: g.attendance || 0 })),
+        { c1: '#38bdf8' }
+      );
+    }
     Ch.renderHeatmap(bd.querySelector('#chHeatmap'), res.heatmap || []);
 
     Ch.renderHBar(

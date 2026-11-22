@@ -17,6 +17,15 @@ from src.core.db_manager import (
     normalize_persian,
     parse_jalali_date,
     parse_number_strict,
+    classify_non_expense_row,
+    clean_excel_cell_value,
+    detect_workgroup_unified,
+    extract_roster_banner_meta,
+    is_blank_numbered_row,
+    is_banner_header_col,
+    is_non_entity_value,
+    is_valid_teacher_name,
+    promote_banner_headers,
     resolve_default_duckdb_path,
 )
 from src.core.memory_engine import (
@@ -45,9 +54,12 @@ def is_junk_label(label: str) -> bool:
     low = normalize_fa(label).lower()
     if not low or len(low) < 2:
         return True
+    if is_non_entity_value(low):
+        return True
     junk_tokens = (
         "اسلاید", "slide", "جدول", "table", "صفحه", "page", "شیت", "sheet",
         "جمع کل", "مجموع کل", "جمع", "مجموع", "میانگین", "total", "subtotal", "grand total",
+        "ردیف", "مانده از قبل", "مانده قبلی",
     )
     if any(tok in low for tok in junk_tokens) and ("کارگروه" not in low):
         return True
@@ -143,9 +155,31 @@ class ExecutiveAnalyticsEngine:
     def _save_suite(self, data: dict[str, Any]) -> None:
         SUITE_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
+
+    def _load_slide_texts(self) -> dict[tuple[str, str], str]:
+        slide_texts: dict[tuple[str, str], str] = {}
+        try:
+            import lancedb
+            db = lancedb.connect(str(Config.LANCEDB_PATH))
+            if "document_chunks" not in db.table_names():
+                return slide_texts
+            rows = db.open_table("document_chunks").to_pandas().to_dict(orient="records")
+            for r in rows:
+                fn = str(r.get("file_name") or "")
+                loc = normalize_fa(str(r.get("location") or ""))
+                txt = str(r.get("content") or "")
+                if fn and loc:
+                    slide_texts[(fn, loc)] = (slide_texts.get((fn, loc), "") + "\n" + txt).strip()
+        except Exception:
+            pass
+        return slide_texts
+
     def _scan_duckdb(self, data_mode: str = "clean") -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
         courses, persons, costs = [], [], []
         db_path = _find_duckdb_path()
+        slide_texts = self._load_slide_texts()
+        brain_cfg_local = load_brain_config()
+        learned_fin_rules = dict(brain_cfg_local.get("finance_category_rules") or {})
         if not db_path:
             return courses, persons, costs
 
@@ -170,14 +204,21 @@ class ExecutiveAnalyticsEngine:
                         continue
 
                     fn, sh = cat_map.get(tname, (tname, ""))
+                    cols, rows, banner_ctx = promote_banner_headers(cols, rows)
+                    if not cols or not rows:
+                        continue
                     norm_cols = [normalize_fa(c).lower() for c in cols]
 
                     def find_col(keywords: tuple[str, ...]) -> int:
                         for idx, nc in enumerate(norm_cols):
+                            if is_banner_header_col(cols[idx]):
+                                continue
                             if any(kw in nc for kw in keywords):
                                 return idx
                         return -1
 
+                    i_first_name = next((idx for idx, nc in enumerate(norm_cols) if nc in ("نام", "first name", "name") and not is_banner_header_col(cols[idx])), -1)
+                    i_last_name = next((idx for idx, nc in enumerate(norm_cols) if ("نام خانوادگی" in nc or "فامیل" in nc or nc == "last name") and not is_banner_header_col(cols[idx])), -1)
                     i_person = find_col(("نام و نام خانوادگی", "نام خانوادگی", "شرکت کننده", "شرکت‌کننده", "طلبه", "ثبت نام کننده", "پاسخ دهنده", "full_name", "participant"))
                     i_phone = find_col(("موبایل", "همراه", "تلفن", "شماره تماس", "phone", "mobile"))
                     i_nid = find_col(("کد ملی", "کدملی", "شماره ملی", "national"))
@@ -188,26 +229,35 @@ class ExecutiveAnalyticsEngine:
                     i_count = find_col(("مخاطب", "شرکت", "تعداد نفر", "حاضرین", "نفر", "ثبت نام", "attendance", "count", "students"))
                     i_hours = find_col(("ساعت", "ساعات", "مدت", "hours", "duration"))
                     i_sessions = find_col(("جلسه", "تعداد جلسات", "جلسات", "sessions"))
-                    i_cost = find_col(("مبلغ", "هزینه", "حق التدریس", "حق‌التدریس", "تومان", "ریال", "فاکتور", "بهای", "جمع کل", "cost", "amount", "price"))
+                    i_cost = find_col(("مبلغ کل", "بدهکار", "برداشت", "مبلغ", "هزینه", "حق التدریس", "حق‌التدریس", "پرداختی", "پرداخت", "بستانکار", "تنخواه", "خرج", "تومان", "ریال", "فاکتور", "بهای", "جمع کل", "cost", "amount", "price"))
                     i_date = find_col(("تاریخ", "سال", "فصل", "ماه", "زمان", "date", "year"))
                     i_cost_cat = find_col(("شرح", "بابت", "سرفصل", "نوع هزینه", "عنوان", "موضوع"))
 
-                    if i_person != -1 and (i_phone != -1 or i_nid != -1 or i_level != -1):
+                    if (i_person != -1 or (i_first_name != -1 and i_last_name != -1)) and (i_phone != -1 or i_nid != -1 or i_level != -1):
+                        roster_course, roster_teacher = extract_roster_banner_meta(banner_ctx, fn, sh)
                         for r_idx, r in enumerate(rows, start=1):
                             if data_mode == "clean" and is_summary_row_smart(list(r)):
                                 continue
-                            nm = normalize_fa(r[i_person])
+                            if i_first_name != -1 and i_last_name != -1 and i_first_name != i_last_name:
+                                fn_p = normalize_fa(r[i_first_name] if i_first_name < len(r) else "")
+                                ln_p = normalize_fa(r[i_last_name] if i_last_name < len(r) else "")
+                                nm = f"{fn_p} {ln_p}".strip()
+                            else:
+                                nm = normalize_fa(r[i_person] if (i_person != -1 and i_person < len(r)) else "")
                             if is_junk_label(nm) or len(nm) < 3:
                                 continue
-                            dt_raw = normalize_fa(r[i_date]) if i_date != -1 else ""
-                            jd = parse_jalali_date(dt_raw, fallback_text=f"{fn} {sh}")
+                            dt_raw = normalize_fa(r[i_date]) if (i_date != -1 and i_date < len(r)) else ""
+                            jd = parse_jalali_date(dt_raw, fallback_text=f"{fn} {sh} {banner_ctx}")
+                            t_cell = normalize_fa(r[i_teacher]) if (i_teacher != -1 and i_teacher < len(r)) else ""
+                            if not is_valid_teacher_name(t_cell):
+                                t_cell = roster_teacher
                             persons.append({
-                                "name": nm, "phone": normalize_phone(r[i_phone]) if i_phone != -1 else "",
-                                "nid": normalize_nid(r[i_nid]) if i_nid != -1 else "",
-                                "level": normalize_fa(r[i_level]) if i_level != -1 else "",
-                                "course": normalize_fa(r[i_course]) if i_course != -1 else (sh or Path(fn).stem or "دوره آموزشی"),
-                                "group": normalize_fa(r[i_group]) if i_group != -1 else "عمومی",
-                                "teacher": normalize_fa(r[i_teacher]) if i_teacher != -1 else "",
+                                "name": nm, "phone": normalize_phone(r[i_phone]) if (i_phone != -1 and i_phone < len(r)) else "",
+                                "nid": normalize_nid(r[i_nid]) if (i_nid != -1 and i_nid < len(r)) else "",
+                                "level": normalize_fa(r[i_level]) if (i_level != -1 and i_level < len(r)) else "",
+                                "course": normalize_fa(r[i_course]) if (i_course != -1 and i_course < len(r)) else (roster_course or sh or Path(fn).stem or "دوره آموزشی"),
+                                "group": normalize_fa(r[i_group]) if (i_group != -1 and i_group < len(r)) else detect_workgroup_unified(fn, sh, "", roster_course or "", banner_ctx),
+                                "teacher": t_cell,
                                 "date": jd["canonical"] or dt_raw, "year": jd["year"] or "نامشخص",
                                 "month_idx": (jd["month"] - 1) if 1 <= jd["month"] <= 12 else -1,
                                 "season": jd["season"], "source": tname, "file_name": fn, "source_sheet": sh, "row_index": r_idx,
@@ -215,29 +265,80 @@ class ExecutiveAnalyticsEngine:
                         continue
 
                     if i_cost != -1 and i_count == -1 and i_course == -1:
+                        # اگر هر دو ستون بدهکار و بستانکار وجود داشت، ستون هزینه واقعی را انتخاب کن
+                        eff_cost_idx = i_cost
+                        c_cur = norm_cols[i_cost]
+                        pair_idx = -1
+                        for ci_p, nc_p in enumerate(norm_cols):
+                            if ci_p == i_cost or is_banner_header_col(cols[ci_p]):
+                                continue
+                            if (("بدهکار" in c_cur and "بستانکار" in nc_p) or ("بستانکار" in c_cur and "بدهکار" in nc_p)
+                                or ("برداشت" in c_cur and "واریز" in nc_p) or ("واریز" in c_cur and "برداشت" in nc_p)):
+                                pair_idx = ci_p
+                                break
+                        if pair_idx != -1:
+                            if ("واریز" in c_cur or "دریافت" in c_cur) and ("برداشت" in norm_cols[pair_idx] or "پرداخت" in norm_cols[pair_idx]):
+                                eff_cost_idx = pair_idx
+                            elif not (("برداشت" in c_cur or "پرداخت" in c_cur) and ("واریز" in norm_cols[pair_idx] or "دریافت" in norm_cols[pair_idx])):
+                                s1, s2 = 0, 0
+                                for r_chk in rows:
+                                    if is_summary_row_smart(list(r_chk)):
+                                        continue
+                                    it_chk = normalize_fa(r_chk[i_cost_cat]) if (i_cost_cat != -1 and i_cost_cat < len(r_chk)) else ""
+                                    is_non_exp = bool(classify_non_expense_row(it_chk))
+                                    v1 = parse_number_strict(r_chk[i_cost] if i_cost < len(r_chk) else None)
+                                    v2 = parse_number_strict(r_chk[pair_idx] if pair_idx < len(r_chk) else None)
+                                    if v1 is not None and v1 > 0:
+                                        s1 += (-2 if is_non_exp else 1)
+                                    if v2 is not None and v2 > 0:
+                                        s2 += (-2 if is_non_exp else 1)
+                                if s2 > s1:
+                                    eff_cost_idx = pair_idx
+
                         for r_idx, r in enumerate(rows, start=1):
                             if data_mode == "clean" and is_summary_row_smart(list(r)):
                                 continue
-                            amt_opt = parse_number_strict(r[i_cost])
+                            if is_blank_numbered_row(list(r)):
+                                continue
+                            raw_desc = normalize_fa(r[i_cost_cat]) if (i_cost_cat != -1 and i_cost_cat < len(r)) else ""
+                            if classify_non_expense_row(raw_desc) or raw_desc.startswith("امضا"):
+                                continue
+                            amt_opt = parse_number_strict(r[eff_cost_idx] if eff_cost_idx < len(r) else None)
                             if amt_opt is None or amt_opt <= 0:
                                 continue
-                            cat = normalize_fa(r[i_cost_cat]) if i_cost_cat != -1 else "سایر هزینه‌ها"
+                            try:
+                                from src.analytics.bi_engine import categorize_expense_smart
+                                cat = categorize_expense_smart("", raw_desc, "", fn, sh, learned_rules=learned_fin_rules)["category"]
+                            except Exception:
+                                cat = raw_desc or "سایر هزینه‌ها"
                             if is_junk_label(cat):
                                 cat = "سایر هزینه‌ها"
-                            grp_val = normalize_fa(r[i_group]) if i_group != -1 else "عمومی"
+                            grp_val = normalize_fa(r[i_group]) if (i_group != -1 and i_group < len(r)) else "عمومی"
                             if is_junk_label(grp_val):
                                 grp_val = "عمومی"
-                            dt_raw = normalize_fa(r[i_date]) if i_date != -1 else ""
-                            jd = parse_jalali_date(dt_raw, fallback_text=f"{fn} {sh}")
+                            dt_raw = normalize_fa(r[i_date]) if (i_date != -1 and i_date < len(r)) else ""
+                            jd = parse_jalali_date(dt_raw, fallback_text=f"{fn} {sh} {banner_ctx}")
                             costs.append({
                                 "category": cat, "group": grp_val,
-                                "teacher": normalize_fa(r[i_teacher]) if i_teacher != -1 else "",
+                                "teacher": normalize_fa(r[i_teacher]) if (i_teacher != -1 and i_teacher < len(r)) else "",
                                 "amount": float(amt_opt), "date": jd["canonical"] or dt_raw, "year": jd["year"] or "",
                                 "source": tname, "file_name": fn, "source_sheet": sh, "row_index": r_idx,
                             })
                         continue
 
                     if i_course != -1 or i_teacher != -1 or i_group != -1:
+                        base_loc = normalize_fa(str(sh or "").split("(")[0])
+                        slide_txt = slide_texts.get((fn, base_loc), "")
+                        if not slide_txt and base_loc:
+                            for (s_fn, s_loc), s_txt in slide_texts.items():
+                                if s_fn == fn and base_loc in s_loc:
+                                    slide_txt = s_txt
+                                    break
+                        sample_course_str = " ".join(
+                            normalize_fa(rr[i_course]) for rr in rows[:6]
+                            if i_course != -1 and i_course < len(rr) and rr[i_course]
+                        )
+                        table_wg_inferred = detect_workgroup_unified(fn, sh, slide_txt, sample_course_str, banner_ctx)
                         for r_idx, r in enumerate(rows, start=1):
                             if data_mode == "clean" and is_summary_row_smart(list(r)):
                                 continue
@@ -249,23 +350,20 @@ class ExecutiveAnalyticsEngine:
                             ses_opt = parse_number_strict(r[i_sessions]) if i_sessions != -1 else None
                             cst_opt = parse_number_strict(r[i_cost]) if i_cost != -1 else None
                             dt_raw = normalize_fa(r[i_date]) if i_date != -1 else ""
-                            jd = parse_jalali_date(dt_raw, fallback_text=f"{fn} {sh}")
+                            jd = parse_jalali_date(dt_raw, fallback_text=f"{fn} {sh} {banner_ctx}")
 
                             if is_junk_label(c_title):
                                 c_title = ""
-                            if is_junk_label(t_name):
+                            if is_junk_label(t_name) or not is_valid_teacher_name(t_name):
                                 t_name = ""
                             if is_junk_label(g_name):
                                 g_name = ""
 
                             if not g_name:
-                                probe = f"{c_title} {t_name} {sh}"
-                                for kw, g_lbl in (("قرآن", "قرآن"), ("تاریخ", "تاریخ"), ("حدیث", "حدیث"), ("الکافی", "حدیث"), ("فقه", "فقه"), ("کلام", "دین‌شناسی"), ("دین", "دین‌شناسی"), ("اخلاق", "دین‌شناسی"), ("مبلغ", "تربیت مبلغ")):
-                                    if kw in probe:
-                                        g_name = g_lbl
-                                        break
-                            if not g_name:
-                                g_name = "دوره‌های عمومی"
+                                if table_wg_inferred and table_wg_inferred != "دوره‌های عمومی":
+                                    g_name = table_wg_inferred
+                                else:
+                                    g_name = detect_workgroup_unified(fn, sh, slide_txt, f"{c_title} {t_name}", banner_ctx)
                             if not (c_title or t_name):
                                 continue
 
@@ -415,9 +513,43 @@ class ExecutiveAnalyticsEngine:
         meta_teachers = sorted({tn for c in all_courses if c.get("holding_mode") != "گروهی" for tn in (c.get("teachers_resolved") or []) if tn and tn != "نامشخص"})
         meta_years = sorted({c["year"] for c in all_courses if c["year"] and c["year"] != "نامشخص"})
 
-        courses = [c for c in all_courses if (not f_group or c["group"] == f_group) and (not f_teacher or f_teacher == c["teacher"] or f_teacher in (c.get("teachers_resolved") or [])) and (not f_year or c["year"] == f_year)]
-        persons = [p for p in all_persons if (not f_group or p["group"] == f_group) and (not f_teacher or f_teacher == p["teacher"] or f_teacher in (p.get("teachers_list") or [])) and (not f_year or p["year"] == f_year)]
-        costs = [x for x in db_costs if (not f_group or _canon_wg(x["group"]) == f_group) and (not f_teacher or x["teacher"] == f_teacher) and (not f_year or (x.get("year") or extract_year(x["date"])) == f_year)]
+        f_group_ck = canon_key(f_group) if f_group else ""
+        f_teacher_ck = canon_key(f_teacher) if f_teacher else ""
+        f_teacher_core = _clean_for_compare(f_teacher, "teacher", brain_cfg) if f_teacher else ""
+        f_teacher_alias = teacher_alias_map.get(f_teacher_core, f_teacher) if f_teacher_core else f_teacher
+        f_teacher_alias_ck = canon_key(f_teacher_alias) if f_teacher_alias else ""
+
+        def _match_group(g_val: str) -> bool:
+            if not f_group:
+                return True
+            gn = _canon_wg(g_val or "")
+            return gn == f_group or canon_key(gn) == f_group_ck
+
+        def _match_teacher(raw_t: str, resolved_list: list[str] | None = None) -> bool:
+            if not f_teacher:
+                return True
+            cands = list(resolved_list or [])
+            if raw_t:
+                cands.append(raw_t)
+                _, extra_parts = _resolve_course_teachers(raw_t)
+                cands.extend(extra_parts)
+            for cand in cands:
+                cn = normalize_fa(cand or "")
+                if not cn or cn == "نامشخص":
+                    continue
+                if cn == f_teacher or cn == f_teacher_alias:
+                    return True
+                ck = canon_key(cn)
+                if ck and (ck == f_teacher_ck or (f_teacher_alias_ck and ck == f_teacher_alias_ck)):
+                    return True
+                ccore = _clean_for_compare(cn, "teacher", brain_cfg)
+                if ccore and f_teacher_core and ccore == f_teacher_core:
+                    return True
+            return False
+
+        courses = [c for c in all_courses if _match_group(c.get("group", "")) and _match_teacher(c.get("teacher", ""), c.get("teachers_resolved")) and (not f_year or c["year"] == f_year)]
+        persons = [p for p in all_persons if _match_group(p.get("group", "")) and _match_teacher(p.get("teacher", ""), p.get("teachers_list")) and (not f_year or p["year"] == f_year)]
+        costs = [x for x in db_costs if _match_group(x.get("group", "")) and _match_teacher(x.get("teacher", ""), None) and (not f_year or (x.get("year") or extract_year(x["date"])) == f_year)]
 
         person_entities, nid_to_id, phone_to_id, name_to_id = {}, {}, {}, {}
         for p in persons:
@@ -543,6 +675,8 @@ class ExecutiveAnalyticsEngine:
             for tname in t_list:
                 if not tname or tname == "نامشخص":
                     continue
+                if f_teacher and not _match_teacher(tname, [tname]):
+                    continue
                 ts = tch_stats[tname]
                 ts["courses"] += 1
                 ts["independent_courses" if (mode == "انفرادی" or nt == 1) else "joint_courses"] += 1
@@ -649,6 +783,10 @@ class ExecutiveAnalyticsEngine:
             "groups": groups_out, "affinity_matrix": {"labels": aff_labels, "matrix": aff_matrix},
             "teachers": teachers_out, "heatmap": heatmap, "pareto_costs": pareto_costs,
             "participants": participants_list[:400], "data_health": health,
+            "filtered_courses": [
+                {"title": c.get("title", ""), "group": c.get("group", ""), "teacher": c.get("teacher", ""), "attendance": int(c.get("attendance") or 0), "hours": float(c.get("hours") or 0.0), "sessions": int(c.get("sessions") or 0), "year": c.get("year", ""), "mode": c.get("holding_mode", "انفرادی")}
+                for c in sorted(courses, key=lambda x: (-int(x.get("attendance") or 0), x.get("title", "")))[:60]
+            ],
         }
 
     def get_audit_rows(self, entity_type: str = "teacher", entity_name: str = "") -> dict[str, Any]:
@@ -747,50 +885,88 @@ class ExecutiveAnalyticsEngine:
         p = Path(file_path)
         if not p.exists():
             return {"ok": False, "error": "فایل انتخاب‌شده یافت نشد."}
-        rows, headers = [], []
+        raw_rows: list[list[Any]] = []
         try:
-            if p.suffix.lower() == ".csv":
+            suf = p.suffix.lower()
+            if suf == ".csv":
                 with open(p, "r", encoding="utf-8-sig", errors="replace") as f:
-                    reader = list(csv.reader(f))
-                if reader:
-                    headers, rows = [normalize_fa(h) for h in reader[0]], reader[1:]
+                    raw_rows = list(csv.reader(f))
+            elif suf == ".xls":
+                import pandas as pd
+                df_xls = pd.read_excel(p, sheet_name=0, header=None)
+                raw_rows = [["" if pd.isna(v) else clean_excel_cell_value(v) for v in row] for row in df_xls.itertuples(index=False, name=None)]
             else:
                 from openpyxl import load_workbook
                 wb = load_workbook(p, read_only=True, data_only=True)
-                all_r = list(wb.active.iter_rows(values_only=True))
+                raw_rows = [[clean_excel_cell_value(v) for v in r] for r in wb.active.iter_rows(values_only=True)]
                 wb.close()
-                if all_r:
-                    headers, rows = [normalize_fa(h) for h in all_r[0]], [list(r) for r in all_r[1:]]
         except Exception as exc:
             return {"ok": False, "error": f"خطا در خواندن فایل: {exc}"}
+
+        raw_rows = [r for r in raw_rows if any(v is not None and str(v).strip() != "" for v in r)]
+        if not raw_rows:
+            return {"ok": False, "error": "فایل خالی یا فاقد سرتیتر معتبر است."}
+
+        init_cols = [normalize_fa(h) if (h is not None and str(h).strip()) else f"ستون_{i + 1}" for i, h in enumerate(raw_rows[0])]
+        headers, rows, banner_ctx = promote_banner_headers(init_cols, raw_rows[1:])
+        headers = [normalize_fa(h) for h in headers]
         if not headers:
             return {"ok": False, "error": "فایل خالی یا فاقد سرتیتر معتبر است."}
+
         norm_h = [h.lower() for h in headers]
-        def pick(kws):
-            return next((idx for idx, h in enumerate(norm_h) if any(k in h for k in kws)), -1)
-        i_full = pick(("نام و نام خانوادگی", "نام کامل", "شرکت کننده", "full_name"))
-        i_first = pick(("نام کوچک", "نام")) if i_full == -1 else -1
-        i_last = pick(("نام خانوادگی", "فامیل")) if i_full == -1 else -1
-        i_phone, i_level, i_nid = pick(("موبایل", "همراه", "تلفن", "تماس", "phone", "mobile")), pick(("سطح", "پایه", "مقطع", "تحصیلات", "level")), pick(("کد ملی", "کدملی", "national"))
+
+        def pick(kws, exclude_idxs=()):
+            return next((idx for idx, h in enumerate(norm_h) if idx not in exclude_idxs and any(k in h for k in kws)), -1)
+
+        i_full = pick(("نام و نام خانوادگی", "نام کامل", "شرکت کننده", "full_name", "fullname"))
+        i_last = pick(("نام خانوادگی", "فامیل", "last_name", "last name")) if i_full == -1 else -1
+        i_first = -1
+        if i_full == -1:
+            # Prefer exact 'نام' / 'نام کوچک' and NEVER collide with i_last ('نام خانوادگی')
+            i_first = next((idx for idx, h in enumerate(norm_h) if idx != i_last and h in ("نام", "نام کوچک", "first_name", "first name", "name")), -1)
+            if i_first == -1:
+                i_first = pick(("نام کوچک", "نام"), exclude_idxs=(i_last,))
+
+        i_phone = pick(("موبایل", "همراه", "تلفن", "تماس", "phone", "mobile"))
+        i_level = pick(("سطح", "پایه", "مقطع", "تحصیلات", "level"))
+        i_nid = pick(("کد ملی", "کدملی", "شماره ملی", "national"))
+
         existing_an = self.get_executive_analytics()
         known_phones = {x["phone"]: x for x in existing_an["participants"] if x.get("phone")}
         known_names = {canon_key(x["name"]): x for x in existing_an["participants"]}
+
         parsed, new_cnt, ret_cnt = [], 0, 0
         for r in rows:
-            if not any(v is not None and str(v).strip() for v in r):
+            if is_blank_numbered_row(list(r)) or is_summary_row_smart(list(r)):
                 continue
-            name = normalize_fa(r[i_full]) if (i_full != -1 and i_full < len(r)) else f"{normalize_fa(r[i_first]) if i_first != -1 and i_first < len(r) else ''} {normalize_fa(r[i_last]) if i_last != -1 and i_last < len(r) else ''}".strip()
-            if len(name) < 3:
+            if i_full != -1 and i_full < len(r):
+                name = normalize_fa(r[i_full])
+            else:
+                fn_p = normalize_fa(r[i_first]) if (i_first != -1 and i_first < len(r)) else ""
+                ln_p = normalize_fa(r[i_last]) if (i_last != -1 and i_last < len(r)) else ""
+                name = f"{fn_p} {ln_p}".strip()
+            if len(name) < 3 or is_junk_label(name):
                 continue
-            ph = normalize_phone(r[i_phone]) if i_phone != -1 and i_phone < len(r) else ""
-            lvl = normalize_fa(r[i_level]) if i_level != -1 and i_level < len(r) else ""
-            nid = normalize_nid(r[i_nid]) if i_nid != -1 and i_nid < len(r) else ""
+            ph = normalize_phone(r[i_phone]) if (i_phone != -1 and i_phone < len(r)) else ""
+            lvl = normalize_fa(r[i_level]) if (i_level != -1 and i_level < len(r)) else ""
+            nid = normalize_nid(r[i_nid]) if (i_nid != -1 and i_nid < len(r)) else ""
             prev = (known_phones.get(ph) if ph else None) or known_names.get(canon_key(name))
             is_new = prev is None
             new_cnt += int(is_new)
             ret_cnt += int(not is_new)
             parsed.append({"name": name, "phone": ph, "nid": nid, "level": lvl, "is_new": is_new, "prev_courses": prev["courses_count"] if prev else 0})
-        return {"ok": True, "file_name": p.name, "total": len(parsed), "new_count": new_cnt, "returning_count": ret_cnt, "participants": parsed}
+
+        sug_course, sug_teacher = extract_roster_banner_meta(banner_ctx, p.name, "")
+        return {
+            "ok": True,
+            "file_name": p.name,
+            "suggested_course": sug_course,
+            "suggested_teacher": sug_teacher,
+            "total": len(parsed),
+            "new_count": new_cnt,
+            "returning_count": ret_cnt,
+            "participants": parsed,
+        }
 
     def commit_porsline_import(self, payload: dict[str, Any]) -> dict[str, Any]:
         suite = self._ensure_suite_file()

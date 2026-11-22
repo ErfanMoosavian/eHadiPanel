@@ -264,24 +264,22 @@ window.eHadiApp = (() => {
   // ==================== همگام‌سازی لوگوی شفاف PNG ====================
   async function syncSidebarLogo() {
     try {
-      const res = await window.pywebview?.api?.get_branding_settings?.();
-      const uri = res && res.logo_data_uri;
       const sb = document.getElementById('sidebar') || document.querySelector('.sidebar');
-      if (!uri || !sb) return;
-      let banner = document.getElementById('studioLogoBanner');
-      if (!banner) {
-        const brandEl = sb.querySelector('.brand, .sidebar-brand, .brand-box, .logo-box') || sb.firstElementChild;
-        banner = document.createElement('div');
-        banner.id = 'studioLogoBanner';
-        banner.className = 'studio-logo-banner';
-        if (brandEl && brandEl.id !== 'navIndicator' && brandEl.parentElement === sb) {
-          brandEl.style.display = 'none';
-          sb.insertBefore(banner, brandEl);
-        } else {
-          sb.insertBefore(banner, sb.firstChild);
+      if (!sb) return;
+      // Remove any legacy duplicate banner so only the clean single calligraphy crest renders
+      const oldBanner = document.getElementById('studioLogoBanner');
+      if (oldBanner) oldBanner.remove();
+      const brandEl = sb.querySelector('.brand.eh-brand-logo-only');
+      if (brandEl) {
+        brandEl.style.removeProperty('display');
+        const img = brandEl.querySelector('.eh-brand-logo-img');
+        const res = await window.pywebview?.api?.get_branding_settings?.();
+        const uri = res && res.logo_data_uri;
+        // Only swap if user explicitly saved a custom logo data URI
+        if (img && uri && res?.branding?.logo_path) {
+          img.src = uri;
         }
       }
-      banner.innerHTML = `<img src="${uri}" alt="لوگو" /><div class="studio-logo-caption">سامانه هوشمند مدیریت و تحلیل</div>`;
     } catch (_) {}
   }
 

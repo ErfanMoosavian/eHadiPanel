@@ -19,7 +19,7 @@ import tempfile
 import time
 from pathlib import Path
 
-DESIGN_REV = "beta02_ehp_glass_v4b"
+DESIGN_REV = "beta02_ehp_glass_v5_master"
 LOGICAL_W = 760
 LOGICAL_H = 450
 
@@ -131,22 +131,21 @@ def _read_branding_prefs() -> tuple[str, str]:
 
 
 def _find_logo_file(custom_path: str = "") -> Path | None:
-    if custom_path and Path(custom_path).is_file():
-        return Path(custom_path)
     candidates_rel = [
+        "src/ui/web/assets/logo.png",
+        "assets/logo.png",
         "build/splash_logo.png",
         "build/logo.png",
         "src/ui/web/assets/ehadi_logo.png",
-        "src/ui/web/assets/logo.png",
-        "build/eHadiPanel.ico",
     ]
-    for root in _project_roots():
+    for root_dir in _project_roots():
         for rel in candidates_rel:
-            p = root / rel
-            if p.is_file():
-                return p
+            cand = root_dir / rel
+            if cand.is_file():
+                return cand
+    if custom_path and Path(custom_path).is_file():
+        return Path(custom_path)
     return None
-
 
 def _pick_persian_font(tk_font_module) -> str:
     try:
@@ -216,9 +215,9 @@ def _apply_win11_dwm_style(root, palette: str = "navy") -> None:
         pass
 
 
-def _prepare_logo_image(logo_file: Path, target_box: int, palette: str):
-    """Loads institute logo, trims padding, and illuminates dark ink logos into crisp cool platinum-white."""
-    from PIL import Image
+def _prepare_logo_image(logo_file: Path, target_w: int, target_h: int, palette: str):
+    """Loads official calligraphy logo, preserves full marbled texture & shading, and adds jewel-like luminance."""
+    from PIL import Image, ImageFilter
     import numpy as np
 
     with Image.open(logo_file) as raw:
@@ -227,24 +226,53 @@ def _prepare_logo_image(logo_file: Path, target_box: int, palette: str):
     if bbox:
         lg = lg.crop(bbox)
 
-    ratio = min(target_box / max(1, lg.width), target_box / max(1, lg.height))
+    ratio = min(target_w / max(1, lg.width), target_h / max(1, lg.height))
     nw = max(1, int(round(lg.width * ratio)))
     nh = max(1, int(round(lg.height * ratio)))
     lg = lg.resize((nw, nh), Image.Resampling.LANCZOS)
 
     arr = np.array(lg, dtype=np.float32)
-    mask = arr[..., 3] > 42
+    alpha = arr[..., 3]
+    mask = alpha > 16
     if np.any(mask):
-        lum = 0.299 * arr[..., 0] + 0.587 * arr[..., 1] + 0.114 * arr[..., 2]
-        if float(lum[mask].mean()) < 120.0:
-            # Crisp cool platinum-silver tint matching app's dark glass UI
-            if palette == "emerald":
-                arr[..., 0], arr[..., 1], arr[..., 2] = 224.0, 248.0, 239.0
+        rgb = arr[..., :3]
+        lum = 0.299 * rgb[..., 0] + 0.587 * rgb[..., 1] + 0.114 * rgb[..., 2]
+        mean_lum = float(lum[mask].mean())
+        if mean_lum < 145.0:
+            # Lift dark marbled emerald calligraphy gently while preserving 100% of internal highlights & depth!
+            # Apply smooth gamma/screen lift + crisp emerald-mint specular sheen
+            norm = np.clip(rgb / 255.0, 0.0, 1.0)
+            lifted = np.power(norm, 0.62)  # preserves dark/light ratios cleanly without flattening
+            # Subtle jewel tint balance (slightly brighter emerald-cyan highlights)
+            if palette == "navy":
+                tint = np.array([1.12, 1.24, 1.28], dtype=np.float32)
             else:
-                arr[..., 0], arr[..., 1], arr[..., 2] = 228.0, 241.0, 255.0
+                tint = np.array([1.06, 1.26, 1.18], dtype=np.float32)
+            out_rgb = np.clip(lifted * 255.0 * tint + 14.0, 0.0, 255.0)
+            arr[..., :3] = np.where(mask[..., None], out_rgb, rgb)
             lg = Image.fromarray(arr.astype(np.uint8), mode="RGBA")
-    return lg
 
+    # Add a soft luminous emerald/cyan outer aura behind the calligraphy so it gleams against dark glass
+    pad = max(8, int(round(min(target_w, target_h) * 0.18)))
+    cw, ch = lg.width + pad * 2, lg.height + pad * 2
+    glow_layer = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    glow_col = (45, 212, 191) if palette == "emerald" else (56, 189, 248)
+    a_chan = lg.split()[3]
+    glow_solid = Image.new("RGBA", lg.size, glow_col + (0,))
+    glow_solid.putalpha(a_chan.point(lambda p: int(p * 0.42)))
+    glow_layer.paste(glow_solid, (pad, pad))
+    glow_layer = glow_layer.filter(ImageFilter.GaussianBlur(radius=max(3.5, pad * 0.55)))
+
+    # Crisp dark depth drop-shadow right under calligraphy
+    shadow_layer = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    sh_solid = Image.new("RGBA", lg.size, (2, 8, 18, 0))
+    sh_solid.putalpha(a_chan.point(lambda p: int(p * 0.55)))
+    shadow_layer.paste(sh_solid, (pad, pad + max(2, pad // 4)))
+    shadow_layer = shadow_layer.filter(ImageFilter.GaussianBlur(radius=max(2.0, pad * 0.28)))
+
+    composed = Image.alpha_composite(glow_layer, shadow_layer)
+    composed.alpha_composite(lg, dest=(pad, pad))
+    return composed
 
 def _render_artwork_uncached(W: int, H: int, palette: str, logo_file: Path | None):
     """
@@ -472,21 +500,27 @@ def _render_artwork_uncached(W: int, H: int, palette: str, logo_file: Path | Non
         if a > 0:
             d.line([(x, dock_top), (x, dock_top + 1)], fill=(255, 255, 255, a))
 
-    # Top-Right Clean Glass Badge for Institute Logo (52x52 DIPs)
-    sq_x1, sq_y1, sq_x2, sq_y2 = px(666), py(42), px(718), py(94)
+    # Top-Right Spacious Liquid-Glass Crest for Official Institute Calligraphy Logo (124x74 DIPs)
+    sq_x1, sq_y1, sq_x2, sq_y2 = px(594), py(30), px(718), py(104)
     d.rounded_rectangle(
         [sq_x1, sq_y1, sq_x2, sq_y2],
-        radius=px(13),
+        radius=px(18),
         fill=card_fill,
-        outline=acc1 + (112,),
-        width=max(2, px(1.1)),
+        outline=acc1 + (118,),
+        width=max(2, px(1.15)),
     )
-    d.line([(sq_x1 + px(10), sq_y1 + 1), (sq_x2 - px(10), sq_y1 + 1)], fill=(255, 255, 255, 78), width=lw1)
+    # Specular glass highlight across top lip of calligraphy crest
+    d.line([(sq_x1 + px(18), sq_y1 + 1), (sq_x2 - px(18), sq_y1 + 1)], fill=(255, 255, 255, 92), width=lw1)
 
     logo_placed = False
     if logo_file is not None and logo_file.is_file():
         try:
-            lg_img = _prepare_logo_image(logo_file, int(round(34 * scale * S)), palette)
+            lg_img = _prepare_logo_image(
+                logo_file,
+                int(round(104 * scale * S)),
+                int(round(62 * scale * S)),
+                palette,
+            )
             scx, scy = (sq_x1 + sq_x2) // 2, (sq_y1 + sq_y2) // 2
             hero.alpha_composite(lg_img, dest=(scx - lg_img.width // 2, scy - lg_img.height // 2))
             logo_placed = True
@@ -494,10 +528,9 @@ def _render_artwork_uncached(W: int, H: int, palette: str, logo_file: Path | Non
             logo_placed = False
 
     if not logo_placed:
-        # Clean layered-sheets icon (matches index.html .brand-logo SVG!) — zero stars
         d = ImageDraw.Draw(hero)
         scx, scy = (sq_x1 + sq_x2) // 2, (sq_y1 + sq_y2) // 2
-        w_l, h_l = px(13), px(6)
+        w_l, h_l = px(15), px(7)
         d.polygon([(scx, scy - px(12)), (scx + w_l, scy - px(6)), (scx, scy), (scx - w_l, scy - px(6))],
                   fill=acc1 + (58,), outline=acc1 + (235,), width=lw2)
         d.line([(scx - w_l, scy + px(1)), (scx, scy + h_l + px(1)), (scx + w_l, scy + px(1))],
@@ -505,13 +538,13 @@ def _render_artwork_uncached(W: int, H: int, palette: str, logo_file: Path | Non
         d.line([(scx - w_l, scy + px(7)), (scx, scy + h_l + px(7)), (scx + w_l, scy + px(7))],
                fill=acc2 + (205,), width=lw2)
 
-    # Sleek "BETA 0.2" pill matching .version-pill in luxury_glass_v46.css
+    # Sleek "BETA 0.2" pill cleanly balanced to the left of the calligraphy crest
     d = ImageDraw.Draw(hero)
     d.rounded_rectangle(
-        [px(560), py(55), px(652), py(81)],
+        [px(494), py(54), px(582), py(80)],
         radius=px(13),
-        fill=acc1 + (28,),
-        outline=acc1 + (108,),
+        fill=acc1 + (30,),
+        outline=acc1 + (116,),
         width=max(2, px(1.1)),
     )
 
@@ -708,7 +741,7 @@ def main() -> None:
     canvas.create_text(start_x + w_e, mon_cy, text="HP", fill="#f8fafc", font=ehp_font_obj, anchor="w")
 
     # Right Editorial Typography
-    canvas.create_text(dx(606), dy(68), text=VERSION_BADGE, fill=pill_hex, font=f_badge, anchor="center")
+    canvas.create_text(dx(538), dy(67), text=VERSION_BADGE, fill=pill_hex, font=f_badge, anchor="center")
     canvas.create_text(dx(718), dy(150), text=BRAND_WORDMARK, fill="#f8fafc", font=f_brand, anchor="e")
     canvas.create_text(dx(718), dy(216), text=INST_TITLE, fill="#f8fafc", font=f_title, anchor="e")
     canvas.create_text(dx(718), dy(248), text=INST_SUBTITLE, fill="#94a3b8", font=f_sub, anchor="e")
@@ -721,10 +754,20 @@ def main() -> None:
     # =========================================================================
     orb_cx, orb_cy = dx(194), dy(186)
     orb1_r, orb2_r = dx(142), dx(106)
+    # Subtle breathing halo ring pulsing behind/around the eHP monolith
+    mon_pulse_ring = canvas.create_oval(0, 0, 0, 0, fill="", outline=acc_hex, width=max(1, int(scale)))
+    # Smooth fading comet tails behind each orbital bead
+    orb1_trail = [canvas.create_oval(0, 0, 0, 0, fill=acc_hex, outline="") for _ in range(5)]
+    orb2_trail = [canvas.create_oval(0, 0, 0, 0, fill=acc2_hex, outline="") for _ in range(5)]
     orb1_glow = canvas.create_oval(0, 0, 0, 0, fill=acc_hex, outline="")
     orb1_core = canvas.create_oval(0, 0, 0, 0, fill="#ffffff", outline="")
     orb2_glow = canvas.create_oval(0, 0, 0, 0, fill=acc2_hex, outline="")
     orb2_core = canvas.create_oval(0, 0, 0, 0, fill="#ffffff", outline="")
+
+    # Live breathing micro-telemetry bars overlay on bottom-right BI card
+    live_bar_base = [0.42, 0.70, 0.54, 0.92, 0.68]
+    live_bar_cols = [acc2_hex, acc_hex, acc2_hex, pill_hex, acc_hex]
+    live_bars = [canvas.create_rectangle(0, 0, 0, 0, fill=col, outline="") for col in live_bar_cols]
 
     # Live glowing tracer dot gliding smoothly along the top-left BI mini-spline curve
     sp_dot_halo = canvas.create_oval(0, 0, 0, 0, fill="", outline=acc_hex, width=max(1, int(scale)))
@@ -836,15 +879,21 @@ def main() -> None:
         now = time.monotonic()
 
         if state["closing"]:
-            state["alpha"] = max(0.0, state["alpha"] - 0.11)
+            state["alpha"] = max(0.0, state["alpha"] - 0.22)
             try:
                 root.attributes("-alpha", state["alpha"])
             except Exception:
                 pass
-            if state["alpha"] <= 0.02:
+            if state["alpha"] <= 0.04:
                 if ready_file:
                     try:
-                        Path(ready_file).unlink(missing_ok=True)
+                        rf_p = Path(ready_file)
+                        done_p = rf_p.with_suffix(".done")
+                        try:
+                            done_p.write_text("1", encoding="utf-8")
+                        except Exception:
+                            pass
+                        rf_p.unlink(missing_ok=True)
                     except Exception:
                         pass
                 root.destroy()
@@ -856,18 +905,43 @@ def main() -> None:
             except Exception:
                 pass
 
-        # 1. Orbital precision beads gliding smoothly around the `eHP` monolith
-        state["theta"] += 0.020
+        # 1. Orbital precision comets + breathing monolith pulse around `eHP`
+        state["theta"] += 0.024
         a1 = state["theta"] - 0.9
-        a2 = -state["theta"] * 1.40 + 1.1
+        a2 = -state["theta"] * 1.42 + 1.1
+
+        # Breathing luminous halo ring around eHP monolith
+        mr_p = dx(80.0 + 4.5 * math.sin(state["theta"] * 1.8))
+        canvas.coords(mon_pulse_ring, orb_cx - mr_p, orb_cy - mr_p, orb_cx + mr_p, orb_cy + mr_p)
+
+        # Comet trails behind bead 1 & bead 2
+        for ti, tid in enumerate(orb1_trail):
+            ta = a1 - (ti + 1) * 0.095
+            tx, ty = orb_cx + orb1_r * math.cos(ta), orb_cy + orb1_r * math.sin(ta)
+            tr = max(1.0, (3.4 - ti * 0.52) * scale)
+            canvas.coords(tid, tx - tr, ty - tr, tx + tr, ty + tr)
+        for ti, tid in enumerate(orb2_trail):
+            ta = a2 + (ti + 1) * 0.115
+            tx, ty = orb_cx + orb2_r * math.cos(ta), orb_cy + orb2_r * math.sin(ta)
+            tr = max(1.0, (2.9 - ti * 0.45) * scale)
+            canvas.coords(tid, tx - tr, ty - tr, tx + tr, ty + tr)
+
         ox1, oy1 = orb_cx + orb1_r * math.cos(a1), orb_cy + orb1_r * math.sin(a1)
         ox2, oy2 = orb_cx + orb2_r * math.cos(a2), orb_cy + orb2_r * math.sin(a2)
-        g1, c1 = 5.0 * scale, 2.2 * scale
-        g2, c2 = 4.2 * scale, 1.9 * scale
+        g1, c1 = 5.4 * scale, 2.4 * scale
+        g2, c2 = 4.6 * scale, 2.0 * scale
         canvas.coords(orb1_glow, ox1 - g1, oy1 - g1, ox1 + g1, oy1 + g1)
         canvas.coords(orb1_core, ox1 - c1, oy1 - c1, ox1 + c1, oy1 + c1)
         canvas.coords(orb2_glow, ox2 - g2, oy2 - g2, ox2 + g2, oy2 + g2)
         canvas.coords(orb2_core, ox2 - c2, oy2 - c2, ox2 + c2, oy2 + c2)
+
+        # Live breathing telemetry bars on bottom-right micro-card
+        for bi, bid in enumerate(live_bars):
+            bx = dx(250 + bi * 18)
+            by_bot = dy(302)
+            frac = max(0.22, min(0.98, live_bar_base[bi] + 0.11 * math.sin(state["theta"] * 2.2 + bi * 1.15)))
+            bh = dy(36 * frac)
+            canvas.coords(bid, bx, by_bot - bh, bx + dx(10), by_bot)
 
         # 2. Live telemetry tracer gliding along top-left BI spline micro-card
         state["spline_t"] = (state["spline_t"] + 0.0075) % 1.0
@@ -920,7 +994,7 @@ def main() -> None:
         canvas.itemconfigure(status_txt, text=state["status"])
         canvas.itemconfigure(pct_txt, text=_to_fa_pct(state["pct"]))
 
-        if state["ready"] and state["pct"] >= 99.9 and (now - state["ready_at"] >= 0.25):
+        if state["ready"] and state["pct"] >= 99.5 and (now - state["ready_at"] >= 0.03):
             state["closing"] = True
 
         root.after(16, _tick)

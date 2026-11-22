@@ -245,15 +245,59 @@ class DocumentIngestionEngine:
 
         return chunks, tables_count, total_rows
 
+    @staticmethod
+    def _normalize_excel_sheet_header(raw_df: pd.DataFrame) -> tuple[pd.DataFrame, str]:
+        from src.core.db_manager import (
+            clean_excel_cell_value,
+            is_blank_numbered_row,
+            normalize_persian,
+            promote_banner_headers,
+        )
+        df = raw_df.dropna(how="all").dropna(axis=1, how="all").copy()
+        if df.empty:
+            return df, ""
+        raw_rows = [
+            tuple("" if pd.isna(v) else clean_excel_cell_value(v) for v in row)
+            for row in df.itertuples(index=False, name=None)
+        ]
+        if not raw_rows:
+            return pd.DataFrame(), ""
+        init_cols = [str(v).strip() if str(v).strip() else f"ستون_{i + 1}" for i, v in enumerate(raw_rows[0])]
+        body_rows = raw_rows[1:]
+        final_cols, final_rows, banner_ctx = promote_banner_headers(init_cols, body_rows)
+        cleaned_rows = []
+        phone_col_idxs = {
+            ci for ci, cn in enumerate(final_cols)
+            if any(k in normalize_persian(cn).lower() for k in ("موبایل", "همراه", "تلفن", "phone", "mobile"))
+        }
+        for r in final_rows:
+            if is_blank_numbered_row(list(r)):
+                continue
+            r_list = list(r)
+            for ci in phone_col_idxs:
+                if ci < len(r_list) and r_list[ci] != "":
+                    sv = re.sub(r"\.0$", "", str(r_list[ci]).strip())
+                    digits = re.sub(r"\D", "", normalize_persian(sv))
+                    if len(digits) == 10 and digits.startswith("9"):
+                        r_list[ci] = "0" + digits
+                    else:
+                        r_list[ci] = sv
+            cleaned_rows.append(tuple(r_list))
+        if not cleaned_rows:
+            return pd.DataFrame(columns=final_cols), banner_ctx
+        out_df = pd.DataFrame(cleaned_rows, columns=final_cols)
+        return out_df, banner_ctx
+
     def _parse_excel(
         self, path: Path, con: duckdb.DuckDBPyConnection
     ) -> tuple[list[dict[str, Any]], int, int]:
-        sheets = pd.read_excel(path, sheet_name=None)
+        sheets = pd.read_excel(path, sheet_name=None, header=None)
         chunks = []
         tables_count = 0
         total_rows = 0
 
-        for sheet_name, df in sheets.items():
+        for sheet_name, raw_df in sheets.items():
+            df, banner_ctx = self._normalize_excel_sheet_header(raw_df)
             table_name, rows_count, cols = self._save_dataframe_to_duckdb(
                 con, df, path.name, str(sheet_name)
             )
@@ -262,8 +306,9 @@ class DocumentIngestionEngine:
             tables_count += 1
             total_rows += rows_count
             preview_text = df.head(8).fillna("").to_string(index=False)
+            banner_line = f"عنوان/توضیح بالای جدول: {banner_ctx} | " if banner_ctx else ""
             summary = (
-                f"فایل اکسل: {path.name} | شیت: {sheet_name} | نام جدول در دیتابیس: {table_name} | "
+                f"فایل اکسل: {path.name} | شیت: {sheet_name} | {banner_line}نام جدول در دیتابیس: {table_name} | "
                 f"تعداد ردیف: {rows_count} | ستون‌ها: {', '.join(cols)}\nنمونه داده‌ها:\n{preview_text}"
             )
             chunks.append({

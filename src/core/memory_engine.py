@@ -27,6 +27,11 @@ from src.core.db_manager import (
     normalize_persian,
     parse_jalali_date,
     parse_number_strict,
+    JALALI_MONTHS,
+    is_banner_header_col,
+    is_non_entity_value,
+    is_valid_teacher_name,
+    promote_banner_headers,
     resolve_default_duckdb_path,
 )
 from src.core.smart_brain import (
@@ -69,7 +74,8 @@ DEFAULT_BRAIN_CONFIG: dict[str, Any] = {
     "compound_names": [],
     "common_surnames": list(DEFAULT_COMMON_SURNAMES),
     "hours_policy": "equal",          # "equal" | "full" | "split"
-    "course_hour_overrides": {},      # {course_key: {teacher_canonical: hours_float}}
+    "course_hour_overrides": {},
+    "finance_category_rules": {},      # {course_key: {teacher_canonical: hours_float}}
     "entity_type_overrides": {},      # {normalized_raw: "individual" | "collective"}
     "data_mode": "clean",             # "clean" | "raw"
 }
@@ -204,6 +210,14 @@ def save_brain_config(payload: dict[str, Any], db_path: Path | str | None = None
         new_cfg["data_mode"] = payload["data_mode"]
     if "course_hour_overrides" in payload and isinstance(payload["course_hour_overrides"], dict):
         new_cfg["course_hour_overrides"] = payload["course_hour_overrides"]
+    if "finance_category_rules" in payload and isinstance(payload["finance_category_rules"], dict):
+        cleaned_fin = {}
+        for k, v in payload["finance_category_rules"].items():
+            kn = normalize_persian(k)
+            vn = str(v or "").strip()
+            if kn and vn:
+                cleaned_fin[kn] = vn
+        new_cfg["finance_category_rules"] = cleaned_fin
     if "entity_type_overrides" in payload and isinstance(payload["entity_type_overrides"], dict):
         cleaned_ov = {}
         for k, v in payload["entity_type_overrides"].items():
@@ -220,10 +234,14 @@ def save_brain_config(payload: dict[str, Any], db_path: Path | str | None = None
             if record_undo:
                 _record_history(con, "config_update", "بروزرسانی تنظیمات هسته هوشمند موجودیت‌ها", {"type": "restore_config", "prev_config": prev_cfg})
 
-    try:
-        rebuild_clean_teacher_layer(p, force=True)
-    except Exception as exc:
-        logger.warning("rebuild after save_brain_config skipped: %s", exc)
+    teacher_keys_changed = any(
+        k in payload for k in ("honorifics", "collective_keywords", "compound_names", "common_surnames", "hours_policy", "data_mode", "course_hour_overrides", "entity_type_overrides")
+    )
+    if teacher_keys_changed:
+        try:
+            rebuild_clean_teacher_layer(p, force=True)
+        except Exception as exc:
+            logger.warning("rebuild after save_brain_config skipped: %s", exc)
     return {"ok": True, "config": new_cfg}
 
 
@@ -286,6 +304,31 @@ def set_course_hour_override(course_key: str, teacher_shares: dict[str, float] |
         else:
             ov.pop(ck, None)
     return save_brain_config({"course_hour_overrides": ov}, db_path=db_path)
+
+
+
+
+def save_finance_category_rule(item_key: str, category: str, db_path: Path | str | None = None) -> dict[str, Any]:
+    """Saves a user-confirmed finance category rule permanently into brain config."""
+    k_clean = normalize_persian(item_key).strip()
+    cat_clean = str(category or "").strip()
+    if not k_clean or not cat_clean:
+        return {"ok": False, "error": "شرح هزینه یا سرفصل نامعتبر است."}
+    cfg = load_brain_config(db_path)
+    rules_map = dict(cfg.get("finance_category_rules") or {})
+    rules_map[k_clean] = cat_clean
+    save_brain_config({"finance_category_rules": rules_map}, db_path=db_path, record_undo=True)
+    return {"ok": True, "item": k_clean, "category": cat_clean, "rules": rules_map}
+
+
+def delete_finance_category_rule(item_key: str, db_path: Path | str | None = None) -> dict[str, Any]:
+    k_clean = normalize_persian(item_key).strip()
+    cfg = load_brain_config(db_path)
+    rules_map = dict(cfg.get("finance_category_rules") or {})
+    if k_clean in rules_map:
+        del rules_map[k_clean]
+        save_brain_config({"finance_category_rules": rules_map}, db_path=db_path, record_undo=True)
+    return {"ok": True, "rules": rules_map}
 
 
 def _build_honorific_regex(honorifics: list[str] | None = None) -> re.Pattern:
@@ -728,28 +771,26 @@ def rebuild_clean_teacher_layer(db_path: Path | str | None = None, force: bool =
                     continue
                 safe_t = tname.replace('"', '""')
                 try:
-                    cols = [str(c[0]) for c in con.execute(f'DESCRIBE "{safe_t}"').fetchall()]
+                    raw_cols = [str(c[0]) for c in con.execute(f'DESCRIBE "{safe_t}"').fetchall()]
+                    raw_rows = con.execute(f'SELECT * FROM "{safe_t}"').fetchall()
                 except Exception:
                     continue
+                cols, rows, banner_ctx = promote_banner_headers(raw_cols, raw_rows)
+                if not cols or not rows:
+                    continue
                 def _find(hints):
-                    return next((c for c in cols if any(h in normalize_persian(c).lower() for h in hints)), None)
+                    return next((c for c in cols if not is_banner_header_col(c) and any(h in normalize_persian(c).lower() for h in hints)), None)
                 t_col, c_col, a_col = _find(TEACHER_COL_HINTS), _find(COURSE_COL_HINTS), _find(ATTEND_COL_HINTS)
                 if not t_col or (not c_col and not a_col):
                     continue
                 g_col, d_col, h_col, s_col = _find(GROUP_COL_HINTS), _find(DATE_COL_HINTS), _find(HOURS_COL_HINTS), _find(SESSIONS_COL_HINTS)
-                sel_cols = list(dict.fromkeys(c for c in [t_col, c_col, a_col, g_col, d_col, h_col, s_col] if c))
-                idx_of = {c: i for i, c in enumerate(sel_cols)}
-                q_cols = ", ".join(f'"{c.replace(chr(34), chr(34)*2)}"' for c in sel_cols)
-                try:
-                    rows = con.execute(f'SELECT {q_cols} FROM "{safe_t}"').fetchall()
-                except Exception:
-                    continue
+                idx_of = {c: i for i, c in enumerate(cols)}
                 fn, sh = cat_map.get(tname, (tname, ""))
                 for r_idx, r in enumerate(rows, start=1):
                     if is_summary_row_smart(list(r)):
                         continue
                     raw_teacher = str(r[idx_of[t_col]] or "").strip()
-                    if not raw_teacher:
+                    if not raw_teacher or not is_valid_teacher_name(raw_teacher):
                         continue
                     course_title = str(r[idx_of[c_col]] or "").strip() if c_col else ""
                     att_val = parse_number_strict(r[idx_of[a_col]]) if a_col else None
@@ -1011,6 +1052,18 @@ def _compound_match_bonus(ca: str, cb: str, entity_type: str, common_surnames: s
 
 
 def _fuzzy_score(a: str, b: str, entity_type: str, cfg: dict[str, Any] | None = None) -> tuple[float, str]:
+    if is_non_entity_value(a) or is_non_entity_value(b):
+        return 0.0, ""
+    na, nb = normalize_persian(a), normalize_persian(b)
+    # Never suggest merging two labels that differ in numbers/dates (e.g. different invoice periods or levels)
+    nums_a, nums_b = re.findall(r"\d+", na), re.findall(r"\d+", nb)
+    if (nums_a or nums_b) and nums_a != nums_b:
+        return 0.0, ""
+    # Never suggest merging two labels that mention different Persian months (e.g. آبان vs بهمن)
+    months_a = {m for m in JALALI_MONTHS if m in na}
+    months_b = {m for m in JALALI_MONTHS if m in nb}
+    if (months_a or months_b) and months_a != months_b:
+        return 0.0, ""
     ca, cb = _clean_for_compare(a, entity_type, cfg), _clean_for_compare(b, entity_type, cfg)
     if not ca or not cb or ca == cb:
         return 0.0, ""
@@ -1038,7 +1091,11 @@ def _fuzzy_score(a: str, b: str, entity_type: str, cfg: dict[str, Any] | None = 
 
 
 def _classify_column(col_name: str) -> str | None:
+    if is_banner_header_col(col_name):
+        return None
     cn = normalize_persian(col_name).lower()
+    if any(k in cn for k in ("تاریخ", "شماره", "ردیف", "موبایل", "تلفن", "کد ملی", "مبلغ", "مانده", "بدهکار", "بستانکار")):
+        return None
     if any(k in cn for k in TEACHER_COL_HINTS):
         return "teacher"
     if any(k in cn for k in GROUP_COL_HINTS):
@@ -1068,21 +1125,27 @@ def scan_fuzzy_candidates(db_path: Path | str | None = None, min_score: float = 
                     continue
                 safe_t = tname.replace('"', '""')
                 try:
-                    cols = [str(c[0]) for c in con.execute(f'DESCRIBE "{safe_t}"').fetchall()]
+                    raw_cols = [str(c[0]) for c in con.execute(f'DESCRIBE "{safe_t}"').fetchall()]
+                    raw_rows = con.execute(f'SELECT * FROM "{safe_t}" LIMIT 4000').fetchall()
                 except Exception:
                     continue
-                for cname in cols:
+                cols, clean_rows, _ = promote_banner_headers(raw_cols, raw_rows)
+                if not cols or not clean_rows:
+                    continue
+                for c_idx, cname in enumerate(cols):
                     etype = _classify_column(cname)
                     if not etype:
                         continue
-                    safe_c = cname.replace('"', '""')
-                    try:
-                        rows = con.execute(f'SELECT CAST("{safe_c}" AS VARCHAR) AS v, COUNT(*) AS cnt FROM "{safe_t}" WHERE "{safe_c}" IS NOT NULL GROUP BY v ORDER BY cnt DESC LIMIT 200').fetchall()
-                    except Exception:
-                        continue
-                    for val, cnt in rows:
-                        sv = str(val or "").strip()
-                        if len(sv) < 3 or len(sv) > 120 or is_summary_row_smart([sv]):
+                    val_counts: dict[str, int] = {}
+                    for r in clean_rows:
+                        if c_idx < len(r) and r[c_idx] is not None:
+                            sv = str(r[c_idx]).strip()
+                            if sv:
+                                val_counts[sv] = val_counts.get(sv, 0) + 1
+                    for sv, cnt in sorted(val_counts.items(), key=lambda kv: -kv[1])[:200]:
+                        if len(sv) < 3 or len(sv) > 90 or is_summary_row_smart([sv]) or is_non_entity_value(sv):
+                            continue
+                        if etype == "teacher" and not is_valid_teacher_name(sv):
                             continue
                         mode, parts = split_joint_names(sv, etype, cfg)
                         if mode == "گروهی":

@@ -22,7 +22,8 @@ SUITE_FILE = Config.STORAGE_DIR / "ehadi_suite.json"
 FONTS_DIR = Config.STORAGE_DIR / "fonts"
 DEFAULT_LOGO_DEST = BASE_DIR / "src" / "ui" / "web" / "assets" / "logo.png"
 
-HONORIFIC_AS = "\u0611"  # سیمبل ریز علیه‌السلام ؑ
+HONORIFIC_WORD = "علیه‌السلام"
+HONORIFIC_AS = " علیه‌السلام"
 
 THEMES = {
     "emerald_beige": {
@@ -82,10 +83,14 @@ def to_fa_digits(text: Any) -> str:
 
 def normalize_honorifics(text: Any) -> str:
     s = str(text or "")
-    s = re.sub(r"\s*\(\s*[عص]\s*\)", HONORIFIC_AS, s)
-    s = re.sub(r"\s*[«»\(]?\s*علیه[‌\s]*السلام\s*[»\)]?", HONORIFIC_AS, s)
+    # Replace broken Arabic combining honorific symbols (ؑ ؐ ؒ ؓ) with clean small Persian text
+    s = re.sub(r"[\u0610-\u0614\ufdfb]+", HONORIFIC_AS, s)
+    s = re.sub(r"\s*\(\s*ع\s*\)", HONORIFIC_AS, s)
+    s = re.sub(r"\s*[\(\[]?\s*علیه[\u200c\s]*الس[\u0651]?لام\s*[\)\]]?", HONORIFIC_AS, s)
+    s = re.sub(r"(?:\s*علیه‌السلام){2,}", HONORIFIC_AS, s)
     s = re.sub(r"\s*[—–\-|]?\s*محرمانه\s*/?\s*ویژه\s*استفاده\s*مدیریتی", "", s)
     s = re.sub(r"\s*[—–\-|]?\s*تولیدشده\s*توسط\s*سامانه\s*هوشمند\s*مدیریت\s*", "", s)
+    s = re.sub(r" {2,}", " ", s)
     return s.strip()
 
 
@@ -375,6 +380,17 @@ def _set_no_borders(table):
 
 def _add_fa_run(p, text: str, font_name: str = "Tahoma", size: float = 10.5, bold: bool = False, color_hex: str = "1E293B", ltr: bool = False):
     clean = to_fa_digits(normalize_honorifics(text)) if not ltr else str(text)
+    if not ltr and HONORIFIC_WORD in clean and clean.strip() != HONORIFIC_WORD:
+        parts = re.split(f"({re.escape(HONORIFIC_WORD)})", clean)
+        last_run = None
+        for seg in parts:
+            if not seg:
+                continue
+            if seg == HONORIFIC_WORD:
+                last_run = _add_fa_run(p, seg, font_name=font_name, size=max(6.5, size - 2.3), bold=False, color_hex=color_hex, ltr=False)
+            else:
+                last_run = _add_fa_run(p, seg, font_name=font_name, size=size, bold=bold, color_hex=color_hex, ltr=False)
+        return last_run
     run = p.add_run(clean)
     run.bold = bold
     run.font.name = font_name
@@ -691,7 +707,7 @@ def _esc(s: Any) -> str:
     txt = normalize_honorifics(str(s or ""))
     txt = to_fa_digits(txt)
     txt = txt.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
-    txt = txt.replace(HONORIFIC_AS, f'<span class="honorific">{HONORIFIC_AS}</span>')
+    txt = txt.replace(HONORIFIC_WORD, f'<span class="honorific">{HONORIFIC_WORD}</span>')
     return txt
 
 
@@ -832,54 +848,77 @@ def _build_pdf_shell(branding: dict[str, Any], theme: dict[str, str], title: str
     direction: rtl; text-align: right; font-family: {font_stack};
     color: #1e293b; background: #ffffff; margin: 0; padding: 0; font-size: 9.8pt; line-height: 1.85;
   }}
-  .honorific {{ font-family: 'Amiri', 'Vazirmatn', 'Tahoma', serif; font-size: 1.12em; font-weight: 700; display: inline; }}
+  .honorific {{ font-family: inherit; font-size: 0.70em; font-weight: 600; vertical-align: 0.06em; margin-inline-start: 2px; opacity: 0.90; display: inline; white-space: nowrap; }}
   .ltr-iso {{ direction: ltr; unicode-bidi: isolate; display: inline-block; }}
   .geo-frame-svg {{ position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 0; }}
-  .page-canvas {{ position: relative; z-index: 1; padding: 14mm 18mm 26mm 28mm; }}
+
+  /* Multi-page safe print wrapper: repeats top & bottom safe margins on EVERY A4 page! */
+  table.pdf-page-frame {{
+    width: 100%; border-collapse: collapse; border: none; margin: 0; padding: 0;
+    position: relative; z-index: 1; background: transparent;
+  }}
+  table.pdf-page-frame > thead {{ display: table-header-group; }}
+  table.pdf-page-frame > tfoot {{ display: table-footer-group; }}
+  table.pdf-page-frame > thead > tr > td,
+  table.pdf-page-frame > tbody > tr > td,
+  table.pdf-page-frame > tfoot > tr > td {{
+    border: none !important; background: transparent !important; padding: 0 !important; text-align: right;
+  }}
+  .pdf-top-spacer {{ height: 15mm; }}
+  .pdf-bottom-spacer {{ height: 24mm; }}
+  .page-canvas {{ position: relative; z-index: 1; padding: 0 18mm 0 26mm; }}
+
   .bismillah {{ text-align: center; font-weight: 700; font-size: 10.5pt; color: #{d_hex}; margin-bottom: 4px; }}
-  .letterhead {{ display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 14px; padding-bottom: 10px; margin-bottom: 12px; }}
-  .lh-logo-col {{ width: 98px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }}
-  .lh-logo-diamond-outer {{ width: 74px; height: 74px; background: #{p_hex}; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; border-radius: 4px; }}
-  .lh-logo-diamond-inner {{ width: 54px; height: 54px; background: #{as_hex}; display: flex; align-items: center; justify-content: center; border-radius: 3px; }}
-  .logo-img {{ transform: rotate(-45deg); max-width: 64px; max-height: 50px; object-fit: contain; }}
+  .letterhead {{ display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 14px; padding-bottom: 8px; margin-bottom: 10px; }}
+  .lh-logo-col {{ width: 90px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }}
+  .lh-logo-diamond-outer {{ width: 68px; height: 68px; background: #{p_hex}; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; border-radius: 4px; }}
+  .lh-logo-diamond-inner {{ width: 50px; height: 50px; background: #{as_hex}; display: flex; align-items: center; justify-content: center; border-radius: 3px; }}
+  .logo-img {{ transform: rotate(-45deg); max-width: 58px; max-height: 46px; object-fit: contain; }}
   .logo-fallback {{ transform: rotate(-45deg); font-size: 8.5pt; font-weight: 700; color: #{d_hex}; }}
   .lh-center {{ flex: 1; text-align: center; padding: 0 8px; }}
-  .lh-org {{ font-size: 14pt; font-weight: 800; color: #{p_hex}; line-height: 1.5; }}
-  .lh-unit-pill {{ display: inline-block; margin-top: 4px; padding: 2px 15px; border-radius: 999px; background: #{pill_hex}; color: #{d_hex}; font-size: 8.6pt; font-weight: 700; }}
-  .lh-meta {{ min-width: 132px; direction: rtl; text-align: right; font-size: 8.9pt; color: #1e293b; line-height: 1.8; }}
+  .lh-org {{ font-size: 13.5pt; font-weight: 800; color: #{p_hex}; line-height: 1.5; }}
+  .lh-unit-pill {{ display: inline-block; margin-top: 3px; padding: 2px 14px; border-radius: 999px; background: #{pill_hex}; color: #{d_hex}; font-size: 8.4pt; font-weight: 700; }}
+  .lh-meta {{ min-width: 126px; direction: rtl; text-align: right; font-size: 8.7pt; color: #1e293b; line-height: 1.75; }}
   .lh-meta-lbl {{ color: #{p_hex}; font-weight: 700; margin-left: 4px; }}
-  .subject-bar {{ direction: rtl; text-align: right; background: #{l_hex}; border-right: 4px solid #{p_hex}; border-radius: 6px; padding: 6px 12px; margin: 2px 0 10px; font-size: 10.2pt; font-weight: 700; color: #{d_hex}; }}
-  .letter-intro {{ direction: rtl; text-align: justify; text-align-last: right; font-size: 9.5pt; color: #1e293b; margin: 0 0 10px; padding-bottom: 7px; border-bottom: 1px dashed #{a_hex}; }}
-  .kpi-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 12px; }}
-  .kpi {{ background: #{l_hex}; border: 1px solid #{a_hex}; border-radius: 8px; padding: 7px 9px; text-align: center; }}
-  .kpi-l {{ font-size: 8pt; color: #475569; }}
-  .kpi-v {{ font-size: 11pt; font-weight: 800; color: #{d_hex}; margin-top: 2px; }}
-  .chart-card {{ page-break-inside: avoid; margin: 10px 0 14px; padding: 10px; border: 1px solid #{a_hex}; border-radius: 8px; background: #ffffff; }}
-  .chart-card-title {{ font-size: 9.5pt; font-weight: 700; color: #{d_hex}; margin-bottom: 6px; text-align: right; }}
-  .chart-card img {{ width: 100%; height: auto; max-height: 78mm; object-fit: contain; display: block; margin: 0 auto; }}
-  h3 {{ direction: rtl; text-align: right; color: #{d_hex}; font-size: 10.8pt; margin: 10px 0 5px; }}
-  h4 {{ direction: rtl; text-align: right; color: #{p_hex}; font-size: 9.8pt; margin: 8px 0 3px; }}
+  .subject-bar {{ direction: rtl; text-align: right; background: #{l_hex}; border-right: 4px solid #{p_hex}; border-radius: 6px; padding: 5.5px 12px; margin: 2px 0 8px; font-size: 10pt; font-weight: 700; color: #{d_hex}; }}
+  .letter-intro {{ direction: rtl; text-align: justify; text-align-last: right; font-size: 9.2pt; color: #1e293b; margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px dashed #{a_hex}; }}
+  .kpi-grid {{ display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 10px; }}
+  .kpi {{ background: #{l_hex}; border: 1px solid #{a_hex}; border-radius: 8px; padding: 6px 8px; text-align: center; }}
+  .kpi-l {{ font-size: 7.9pt; color: #475569; }}
+  .kpi-v {{ font-size: 10.8pt; font-weight: 800; color: #{d_hex}; margin-top: 2px; }}
+  .chart-card {{ page-break-inside: avoid; break-inside: avoid; margin: 10px 0 12px; padding: 10px; border: 1px solid #{a_hex}; border-radius: 8px; background: #ffffff; }}
+  .chart-card-title {{ font-size: 9.4pt; font-weight: 700; color: #{d_hex}; margin-bottom: 6px; text-align: right; }}
+  .chart-card img {{ width: 100%; height: auto; max-height: 76mm; object-fit: contain; display: block; margin: 0 auto; }}
+  h3 {{ direction: rtl; text-align: right; color: #{d_hex}; font-size: 10.6pt; margin: 10px 0 5px; }}
+  h4 {{ direction: rtl; text-align: right; color: #{p_hex}; font-size: 9.6pt; margin: 8px 0 3px; }}
   p {{ direction: rtl; text-align: justify; text-align-last: right; margin: 4px 0; color: #1e293b; }}
   ul, ol {{ direction: rtl; text-align: right; margin: 4px 0 8px; padding-right: 20px; padding-left: 0; }}
   li {{ direction: rtl; text-align: right; margin-bottom: 2px; }}
   code {{ background: #f1f5f9; padding: 1px 5px; border-radius: 4px; font-size: 8.6pt; color: #0f172a; }}
-  .tbl-wrap {{ width: 100%; margin: 6px 0 12px; }}
-  table {{ direction: rtl; width: 100%; border-collapse: collapse; font-size: 8.6pt; page-break-inside: auto; }}
-  thead {{ display: table-header-group; }}
-  tr {{ page-break-inside: avoid; break-inside: avoid; }}
+
+  /* Data tables only (scoped inside .tbl-wrap so outer print layout frame is unaffected!) */
+  .tbl-wrap {{ width: 100%; margin: 5px 0 10px; }}
+  .tbl-wrap table {{ direction: rtl; width: 100%; border-collapse: collapse; font-size: 8.4pt; line-height: 1.55; page-break-inside: auto; }}
+  .tbl-wrap thead {{ display: table-header-group; }}
+  .tbl-wrap tr {{ page-break-inside: avoid; break-inside: avoid; }}
+  .tbl-wrap th {{ background: #{p_hex}; color: #ffffff; font-weight: 700; padding: 5px 6px; border: 1px solid #cbd5e1; text-align: center; white-space: nowrap; }}
+  .tbl-wrap td {{ padding: 4.5px 6px; border: 1px solid #cbd5e1; text-align: right; color: #1e293b; }}
+  .tbl-wrap td.center {{ text-align: center; }}
+  .tbl-wrap td.nowrap {{ white-space: nowrap; }}
+  .tbl-wrap tbody tr:nth-child(even) {{ background: #{l_hex}; }}
+  .tbl-wrap.att-sheet table {{ font-size: 8.1pt; line-height: 1.42; }}
+  .tbl-wrap.att-sheet th {{ padding: 4.5px 5px; }}
+  .tbl-wrap.att-sheet td {{ padding: 3.6px 5px; }}
+
   .transparency-box {{ direction: rtl; text-align: right; margin-top: 10px; padding: 8px 12px; border-radius: 6px; background: #f8fafc; border: 1px solid #cbd5e1; border-right: 3px solid #{p_hex}; font-size: 8.2pt; color: #475569; break-inside: avoid; }}
-  th {{ background: #{p_hex}; color: #ffffff; font-weight: 700; padding: 5.5px 7px; border: 1px solid #cbd5e1; text-align: center; }}
-  td {{ padding: 5.5px 7px; border: 1px solid #cbd5e1; text-align: right; color: #1e293b; }}
-  td.center {{ text-align: center; }}
-  tbody tr:nth-child(even) {{ background: #{l_hex}; }}
-  .cites {{ direction: rtl; text-align: right; margin-top: 12px; padding: 8px 12px; border-radius: 6px; background: #{l_hex}; border-right: 3px solid #{p_hex}; font-size: 8.4pt; color: #334155; }}
+  .cites {{ direction: rtl; text-align: right; margin-top: 10px; padding: 8px 12px; border-radius: 6px; background: #{l_hex}; border-right: 3px solid #{p_hex}; font-size: 8.4pt; color: #334155; break-inside: avoid; }}
   .cites-title {{ font-weight: 700; color: #{d_hex}; margin-bottom: 3px; }}
-  .sig-area {{ display: flex; justify-content: flex-end; margin-top: 18px; page-break-inside: avoid; }}
-  .sig-card {{ min-width: 195px; text-align: center; }}
-  .sig-lbl {{ font-size: 9.2pt; font-weight: 700; color: #{d_hex}; }}
-  .sig-line {{ margin-top: 30px; border-bottom: 1.5px dashed #{a_hex}; }}
+  .sig-area {{ display: flex; justify-content: flex-end; margin-top: 12px; page-break-inside: avoid; break-inside: avoid; }}
+  .sig-card {{ min-width: 190px; text-align: center; }}
+  .sig-lbl {{ font-size: 9pt; font-weight: 700; color: #{d_hex}; }}
+  .sig-line {{ margin-top: 22px; border-bottom: 1.5px dashed #{a_hex}; }}
   .letter-footer {{
-    position: fixed; bottom: 5.5mm; left: 26mm; right: 60mm;
+    position: fixed; bottom: 5.5mm; left: 26mm; right: 56mm;
     display: flex; flex-direction: row; align-items: center; justify-content: space-between;
     gap: 10px; font-size: 8.4pt; color: #{p_hex}; font-weight: 700; z-index: 2;
   }}
@@ -894,24 +933,34 @@ def _build_pdf_shell(branding: dict[str, Any], theme: dict[str, str], title: str
 </head>
 <body>
   {geo_svg}
-  <div class="page-canvas">
-    {bismillah_html}
-    <div class="letterhead">
-      <div class="lh-logo-col">
-        <div class="lh-logo-diamond-outer"><div class="lh-logo-diamond-inner">{logo_img}</div></div>
-      </div>
-      <div class="lh-center">
-        <div class="lh-org">{_esc(branding.get('org_name'))}</div>
-        <div class="lh-unit-pill">{_esc(branding.get('unit_name'))}</div>
-      </div>
-      <div class="lh-meta">
-        <div><span class="lh-meta-lbl">تاریخ:</span><span class="ltr-iso">{today_jalali_str()}</span></div>
-        <div><span class="lh-meta-lbl">شماره:</span><span class="ltr-iso">{letter_no}</span></div>
-        <div><span class="lh-meta-lbl">پیوست:</span><span>{"دارد" if has_attach else "ندارد"}</span></div>
-      </div>
-    </div>
-    {inner_html}
-  </div>
+  <table class="pdf-page-frame">
+    <thead><tr><td><div class="pdf-top-spacer"></div></td></tr></thead>
+    <tbody>
+      <tr>
+        <td>
+          <div class="page-canvas">
+            {bismillah_html}
+            <div class="letterhead">
+              <div class="lh-logo-col">
+                <div class="lh-logo-diamond-outer"><div class="lh-logo-diamond-inner">{logo_img}</div></div>
+              </div>
+              <div class="lh-center">
+                <div class="lh-org">{_esc(branding.get('org_name'))}</div>
+                <div class="lh-unit-pill">{_esc(branding.get('unit_name'))}</div>
+              </div>
+              <div class="lh-meta">
+                <div><span class="lh-meta-lbl">تاریخ:</span><span class="ltr-iso">{today_jalali_str()}</span></div>
+                <div><span class="lh-meta-lbl">شماره:</span><span class="ltr-iso">{letter_no}</span></div>
+                <div><span class="lh-meta-lbl">پیوست:</span><span>{"دارد" if has_attach else "ندارد"}</span></div>
+              </div>
+            </div>
+            {inner_html}
+          </div>
+        </td>
+      </tr>
+    </tbody>
+    <tfoot><tr><td><div class="pdf-bottom-spacer"></div></td></tr></tfoot>
+  </table>
 
   <div class="letter-footer">
     <span class="footer-right">{_esc(branding.get('footer_text'))}</span>
@@ -1005,9 +1054,9 @@ def export_attendance_sheet_pdf(payload: dict[str, Any], dest_path: Path) -> dic
         tag = "جدید" if p.get("is_new") else "قدیمی"
         checks = "".join('<td class="center"></td>' for _ in range(sessions))
         body_rows.append(
-            f'<tr><td class="center">{to_fa_digits(str(idx))}</td><td><strong>{name}</strong></td>'
-            f'<td class="center">{level}</td><td class="center"><span class="ltr-iso">{phone}</span></td>'
-            f'<td class="center">{tag}</td>{checks}</tr>'
+            f'<tr><td class="center nowrap">{to_fa_digits(str(idx))}</td><td class="nowrap"><strong>{name}</strong></td>'
+            f'<td class="center nowrap">{level}</td><td class="center nowrap"><span class="ltr-iso">{phone}</span></td>'
+            f'<td class="center nowrap">{tag}</td>{checks}</tr>'
         )
 
     meta_line = "  |  ".join(x for x in [
@@ -1019,9 +1068,9 @@ def export_attendance_sheet_pdf(payload: dict[str, Any], dest_path: Path) -> dic
     inner = (
         f'<div class="subject-bar">لیست رسمی حضور و غیاب: {_esc(course)}</div>'
         f'<p class="letter-intro">{_esc(meta_line)}</p>'
-        f'<div class="tbl-wrap"><table><thead><tr>'
-        f'<th style="width:28px;">ردیف</th><th>نام و نام خانوادگی</th><th style="width:65px;">سطح</th>'
-        f'<th style="width:92px;">شماره تماس</th><th style="width:48px;">سابقه</th>{sess_headers}'
+        f'<div class="tbl-wrap att-sheet"><table><thead><tr>'
+        f'<th style="width:26px;">ردیف</th><th style="min-width:118px;">نام و نام خانوادگی</th><th style="width:46px;">سطح</th>'
+        f'<th style="width:88px;">شماره تماس</th><th style="width:42px;">سابقه</th>{sess_headers}'
         f'</tr></thead><tbody>{"".join(body_rows)}</tbody></table></div>'
         f'<div class="sig-area"><div class="sig-card"><div class="sig-lbl">تأیید دبیر دوره / مسئول آموزش</div><div class="sig-line"></div></div></div>'
     )

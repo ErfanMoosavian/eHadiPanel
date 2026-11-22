@@ -27,3 +27,20 @@ audit_step*.txt
 Thumbs.db
 .vscode/
 .idea/
+
+# Secrets & Environment
+.env
+venv/
+__pycache__/
+*.pyc
+*.bak
+*.bak*
+
+# Institutional Data & Databases (Sensitive)
+data/
+
+# Build Outputs & Archives
+dist/
+build/eHadiPanel/
+*.exe
+*.zip

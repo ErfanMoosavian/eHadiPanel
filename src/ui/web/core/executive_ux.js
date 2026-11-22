@@ -302,7 +302,7 @@
     const origAnalytics = api.get_executive_analytics?.bind(api);
     if (origAnalytics) {
       api.get_executive_analytics = async function (filters = {}) {
-        const isDefault = !filters || Object.keys(filters).length === 0;
+        const isDefault = !filters || Object.values(filters).every(v => v === '' || v === null || v === undefined);
         if (isDefault && cachedAnalytics && (Date.now() - cacheTs < 45000)) return cachedAnalytics;
         const res = await origAnalytics(filters);
         if (isDefault && res && res.ok) { cachedAnalytics = res; cacheTs = Date.now(); }
@@ -2935,3 +2935,61 @@
     setTimeout(() => { tagResizeHandles(); probeMaximizedState(); }, 450);
   });
 })();
+
+
+// ================= Pure-CSS Smooth Open/Close Lifecycle for Diagnostics & Memory Modals =================
+(() => {
+  if (window.__EH_MODAL_PURE_CSS_V500) return;
+  window.__EH_MODAL_PURE_CSS_V500 = true;
+
+  const closeTimers = new WeakMap();
+
+  function cancelPendingClose(bd) {
+    if (!bd) return;
+    const t = closeTimers.get(bd);
+    if (t) {
+      clearTimeout(t);
+      closeTimers.delete(bd);
+    }
+    bd.classList.remove('eh-closing');
+    bd.style.removeProperty('display');
+    bd.style.removeProperty('opacity');
+    bd.style.removeProperty('pointer-events');
+  }
+
+  function smoothHideBackdrop(bd) {
+    if (!bd || !bd.classList?.contains('open') || bd.classList.contains('eh-closing')) return;
+    bd.classList.add('eh-closing');
+    const timer = setTimeout(() => {
+      closeTimers.delete(bd);
+      bd.classList.remove('open', 'eh-closing');
+      bd.style.removeProperty('display');
+    }, 185);
+    closeTimers.set(bd, timer);
+  }
+
+  // Before sidebar footer buttons trigger openDiagnosticsModal / openMemoryModal, clear any closing state
+  document.addEventListener('pointerdown', (e) => {
+    const btn = e.target?.closest?.('#ehDiagSidebarBtn, #ehMemSidebarBtn, [onclick*="openDiagnosticsModal"], [onclick*="openMemoryModal"]');
+    if (!btn) return;
+    document.querySelectorAll('.eh-diag-backdrop').forEach(cancelPendingClose);
+  }, true);
+
+  // Intercept close button / backdrop click for smooth fade-out without ever breaking next open
+  document.addEventListener('click', (e) => {
+    const bd = e.target?.closest?.('.eh-diag-backdrop');
+    if (!bd) return;
+    if (e.target === bd || e.target.closest?.('.eh-diag-close, [data-close-modal], .eh-mem-close')) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      smoothHideBackdrop(bd);
+    }
+  }, true);
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      document.querySelectorAll('.eh-diag-backdrop.open:not(.eh-closing)').forEach(smoothHideBackdrop);
+    }
+  }, true);
+})();
+
