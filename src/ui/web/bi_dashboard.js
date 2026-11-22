@@ -11,6 +11,7 @@
     // فیلترهای آموزشی
     eduWorkgroup: 'ALL',
     eduSearch: '',
+    eduTeacherMode: 'all',
     // فیلترهای مالی
     finCategory: 'ALL',
     finFile: 'ALL',
@@ -55,7 +56,7 @@
     root.innerHTML = `
       <div class="glass-card bi-hub-header">
         <div class="bi-hub-brand">
-          <span class="bi-dot"></span>
+          <span class="bi-hub-ico" aria-hidden="true"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></span>
           <div>
             <strong>مرکز هوش تجاری و تحلیل آماری</strong>
             <div class="bi-hub-sub">تحلیل زنده و آفلاین روی داده‌های آموزشی، فاکتورهای خرید و کلیه جداول ثبت‌شده</div>
@@ -77,7 +78,9 @@
           </button>
         </div>
 
-        <button class="ghost-btn bi-mini-btn" id="biGlobalRefresh" title="بروزرسانی کامل داده‌های BI">↻ بروزرسانی</button>
+        <div class="bi-hub-actions" id="biHubActions">
+          <button class="ghost-btn bi-mini-btn" id="biGlobalRefresh" title="بروزرسانی کامل داده‌های BI">↻ بروزرسانی</button>
+        </div>
       </div>
 
       <div id="biLensViewport" class="bi-viewport"></div>
@@ -95,6 +98,33 @@
     });
 
     document.getElementById('biGlobalRefresh').addEventListener('click', loadBiData);
+
+    // Proxy hubHdr.insertBefore & observe appendChild so report_studio.js PDF/Word buttons
+    // ALWAYS mount cleanly inside #biHubActions (zero NotFoundError, 100% centered tabs!)
+    const hubHdr = root.querySelector('.bi-hub-header');
+    const hubActs = root.querySelector('#biHubActions');
+    if (hubHdr && hubActs) {
+      const origInsertBefore = hubHdr.insertBefore.bind(hubHdr);
+      hubHdr.insertBefore = function(newNode, refNode) {
+        if (refNode && refNode.parentNode === hubActs) {
+          return hubActs.insertBefore(newNode, refNode);
+        }
+        if (newNode && newNode.nodeType === 1 && !newNode.classList.contains('bi-hub-brand') && !newNode.classList.contains('bi-lens-tabs') && newNode !== hubActs && (newNode.tagName === 'BUTTON' || newNode.querySelector?.('button'))) {
+          return hubActs.insertBefore(newNode, hubActs.querySelector('#biGlobalRefresh') || hubActs.firstChild);
+        }
+        return origInsertBefore(newNode, refNode);
+      };
+      const adoptStrays = () => {
+        Array.from(hubHdr.children).forEach(ch => {
+          if (ch.classList.contains('bi-hub-brand') || ch.classList.contains('bi-lens-tabs') || ch === hubActs) return;
+          if (ch.tagName === 'BUTTON' || ch.querySelector?.('button')) {
+            hubActs.insertBefore(ch, hubActs.querySelector('#biGlobalRefresh') || hubActs.firstChild);
+          }
+        });
+      };
+      adoptStrays();
+      new MutationObserver(adoptStrays).observe(hubHdr, { childList: true });
+    }
   }
 
   function buildDonutHtml(items, total, selectedKey, centerLabel, unitLabel) {
@@ -210,17 +240,43 @@
     const maxAvg = Math.max(...cmpItems.map(x => x.avg), 1);
     const maxCnt = Math.max(...cmpItems.map(x => x.courses), 1);
 
-    // اساتید شاخص
-    const tMap = {};
-    filtered.forEach(r => {
-      if (r.is_collective || !r.teacher_key) return;
-      if (!tMap[r.teacher_key]) tMap[r.teacher_key] = { name: r.teacher, courses: 0, participants: 0 };
-      if (r.teacher.length > tMap[r.teacher_key].name.length) tMap[r.teacher_key].name = r.teacher;
-      tMap[r.teacher_key].courses += 1;
-      tMap[r.teacher_key].participants += Number(r.participants || 0);
-    });
-    const teachers = Object.values(tMap).sort((a, b) => (b.participants - a.participants) || (b.courses - a.courses)).slice(0, 8);
-    const maxT = Math.max(...teachers.map(x => x.participants), 1);
+    // اساتید شاخص (بروزرسانی لحظه‌ای بدون بازسازی کل صفحه)
+    const buildTeachersRowsHtml = (mode) => {
+      const tMap = {};
+      filtered.forEach(r => {
+        if (r.is_collective) return;
+        if (mode === 'solo') {
+          if (!r.teacher_key) return;
+          if (!tMap[r.teacher_key]) tMap[r.teacher_key] = { name: r.teacher, courses: 0, participants: 0 };
+          if (r.teacher.length > tMap[r.teacher_key].name.length) tMap[r.teacher_key].name = r.teacher;
+          tMap[r.teacher_key].courses += 1;
+          tMap[r.teacher_key].participants += Number(r.participants || 0);
+        } else {
+          const tList = (Array.isArray(r.teachers) && r.teachers.length) ? r.teachers : (r.teacher_key ? [r.teacher] : []);
+          tList.forEach(tn => {
+            const cleanN = String(tn || '').trim();
+            if (!cleanN || cleanN === 'ثبت‌نشده' || cleanN === 'نامشخص') return;
+            const tKey = cleanN.replace(/[\s\u200c]+/g, ' ');
+            if (!tMap[tKey]) tMap[tKey] = { name: cleanN, courses: 0, participants: 0 };
+            tMap[tKey].courses += 1;
+            tMap[tKey].participants += Number(r.participants || 0);
+          });
+        }
+      });
+      const list = Object.values(tMap).sort((a, b) => (b.participants - a.participants) || (b.courses - a.courses)).slice(0, 8);
+      const maxT = Math.max(...list.map(x => x.participants), 1);
+      return list.length ? list.map((t, idx) => `
+        <div class="bi-teacher-row">
+          <div class="bi-bar-head">
+            <span class="bi-bar-rank">${faNum(idx + 1)}</span>
+            <span class="bi-bar-name">${esc(t.name)}</span>
+            <span class="stat-pill">${faNum(t.courses)} دوره</span>
+            <span class="bi-bar-num" style="color:#34d399;">${faNum(t.participants)} نفر</span>
+          </div>
+          <div class="bi-bar-track"><div class="bi-bar-fill" style="width:${Math.max(6, Math.round(t.participants / maxT * 100))}%; background:linear-gradient(90deg, #10b981cc, #34d399);"></div></div>
+        </div>
+      `).join('') : '<div class="empty-state"><p>استادی در این فیلتر ثبت نشده است.</p></div>';
+    };
 
     vp.innerHTML = `
       <div class="glass-card bi-toolbar">
@@ -300,19 +356,15 @@
         </div>
 
         <div class="glass-card bi-card">
-          <div class="card-title"><span>اساتید شاخص (دوره‌های انفرادی)</span><span class="bi-hint">مرتب‌شده بر اساس مجموع مخاطبان</span></div>
-          <div class="bi-teachers">
-            ${teachers.length ? teachers.map((t, idx) => `
-              <div class="bi-teacher-row">
-                <div class="bi-bar-head">
-                  <span class="bi-bar-rank">${faNum(idx + 1)}</span>
-                  <span class="bi-bar-name">${esc(t.name)}</span>
-                  <span class="stat-pill">${faNum(t.courses)} دوره</span>
-                  <span class="bi-bar-num" style="color:#34d399;">${faNum(t.participants)} نفر</span>
-                </div>
-                <div class="bi-bar-track"><div class="bi-bar-fill" style="width:${Math.max(6, Math.round(t.participants / maxT * 100))}%; background:linear-gradient(90deg, #10b981cc, #34d399);"></div></div>
-              </div>
-            `).join('') : '<div class="empty-state"><p>استاد انفرادی در این فیلتر ثبت نشده است.</p></div>'}
+          <div class="card-title" style="gap:8px; flex-wrap:wrap;">
+            <span>اساتید شاخص</span>
+            <div class="eh-seg-switch" role="tablist">
+              <button type="button" class="eh-seg-opt ${state.eduTeacherMode !== 'solo' ? 'active' : ''}" data-edu-tmode="all">کل دوره‌ها</button>
+              <button type="button" class="eh-seg-opt ${state.eduTeacherMode === 'solo' ? 'active' : ''}" data-edu-tmode="solo">فقط انفرادی</button>
+            </div>
+          </div>
+          <div class="bi-teachers" id="biEduTeachersList">
+            ${buildTeachersRowsHtml(state.eduTeacherMode)}
           </div>
         </div>
       </div>
@@ -344,6 +396,16 @@
         : `تحلیل کامل آماری و مدیریتی از «${state.eduWorkgroup}» شامل تعداد دوره‌ها، مجموع و میانگین مخاطبان، اساتید شاخص و پیشنهادهای بهبود ارائه کن.`;
       window.switchPageById && window.switchPageById('chat');
       window.sendQuickPrompt && window.sendQuickPrompt(q);
+    });
+    vp.querySelectorAll('[data-edu-tmode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const nextMode = btn.getAttribute('data-edu-tmode') || 'all';
+        if (state.eduTeacherMode === nextMode) return;
+        state.eduTeacherMode = nextMode;
+        vp.querySelectorAll('[data-edu-tmode]').forEach(b => b.classList.toggle('active', b === btn));
+        const listEl = vp.querySelector('#biEduTeachersList');
+        if (listEl) listEl.innerHTML = buildTeachersRowsHtml(nextMode);
+      });
     });
     document.getElementById('eduExportBtn').addEventListener('click', () => {
       exportExcel({
@@ -430,35 +492,49 @@
     const catTotal = catItems.reduce((s, x) => s + x.value, 0);
     const topCat = catItems[0];
 
-    // ۱۰ قلم/فاکتور با بیشترین مبلغ — به‌صورت پیش‌فرض تجمیع‌شده بر اساس عنوان قلم (اصولی) با امکان سوییچ به تک‌فاکتور
-    let topItems = [];
-    if (state.finTopMode === 'single') {
-      topItems = filtered.slice().sort((a, b) => b.amount - a.amount).slice(0, 10).map(r => ({
-        item: r.item,
-        category: r.category,
-        amount: Number(r.amount || 0),
-        count: 1,
-        date: r.date || '—',
-        vendor: r.vendor || '',
-        file_name: r.file_name || '',
-      }));
-    } else {
-      const grpItems = {};
-      filtered.forEach(r => {
-        const key = (r.item_key || r.item || 'سایر').trim();
-        if (!grpItems[key]) {
-          grpItems[key] = { item: r.item, category: r.category, amount: 0, count: 0, date: r.date || '—', vendor: r.vendor || '', files: new Set() };
-        }
-        grpItems[key].amount += Number(r.amount || 0);
-        grpItems[key].count += 1;
-        if (r.file_name) grpItems[key].files.add(r.file_name);
-      });
-      topItems = Object.values(grpItems).sort((a, b) => b.amount - a.amount).slice(0, 10).map(x => ({
-        ...x,
-        file_name: Array.from(x.files).join('، '),
-      }));
-    }
-    const maxItem = Math.max(...topItems.map(x => x.amount), 1);
+    // ۱۰ قلم هزینه برتر — بروزرسانی لحظه‌ای بدون بازسازی کل صفحه
+    const buildFinTopRowsHtml = (mode) => {
+      let topItems = [];
+      if (mode === 'single') {
+        topItems = filtered.slice().sort((a, b) => b.amount - a.amount).slice(0, 10).map(r => ({
+          item: r.item,
+          category: r.category,
+          amount: Number(r.amount || 0),
+          count: 1,
+          date: r.date || '—',
+          vendor: r.vendor || '',
+          file_name: r.file_name || '',
+        }));
+      } else {
+        const grpItems = {};
+        filtered.forEach(r => {
+          const key = (r.item_key || r.item || 'سایر').trim();
+          if (!grpItems[key]) {
+            grpItems[key] = { item: r.item, category: r.category, amount: 0, count: 0, date: r.date || '—', vendor: r.vendor || '', files: new Set() };
+          }
+          grpItems[key].amount += Number(r.amount || 0);
+          grpItems[key].count += 1;
+          if (r.file_name) grpItems[key].files.add(r.file_name);
+        });
+        topItems = Object.values(grpItems).sort((a, b) => b.amount - a.amount).slice(0, 10).map(x => ({
+          ...x,
+          file_name: Array.from(x.files).join('، '),
+        }));
+      }
+      const maxItem = Math.max(...topItems.map(x => x.amount), 1);
+      return topItems.map((it, idx) => `
+        <div class="bi-bar-row" title="${esc(it.item)} | ${esc(it.category)}${it.count > 1 ? ' | ' + faNum(it.count) + ' خرید' : (it.date && it.date !== '—' ? ' | ' + esc(it.date) : '')}">
+          <div class="bi-bar-head">
+            <span class="bi-bar-rank">${faNum(idx + 1)}</span>
+            <span class="bi-bar-name">${esc(it.item)}</span>
+            ${it.count > 1 ? `<span class="stat-pill">${faNum(it.count)} خرید</span>` : (mode === 'single' && it.date && it.date !== '—' ? `<span class="stat-pill">${esc(it.date)}</span>` : '')}
+            ${state.finCategory === 'ALL' ? `<span class="stat-pill">${esc(it.category)}</span>` : ''}
+            <span class="bi-bar-num" style="color:#34d399;">${faNum(Math.round(it.amount))}</span>
+          </div>
+          <div class="bi-bar-track"><div class="bi-bar-fill" style="width:${Math.max(4, Math.round(it.amount / maxItem * 100))}%; background:linear-gradient(90deg, ${COLORS[idx % COLORS.length]}cc, ${COLORS[idx % COLORS.length]});"></div></div>
+        </div>
+      `).join('');
+    };
 
     // روند بر اساس دوره زمانی / فایل
     const periodMap = {};
@@ -569,26 +645,17 @@
 
         <div class="glass-card bi-card">
           <div class="card-title" style="gap:8px; flex-wrap:wrap;">
-            <span>${state.finTopMode === 'single' ? '۱۰ فاکتور تکی با بیشترین مبلغ' : '۱۰ قلم هزینه برتر (تجمیعی)'}</span>
-            <div style="display:flex; align-items:center; gap:5px;">
-              <button type="button" class="eh-mini-btn eh-top-mode-btn ${state.finTopMode !== 'single' ? 'active' : ''}" data-top-mode="grouped">تجمیعی</button>
-              <button type="button" class="eh-mini-btn eh-top-mode-btn ${state.finTopMode === 'single' ? 'active' : ''}" data-top-mode="single">تک‌فاکتور</button>
-              <span class="bi-hint" style="margin-right:4px;">${esc(unit)}</span>
+            <span>۱۰ قلم هزینه برتر</span>
+            <div style="display:flex; align-items:center; gap:7px;">
+              <div class="eh-seg-switch" role="tablist">
+                <button type="button" class="eh-seg-opt ${state.finTopMode !== 'single' ? 'active' : ''}" data-top-mode="grouped">تجمیعی</button>
+                <button type="button" class="eh-seg-opt ${state.finTopMode === 'single' ? 'active' : ''}" data-top-mode="single">تک‌فاکتور</button>
+              </div>
+              <span class="bi-hint">${esc(unit)}</span>
             </div>
           </div>
-          <div class="bi-bars">
-            ${topItems.map((it, idx) => `
-              <div class="bi-bar-row" title="${esc(it.item)} | ${esc(it.category)}${it.count > 1 ? ' | ' + faNum(it.count) + ' خرید' : (it.date && it.date !== '—' ? ' | ' + esc(it.date) : '')}">
-                <div class="bi-bar-head">
-                  <span class="bi-bar-rank">${faNum(idx + 1)}</span>
-                  <span class="bi-bar-name">${esc(it.item)}</span>
-                  ${it.count > 1 ? `<span class="stat-pill">${faNum(it.count)} خرید</span>` : (state.finTopMode === 'single' && it.date && it.date !== '—' ? `<span class="stat-pill">${esc(it.date)}</span>` : '')}
-                  ${state.finCategory === 'ALL' ? `<span class="stat-pill">${esc(it.category)}</span>` : ''}
-                  <span class="bi-bar-num" style="color:#34d399;">${faNum(Math.round(it.amount))}</span>
-                </div>
-                <div class="bi-bar-track"><div class="bi-bar-fill" style="width:${Math.max(4, Math.round(it.amount / maxItem * 100))}%; background:linear-gradient(90deg, ${COLORS[idx % COLORS.length]}cc, ${COLORS[idx % COLORS.length]});"></div></div>
-              </div>
-            `).join('')}
+          <div class="bi-bars" id="biFinTopItemsList">
+            ${buildFinTopRowsHtml(state.finTopMode)}
           </div>
         </div>
 
@@ -641,9 +708,9 @@
             const feeTot = Number(fin.transfer_fee_total || 0);
             const fundBox = (fundTot > 0 || openBal > 0 || feeTot > 0) ? `
               <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; padding-top:10px; border-top:1px solid rgba(255,255,255,0.08); font-size:11.5px;">
-                ${fundTot > 0 ? `<span class="stat-pill" style="border-color:rgba(56,189,248,0.35); color:#38bdf8;">واریزی تنخواه (جدا از هزینه): ${faNum(Math.round(fundTot))} ${esc(unit)}</span>` : ''}
-                ${openBal > 0 ? `<span class="stat-pill" style="border-color:rgba(148,163,184,0.32); color:#cbd5e1;">مانده انتقالی ماه قبل: ${faNum(Math.round(openBal))} ${esc(unit)}</span>` : ''}
-                ${feeTot > 0 ? `<span class="stat-pill" style="border-color:rgba(245,158,11,0.35); color:#fbbf24;">کارمزد انتقال بانکی: ${faNum(Math.round(feeTot))} ${esc(unit)}</span>` : ''}
+                ${fundTot > 0 ? `<span class="stat-pill" style="background:rgba(56,189,248,0.14); border-color:rgba(56,189,248,0.52); color:#7dd3fc; font-weight:700;">واریزی تنخواه (جدا از هزینه): ${faNum(Math.round(fundTot))} ${esc(unit)}</span>` : ''}
+                ${openBal > 0 ? `<span class="stat-pill" style="background:rgba(148,163,184,0.12); border-color:rgba(148,163,184,0.44); color:#e2e8f0; font-weight:700;">مانده انتقالی ماه قبل: ${faNum(Math.round(openBal))} ${esc(unit)}</span>` : ''}
+                ${feeTot > 0 ? `<span class="stat-pill" style="background:rgba(245,158,11,0.14); border-color:rgba(245,158,11,0.52); color:#fcd34d; font-weight:700;">کارمزد انتقال بانکی: ${faNum(Math.round(feeTot))} ${esc(unit)}</span>` : ''}
               </div>` : '';
             return `
               <div class="card-title"><span>تفکیک هزینه به ازای فایل‌های مالی و تنخواه</span><span class="bi-hint">${esc(unit)}</span></div>
@@ -668,12 +735,14 @@
       <div class="glass-card bi-card" style="min-height:auto;">
         <div class="card-title"><span>دفترچه ریز اقلام و فاکتورها (نمایش تا ۵۰ ردیف فیلترشده)</span><span class="stat-pill">${faNum(filtered.length)} ردیف</span></div>
         <div class="ai-table-scroll" style="max-height:240px;">
-          <table class="glass-table">
-            <thead><tr><th>شرح کالا / خدمت</th><th>سرفصل</th><th>مبلغ (${esc(unit)})</th><th>فروشنده</th><th>تاریخ</th><th>فایل منبع</th></tr></thead>
-            <tbody>
-              ${filtered.slice(0, 80).map(r => {
-                const allCats = fin.all_categories || ['ایاب‌وذهاب و حمل‌ونقل', 'پذیرایی و تشریفات', 'چاپ، تبلیغات و انتشارات', 'تجهیزات، فناوری و سامانه‌های مجازی', 'تأسیسات، تعمیرات و پشتیبانی', 'نوشت‌افزار و ملزومات اداری', 'حق‌التدریس، پژوهش و هدایا', 'سایر هزینه‌ها'];
-                return `<tr>
+          ${(() => {
+            const visRows = filtered.slice(0, 80);
+            const hasVendor = visRows.some(r => r.vendor && r.vendor !== 'ثبت‌نشده' && r.vendor !== '—' && r.vendor !== '-');
+            const allCats = fin.all_categories || ['ایاب‌وذهاب و حمل‌ونقل', 'پذیرایی و تشریفات', 'چاپ، تبلیغات و انتشارات', 'تجهیزات، فناوری و سامانه‌های مجازی', 'تأسیسات، تعمیرات و پشتیبانی', 'نوشت‌افزار و ملزومات اداری', 'حق‌التدریس، پژوهش و هدایا', 'سایر هزینه‌ها'];
+            return `<table class="glass-table">
+              <thead><tr><th>شرح کالا / خدمت</th><th>سرفصل</th><th>مبلغ (${esc(unit)})</th>${hasVendor ? '<th>فروشنده</th>' : ''}<th>تاریخ</th><th>فایل منبع</th></tr></thead>
+              <tbody>
+                ${visRows.map(r => `<tr>
                   <td>
                     <strong>${esc(r.item)}</strong>
                     ${r.no_invoice ? '<span class="eh-noinv-pill">بدون فاکتور</span>' : ''}
@@ -685,13 +754,13 @@
                     </select>
                   </td>
                   <td style="color:#34d399; font-weight:700;">${faNum(Math.round(r.amount))}</td>
-                  <td>${esc(r.vendor)}</td>
+                  ${hasVendor ? `<td>${esc(r.vendor)}</td>` : ''}
                   <td>${esc(r.date)}</td>
                   <td>${esc(r.file_name)}</td>
-                </tr>`;
-              }).join('')}
-            </tbody>
-          </table>
+                </tr>`).join('')}
+              </tbody>
+            </table>`;
+          })()}
         </div>
       </div>
     `;
@@ -729,10 +798,14 @@
       }
     }
 
-    vp.querySelectorAll('.eh-top-mode-btn').forEach(btn => {
+    vp.querySelectorAll('[data-top-mode]').forEach(btn => {
       btn.addEventListener('click', () => {
-        state.finTopMode = btn.dataset.topMode === 'single' ? 'single' : 'grouped';
-        renderFinanceLens(vp);
+        const nextMode = btn.dataset.topMode === 'single' ? 'single' : 'grouped';
+        if (state.finTopMode === nextMode) return;
+        state.finTopMode = nextMode;
+        vp.querySelectorAll('[data-top-mode]').forEach(b => b.classList.toggle('active', b === btn));
+        const listEl = vp.querySelector('#biFinTopItemsList');
+        if (listEl) listEl.innerHTML = buildFinTopRowsHtml(nextMode);
       });
     });
 
@@ -926,7 +999,22 @@
           <div class="ai-table-scroll eh-uni-table-scroll">
             <table class="glass-table eh-uni-table">
               <thead><tr>${cols.map(c => `<th title="${esc(c)}">${esc(c)}</th>`).join('')}</tr></thead>
-              <tbody>${previewRows.slice(0, 100).map(r => `<tr>${cols.map((_, ci) => `<td title="${esc(r[ci] ?? '')}">${esc(r[ci] ?? '')}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${Math.max(1, cols.length)}" style="text-align:center; padding:18px;">موردی یافت نشد.</td></tr>`}</tbody>
+              <tbody>${(() => {
+                const fmtUniCell = (val, colName) => {
+                  const s = String(val ?? '').trim();
+                  if (!s) return '—';
+                  const cn = String(colName || '');
+                  if (cn.includes('ردیف') || cn.includes('شماره') || cn.includes('کد') || cn.includes('تاریخ') || cn.includes('موبایل') || cn.includes('تلفن')) return esc(s);
+                  if (/^-?\d+(\.\d+)?$/.test(s)) {
+                    const n = Number(s);
+                    if (Number.isFinite(n) && Math.abs(n) >= 1000 && !(Number.isInteger(n) && n >= 1300 && n <= 1500)) {
+                      return faNum(n);
+                    }
+                  }
+                  return esc(s);
+                };
+                return previewRows.slice(0, 100).map(r => `<tr>${cols.map((cn, ci) => `<td title="${esc(r[ci] ?? '')}">${fmtUniCell(r[ci], cn)}</td>`).join('')}</tr>`).join('') || `<tr><td colspan="${Math.max(1, cols.length)}" style="text-align:center; padding:18px;">موردی یافت نشد.</td></tr>`;
+              })()}</tbody>
             </table>
           </div>
         </div>

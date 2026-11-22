@@ -1,5 +1,5 @@
 """
-اسپلش اسکرین رسمی و شیشه‌ای eHadiPanel Beta 0.2
+اسپلش اسکرین رسمی و شیشه‌ای eHadiPanel v0.3.0-beta
 مؤسسه علمی فرهنگی امام هادی علیه‌السلام
 - طراحی کاملاً هم‌زبان با رابط کاربری برنامه (Obsidian Liquid Glass + Micro-Grid + Ambient Orbs)
 - مونوگرام معماری و شیشه‌ای eHP در مرکز گرافیک به‌همراه کارت‌های مینی‌تحلیلی شیشه‌ای (Spline & Telemetry)
@@ -19,16 +19,16 @@ import tempfile
 import time
 from pathlib import Path
 
-DESIGN_REV = "beta02_ehp_glass_v5_master"
+DESIGN_REV = "v030_beta_ehp_glass_v8_pure_light"
 LOGICAL_W = 760
 LOGICAL_H = 450
 
 BRAND_WORDMARK = "eHadiPanel"
-VERSION_BADGE = "BETA 0.2"
+VERSION_BADGE = "BETA 0.3"
 INST_TITLE = "مؤسسه علمی فرهنگی امام هادی علیه‌السلام"
 INST_SUBTITLE = "سامانه هوشمند مدیریت، تحلیل آماری و دستیار پژوهشی"
-FOOTER_META_RIGHT = "نسخه آزمایشی دوم  •  پلتفرم آفلاین و امن"
-FOOTER_META_LEFT = "eHadiPanel  •  Beta 0.2"
+FOOTER_META_RIGHT = "نسخه آزمایشی سوم  •  پلتفرم آفلاین و امن"
+FOOTER_META_LEFT = "eHadiPanel  •  v0.3.0-beta"
 
 CAPABILITY_CHIPS = [
     ("هوش تجاری", 632, 718),
@@ -37,11 +37,11 @@ CAPABILITY_CHIPS = [
 ]
 
 STAGES = {
-    "0": (22.0, "در حال آماده‌سازی هسته سامانه..."),
-    "1": (48.0, "بارگذاری پایگاه‌داده تحلیلی و موتور اسناد..."),
-    "2": (74.0, "راه‌اندازی هوش تجاری و حافظه هوشمند..."),
-    "3": (92.0, "آماده‌سازی پنجره و رابط کاربری..."),
-    "READY": (100.0, "سامانه آماده به کار است"),
+    "0": (22.0, "\u200fدر حال آماده‌سازی هسته سامانه...\u200f"),
+    "1": (48.0, "\u200fبارگذاری پایگاه‌داده تحلیلی و موتور اسناد...\u200f"),
+    "2": (74.0, "\u200fراه‌اندازی هوش تجاری و حافظه هوشمند...\u200f"),
+    "3": (92.0, "\u200fآماده‌سازی پنجره و رابط کاربری...\u200f"),
+    "READY": (100.0, "\u200fسامانه آماده به کار است\u200f"),
 }
 
 FA_DIGITS = str.maketrans("0123456789", "۰۱۲۳۴۵۶۷۸۹")
@@ -147,6 +147,32 @@ def _find_logo_file(custom_path: str = "") -> Path | None:
         return Path(custom_path)
     return None
 
+def _register_bundled_fonts() -> None:
+    """Privately registers bundled Vazirmatn TTF/OTF fonts for this splash process (zero OS side effects)."""
+    if os.name != "nt":
+        return
+    try:
+        gdi32 = ctypes.windll.gdi32
+        FR_PRIVATE = 0x10
+        seen: set[str] = set()
+        for root_dir in _project_roots():
+            fdir = root_dir / "assets" / "fonts"
+            if not fdir.is_dir():
+                continue
+            for fp in sorted(fdir.iterdir()):
+                if fp.is_file() and fp.suffix.lower() in (".ttf", ".otf"):
+                    key = str(fp.resolve()).lower()
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    try:
+                        gdi32.AddFontResourceExW(str(fp), FR_PRIVATE, 0)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+
 def _pick_persian_font(tk_font_module) -> str:
     try:
         avail = {f.lower(): f for f in tk_font_module.families()}
@@ -167,6 +193,26 @@ def _pick_persian_font(tk_font_module) -> str:
         if pref.lower() in avail:
             return avail[pref.lower()]
     return "Segoe UI"
+
+
+def _pick_persian_medium_font(tk_font_module, fallback_family: str) -> tuple[str, str]:
+    """Returns (family, weight) that renders ultra-clean at 12px on dark backgrounds without GDI thin-stroke aliasing."""
+    try:
+        avail = {f.lower(): f for f in tk_font_module.families()}
+    except Exception:
+        avail = {}
+    for pref in (
+        "Vazirmatn Medium",
+        "Vazirmatn SemiBold",
+        "Vazirmatn FD Medium",
+        "Vazirmatn FD SemiBold",
+        "Vazir Medium",
+        "IRANSansX Medium",
+        "IRANSans Medium",
+    ):
+        if pref.lower() in avail:
+            return avail[pref.lower()], "normal"
+    return fallback_family, "bold"
 
 
 def _pick_latin_display_font(tk_font_module) -> str:
@@ -393,28 +439,26 @@ def _render_artwork_uncached(W: int, H: int, palette: str, logo_file: Path | Non
 
     cx, cy = px(194), py(186)
 
-    # Soft backlit aura behind eHP Monolith
+    r_orb1 = px(142)
+    r_orb2 = px(106)
+
+    # Soft diffused backlit aura behind eHP Monolith ONLY (no heavy muddy ring hoops!)
     halo = Image.new("RGBA", (SW, SH), (0, 0, 0, 0))
     hd = ImageDraw.Draw(halo)
-    hr = px(94)
-    hd.rounded_rectangle([cx - hr, cy - hr, cx + hr, cy + hr], radius=px(36), fill=acc1 + (46,))
-    hd.ellipse([cx - px(136), cy - px(136), cx + px(136), cy + px(136)], outline=acc2 + (54,), width=max(2, px(2.5)))
-    halo = halo.filter(ImageFilter.GaussianBlur(radius=max(8, px(20))))
+    hr = px(90)
+    hd.rounded_rectangle([cx - hr, cy - hr, cx + hr, cy + hr], radius=px(36), fill=acc1 + (44,))
+    halo = halo.filter(ImageFilter.GaussianBlur(radius=max(10, px(22))))
     base = Image.alpha_composite(base, halo.resize((W, H), Image.Resampling.BILINEAR))
 
     hero = Image.new("RGBA", (SW, SH), (0, 0, 0, 0))
     d = ImageDraw.Draw(hero)
     lw1 = max(1, int(round(1.0 * scale * S)))
-    lw2 = max(2, int(round(1.6 * scale * S)))
+    lw2 = max(2, int(round(1.5 * scale * S)))
 
-    # Two minimal architectural precision orbit rings (tracks for live animated light beads)
-    r_orb1 = px(142)
-    r_orb2 = px(106)
-    d.ellipse([cx - r_orb1, cy - r_orb1, cx + r_orb1, cy + r_orb1], outline=acc1 + (36,), width=lw1)
-    d.ellipse([cx - r_orb2, cy - r_orb2, cx + r_orb2, cy + r_orb2], outline=(255, 255, 255, 24), width=lw1)
-    d.arc([cx - r_orb1, cy - r_orb1, cx + r_orb1, cy + r_orb1], start=208, end=318, fill=acc1 + (115,), width=lw2)
-    d.arc([cx - r_orb1, cy - r_orb1, cx + r_orb1, cy + r_orb1], start=28, end=122, fill=acc2 + (95,), width=lw2)
-    d.arc([cx - r_orb2, cy - r_orb2, cx + r_orb2, cy + r_orb2], start=135, end=235, fill=(255, 255, 255, 72), width=lw1)
+    # Ultra-clean, whisper-thin architectural glass orbit tracks (pure minimal luxury;
+    # the live rotating pure-light streams carry the visual glow!)
+    d.ellipse([cx - r_orb1, cy - r_orb1, cx + r_orb1, cy + r_orb1], outline=(255, 255, 255, 24), width=lw1)
+    d.ellipse([cx - r_orb2, cy - r_orb2, cx + r_orb2, cy + r_orb2], outline=(255, 255, 255, 17), width=lw1)
 
     # Floating Smoked-Glass BI Micro-Card 1 (Top-Left: Sleek Analytics Spline Card)
     c1_x1, c1_y1, c1_x2, c1_y2 = px(44), py(58), px(152), py(118)
@@ -639,8 +683,33 @@ def _parse_args(argv: list[str]) -> tuple[str, int]:
     return ready_file, parent_pid
 
 
+def _make_pure_light_puff(radius_px: int, rgb: tuple[int, int, int], peak_alpha: float, core_white: float = 0.0):
+    """Generates a C2-smooth Gaussian radial pure-light RGBA sprite (zero hard circle edge)."""
+    import numpy as np
+    from PIL import Image
+
+    r = max(3, int(radius_px))
+    sz = r * 2 + 1
+    yy, xx = np.mgrid[0:sz, 0:sz].astype(np.float32)
+    rn = np.sqrt((xx - r) ** 2 + (yy - r) ** 2) / float(r)
+    edge_taper = np.maximum(0.0, 1.0 - rn ** 2) ** 1.5
+    falloff = np.exp(-2.8 * (rn ** 2)) * edge_taper
+    alpha = np.clip(falloff * peak_alpha, 0.0, 1.0)
+
+    col = np.array(rgb, dtype=np.float32)
+    white = np.array([255.0, 255.0, 255.0], dtype=np.float32)
+    w_mix = np.clip(np.exp(-8.5 * (rn ** 2)) * core_white, 0.0, 1.0)[..., None]
+    out_rgb = col[None, None, :] * (1.0 - w_mix) + white[None, None, :] * w_mix
+
+    rgba = np.zeros((sz, sz, 4), dtype=np.uint8)
+    rgba[..., :3] = np.clip(out_rgb, 0, 255).astype(np.uint8)
+    rgba[..., 3] = np.clip(alpha * 255.0, 0, 255).astype(np.uint8)
+    return Image.fromarray(rgba, mode="RGBA")
+
+
 def main() -> None:
     _enable_dpi_awareness()
+    _register_bundled_fonts()
     ready_file, parent_pid = _parse_args(sys.argv[1:])
 
     try:
@@ -659,12 +728,18 @@ def main() -> None:
         acc2_hex = "#2dd4bf"
         pill_hex = "#34d399"
         shimmer_hex = "#d1fae5"
+        acc1_rgb = (16, 185, 129)
+        acc2_rgb = (45, 212, 191)
+        pill_rgb = (110, 231, 183)
     else:
         bg_hex = "#040916"
         acc_hex = "#38bdf8"
         acc2_hex = "#818cf8"
         pill_hex = "#7dd3fc"
         shimmer_hex = "#e0f2fe"
+        acc1_rgb = (56, 189, 248)
+        acc2_rgb = (129, 140, 248)
+        pill_rgb = (125, 211, 252)
 
     root = tk.Tk()
     root.overrideredirect(True)
@@ -691,11 +766,14 @@ def main() -> None:
     canvas = tk.Canvas(root, width=W, height=H, bg=bg_hex, highlightthickness=0, bd=0)
     canvas.pack(fill="both", expand=True)
 
+    sx_px = W / float(LOGICAL_W)
+    sy_px = H / float(LOGICAL_H)
+
     def dx(v: float) -> float:
-        return v * scale
+        return v * sx_px
 
     def dy(v: float) -> float:
-        return v * scale
+        return v * sy_px
 
     try:
         from PIL import ImageTk
@@ -716,7 +794,8 @@ def main() -> None:
     f_title = (ui_font, -max(14, int(round(17.5 * scale))), "bold")
     f_sub = (ui_font, -max(10, int(round(12.2 * scale))))
     f_chip = (ui_font, -max(9, int(round(10.8 * scale))), "bold")
-    f_status = (ui_font, -max(10, int(round(12.2 * scale))))
+    st_fam, st_wt = _pick_persian_medium_font(tkfont, ui_font)
+    f_status = (st_fam, -max(10, int(round(12.2 * scale))), st_wt)
     f_pct = (ui_font, -max(11, int(round(13.0 * scale))), "bold")
     f_meta = (ui_font, -max(8, int(round(9.8 * scale))))
     f_meta_en = (latin_font, -max(8, int(round(9.8 * scale))), "bold")
@@ -750,71 +829,106 @@ def main() -> None:
         canvas.create_text(dx((cx1 + cx2) / 2.0), dy(299), text=label, fill="#cbd5e1", font=f_chip, anchor="center")
 
     # =========================================================================
-    # SMOOTH 60 FPS EXECUTIVE MOTION (Orbital Beads, Spline Tracer, Motes)
+    # ULTRA-SILKY HIGH-FPS (90-120 FPS) PURE DIFFUSED LIGHT MOTION (ZERO DOTS!)
     # =========================================================================
     orb_cx, orb_cy = dx(194), dy(186)
     orb1_r, orb2_r = dx(142), dx(106)
-    # Subtle breathing halo ring pulsing behind/around the eHP monolith
-    mon_pulse_ring = canvas.create_oval(0, 0, 0, 0, fill="", outline=acc_hex, width=max(1, int(scale)))
-    # Smooth fading comet tails behind each orbital bead
-    orb1_trail = [canvas.create_oval(0, 0, 0, 0, fill=acc_hex, outline="") for _ in range(5)]
-    orb2_trail = [canvas.create_oval(0, 0, 0, 0, fill=acc2_hex, outline="") for _ in range(5)]
-    orb1_glow = canvas.create_oval(0, 0, 0, 0, fill=acc_hex, outline="")
-    orb1_core = canvas.create_oval(0, 0, 0, 0, fill="#ffffff", outline="")
-    orb2_glow = canvas.create_oval(0, 0, 0, 0, fill=acc2_hex, outline="")
-    orb2_core = canvas.create_oval(0, 0, 0, 0, fill="#ffffff", outline="")
+    canvas._light_refs = []
+
+    use_pure_light_sprites = False
+    orb1_puffs: list[int] = []
+    orb2_puffs: list[int] = []
+    sp_light_id = None
+    mote_items = []
+
+    try:
+        from PIL import ImageTk
+
+        # Outer orbit pure-light stream: 22 tightly overlapped silk Gaussian blooms (100% seamless continuous light)
+        n_outer = 22
+        for i in range(n_outer - 1, -1, -1):
+            frac = 1.0 - (i / float(n_outer - 1))
+            rad = max(5, int(round((8.5 + 9.5 * (frac ** 1.4)) * scale)))
+            p_alpha = (0.04 + 0.42 * (frac ** 2.0)) if i > 0 else 0.86
+            c_white = (0.16 * (frac ** 2.2)) if i > 0 else 0.85
+            col_use = pill_rgb if i <= 3 else acc1_rgb
+            ph = ImageTk.PhotoImage(_make_pure_light_puff(rad, col_use, p_alpha, c_white))
+            canvas._light_refs.append(ph)
+            orb1_puffs.append(canvas.create_image(-200, -200, image=ph, anchor="center"))
+
+        # Inner orbit counter-rotating pure-light stream: 18 tightly overlapped silk Gaussian blooms
+        n_inner = 18
+        for i in range(n_inner - 1, -1, -1):
+            frac = 1.0 - (i / float(n_inner - 1))
+            rad = max(4, int(round((7.2 + 8.0 * (frac ** 1.4)) * scale)))
+            p_alpha = (0.035 + 0.36 * (frac ** 2.0)) if i > 0 else 0.80
+            c_white = (0.14 * (frac ** 2.2)) if i > 0 else 0.80
+            col_use = acc2_rgb if i > 2 else ((196, 210, 255) if palette != "emerald" else (167, 243, 208))
+            ph = ImageTk.PhotoImage(_make_pure_light_puff(rad, col_use, p_alpha, c_white))
+            canvas._light_refs.append(ph)
+            orb2_puffs.append(canvas.create_image(-200, -200, image=ph, anchor="center"))
+
+        # Soft pure-light spline tracer flare
+        sp_flare = ImageTk.PhotoImage(_make_pure_light_puff(max(8, int(round(11 * scale))), pill_rgb, 0.92, 0.86))
+        canvas._light_refs.append(sp_flare)
+        sp_light_id = canvas.create_image(-200, -200, image=sp_flare, anchor="center")
+
+        # Subtle floating pure-light dust motes
+        mote_specs = [
+            (0.07, 0.72, 4.5, 0.00050, acc1_rgb),
+            (0.14, 0.30, 3.8, 0.00038, acc2_rgb),
+            (0.36, 0.65, 4.6, 0.00045, acc1_rgb),
+            (0.41, 0.25, 3.6, 0.00054, (203, 213, 225)),
+            (0.11, 0.48, 4.0, 0.00036, acc2_rgb),
+            (0.29, 0.78, 4.2, 0.00046, (203, 213, 225)),
+        ]
+        for mx, my, mr, mspd, mrgb in mote_specs:
+            mph = ImageTk.PhotoImage(_make_pure_light_puff(max(3, int(round(mr * scale))), mrgb, 0.52, 0.45))
+            canvas._light_refs.append(mph)
+            mid = canvas.create_image(-200, -200, image=mph, anchor="center")
+            mote_items.append([mid, mx, my, mr * scale, mspd, True])
+
+        use_pure_light_sprites = True
+    except Exception:
+        use_pure_light_sprites = False
 
     # Live breathing micro-telemetry bars overlay on bottom-right BI card
     live_bar_base = [0.42, 0.70, 0.54, 0.92, 0.68]
     live_bar_cols = [acc2_hex, acc_hex, acc2_hex, pill_hex, acc_hex]
     live_bars = [canvas.create_rectangle(0, 0, 0, 0, fill=col, outline="") for col in live_bar_cols]
 
-    # Live glowing tracer dot gliding smoothly along the top-left BI mini-spline curve
-    sp_dot_halo = canvas.create_oval(0, 0, 0, 0, fill="", outline=acc_hex, width=max(1, int(scale)))
-    sp_dot_core = canvas.create_oval(0, 0, 0, 0, fill="#ffffff", outline=acc_hex, width=max(1, int(scale)))
-
-    # Subtle upward-drifting glass micro-particles in left hero space
-    mote_specs = [
-        (0.07, 0.72, 1.9, 0.00050, acc_hex),
-        (0.14, 0.30, 1.6, 0.00038, acc2_hex),
-        (0.36, 0.65, 2.0, 0.00045, acc_hex),
-        (0.41, 0.25, 1.5, 0.00054, "#cbd5e1"),
-        (0.11, 0.48, 1.7, 0.00036, acc2_hex),
-        (0.29, 0.78, 1.8, 0.00046, "#cbd5e1"),
-    ]
-    mote_items = []
-    for mx, my, mr, mspd, mcol in mote_specs:
-        oid = canvas.create_oval(0, 0, 0, 0, fill=mcol, outline="")
-        mote_items.append([oid, mx, my, mr * scale, mspd])
-
     # Bottom Loading Dock Dynamic Elements
-    dot_r = max(3.0, 3.6 * scale)
+    dot_r = max(2.8, 3.2 * scale)
     dot_cx, dot_cy = dx(714), dy(388)
-    status_dot_halo = canvas.create_oval(
-        dot_cx - dot_r * 1.9, dot_cy - dot_r * 1.9, dot_cx + dot_r * 1.9, dot_cy + dot_r * 1.9,
-        fill="", outline=acc_hex, width=max(1, int(scale)),
-    )
-    canvas.create_oval(
-        dot_cx - dot_r, dot_cy - dot_r, dot_cx + dot_r, dot_cy + dot_r,
-        fill=acc_hex, outline="",
-    )
+    status_dot_halo = None
+    if use_pure_light_sprites:
+        from PIL import ImageTk
+        sd_ph = ImageTk.PhotoImage(_make_pure_light_puff(max(8, int(round(10 * scale))), acc1_rgb, 0.88, 0.75))
+        canvas._light_refs.append(sd_ph)
+        canvas.create_image(dot_cx, dot_cy, image=sd_ph, anchor="center")
+    else:
+        canvas.create_oval(dot_cx - dot_r, dot_cy - dot_r, dot_cx + dot_r, dot_cy + dot_r, fill=acc_hex, outline="")
 
     status_txt = canvas.create_text(dx(700), dy(388), text=STAGES["0"][1], fill="#e2e8f0", font=f_status, anchor="e")
     pct_txt = canvas.create_text(dx(42), dy(388), text=_to_fa_pct(6), fill=pill_hex, font=f_pct, anchor="w")
 
-    bar_x1, bar_x2 = dx(42), dx(718)
-    bar_y1, bar_y2 = dy(411), dy(416)
-    bar_span = bar_x2 - bar_x1
+    bar_x1 = int(round(dx(42))) + 1
+    bar_x2 = int(round(dx(718))) - 1
+    bar_y1 = int(round(dy(411))) + 1
+    bar_y2 = max(bar_y1 + 2, int(round(dy(416))) - 1)
+    bar_span = max(10, bar_x2 - bar_x1)
 
-    fill_bar = canvas.create_rectangle(bar_x2 - dx(10), bar_y1, bar_x2, bar_y2, fill=acc_hex, outline="")
-    lead_tip = canvas.create_rectangle(bar_x2 - dx(14), bar_y1, bar_x2 - dx(6), bar_y2, fill=acc2_hex, outline="")
-    shimmer_bar = canvas.create_rectangle(bar_x2, bar_y1, bar_x2, bar_y2, fill=shimmer_hex, outline="")
+    fill_bar = canvas.create_rectangle(bar_x2 - min(bar_span, int(round(dx(10)))), bar_y1, bar_x2, bar_y2, fill=acc_hex, outline="")
+    lead_tip = canvas.create_rectangle(bar_x2 - min(bar_span, int(round(dx(10)))), bar_y1, bar_x2, bar_y2, fill=acc2_hex, outline="")
+    shimmer_bar = canvas.create_rectangle(bar_x1, bar_y1, bar_x1, bar_y2, fill=shimmer_hex, outline="", state="hidden")
 
     canvas.create_text(dx(718), dy(434), text=FOOTER_META_RIGHT, fill="#64748b", font=f_meta, anchor="e")
     canvas.create_text(dx(42), dy(434), text=FOOTER_META_LEFT, fill="#64748b", font=f_meta_en, anchor="w")
 
+    _t_start = time.monotonic()
     state = {
-        "t0": time.monotonic(),
+        "t0": _t_start,
+        "last_t": _t_start,
         "alpha": 0.0,
         "pct": 6.0,
         "target_pct": 24.0,
@@ -877,9 +991,12 @@ def main() -> None:
     def _tick() -> None:
         _poll_stage()
         now = time.monotonic()
+        dt = min(0.05, max(0.002, now - state["last_t"]))
+        state["last_t"] = now
+        step = dt * 60.0  # Delta-time normalized to 60Hz baseline so 90-120 FPS stays exact standard speed
 
         if state["closing"]:
-            state["alpha"] = max(0.0, state["alpha"] - 0.22)
+            state["alpha"] = max(0.0, state["alpha"] - 0.22 * step)
             try:
                 root.attributes("-alpha", state["alpha"])
             except Exception:
@@ -899,41 +1016,30 @@ def main() -> None:
                 root.destroy()
                 return
         elif state["alpha"] < 1.0:
-            state["alpha"] = min(1.0, state["alpha"] + 0.09)
+            state["alpha"] = min(1.0, state["alpha"] + 0.095 * step)
             try:
                 root.attributes("-alpha", state["alpha"])
             except Exception:
                 pass
 
-        # 1. Orbital precision comets + breathing monolith pulse around `eHP`
-        state["theta"] += 0.024
+        # 1. Silky high-FPS pure diffused light streams gliding along the minimal glass tracks
+        state["theta"] += 0.022 * step
         a1 = state["theta"] - 0.9
-        a2 = -state["theta"] * 1.42 + 1.1
+        a2 = -state["theta"] * 1.32 + 1.1
 
-        # Breathing luminous halo ring around eHP monolith
-        mr_p = dx(80.0 + 4.5 * math.sin(state["theta"] * 1.8))
-        canvas.coords(mon_pulse_ring, orb_cx - mr_p, orb_cy - mr_p, orb_cx + mr_p, orb_cy + mr_p)
+        if use_pure_light_sprites:
+            n1 = len(orb1_puffs)
+            for idx_p, pid in enumerate(orb1_puffs):
+                # idx_p = 0 is tail end, n1-1 is bright luminous head; ~5px spacing for 80%+ overlap = seamless light!
+                dist_behind = (n1 - 1 - idx_p) * 0.022
+                ang = a1 - dist_behind
+                canvas.coords(pid, orb_cx + orb1_r * math.cos(ang), orb_cy + orb1_r * math.sin(ang))
 
-        # Comet trails behind bead 1 & bead 2
-        for ti, tid in enumerate(orb1_trail):
-            ta = a1 - (ti + 1) * 0.095
-            tx, ty = orb_cx + orb1_r * math.cos(ta), orb_cy + orb1_r * math.sin(ta)
-            tr = max(1.0, (3.4 - ti * 0.52) * scale)
-            canvas.coords(tid, tx - tr, ty - tr, tx + tr, ty + tr)
-        for ti, tid in enumerate(orb2_trail):
-            ta = a2 + (ti + 1) * 0.115
-            tx, ty = orb_cx + orb2_r * math.cos(ta), orb_cy + orb2_r * math.sin(ta)
-            tr = max(1.0, (2.9 - ti * 0.45) * scale)
-            canvas.coords(tid, tx - tr, ty - tr, tx + tr, ty + tr)
-
-        ox1, oy1 = orb_cx + orb1_r * math.cos(a1), orb_cy + orb1_r * math.sin(a1)
-        ox2, oy2 = orb_cx + orb2_r * math.cos(a2), orb_cy + orb2_r * math.sin(a2)
-        g1, c1 = 5.4 * scale, 2.4 * scale
-        g2, c2 = 4.6 * scale, 2.0 * scale
-        canvas.coords(orb1_glow, ox1 - g1, oy1 - g1, ox1 + g1, oy1 + g1)
-        canvas.coords(orb1_core, ox1 - c1, oy1 - c1, ox1 + c1, oy1 + c1)
-        canvas.coords(orb2_glow, ox2 - g2, oy2 - g2, ox2 + g2, oy2 + g2)
-        canvas.coords(orb2_core, ox2 - c2, oy2 - c2, ox2 + c2, oy2 + c2)
+            n2 = len(orb2_puffs)
+            for idx_p, pid in enumerate(orb2_puffs):
+                dist_behind = (n2 - 1 - idx_p) * 0.028
+                ang = a2 + dist_behind
+                canvas.coords(pid, orb_cx + orb2_r * math.cos(ang), orb_cy + orb2_r * math.sin(ang))
 
         # Live breathing telemetry bars on bottom-right micro-card
         for bi, bid in enumerate(live_bars):
@@ -943,53 +1049,55 @@ def main() -> None:
             bh = dy(36 * frac)
             canvas.coords(bid, bx, by_bot - bh, bx + dx(10), by_bot)
 
-        # 2. Live telemetry tracer gliding along top-left BI spline micro-card
-        state["spline_t"] = (state["spline_t"] + 0.0075) % 1.0
+        # 2. Pure-light tracer gliding along top-left BI spline micro-card
+        state["spline_t"] = (state["spline_t"] + 0.0075 * step) % 1.0
         st = state["spline_t"]
         spx = dx(56 + st * 84.0)
         spy = dy(104 - (0.28 + 0.45 * st + 0.22 * math.sin(st * 5.2 - 0.4)) * 30.0)
-        sr_c, sr_h = 2.6 * scale, (4.8 + 1.4 * math.sin(state["theta"] * 4.0)) * scale
-        canvas.coords(sp_dot_halo, spx - sr_h, spy - sr_h, spx + sr_h, spy + sr_h)
-        canvas.coords(sp_dot_core, spx - sr_c, spy - sr_c, spx + sr_c, spy + sr_c)
+        if sp_light_id is not None:
+            canvas.coords(sp_light_id, spx, spy)
 
-        # 3. Drifting ambient glass motes
+        # 3. Drifting ambient pure-light motes
         for m in mote_items:
-            m[2] -= m[4]
+            m[2] -= m[4] * step
             if m[2] < 0.06:
                 m[2] = 0.77
             mx_px = m[1] * W + math.sin(state["theta"] * 1.2 + m[1] * 20.0) * (2.6 * scale)
             my_px = m[2] * H
-            rr = m[3]
-            canvas.coords(m[0], mx_px - rr, my_px - rr, mx_px + rr, my_px + rr)
+            canvas.coords(m[0], mx_px, my_px)
 
-        # 4. Breathing pulse on live status dot
-        pulse = 1.45 + 0.55 * (0.5 + 0.5 * math.sin(state["theta"] * 3.0))
-        hr = dot_r * pulse
-        canvas.coords(status_dot_halo, dot_cx - hr, dot_cy - hr, dot_cx + hr, dot_cy + hr)
+        # 4. Soft status glow (anti-aliased sprite — zero harsh Tk oval outline)
+        if status_dot_halo is not None:
+            pulse = 1.45 + 0.55 * (0.5 + 0.5 * math.sin(state["theta"] * 3.0))
+            hr = dot_r * pulse
+            canvas.coords(status_dot_halo, dot_cx - hr, dot_cy - hr, dot_cx + hr, dot_cy + hr)
 
         # 5. Smooth RTL progress bar + leading accent-2 tip + gliding shimmer
-        speed = 0.28 if state["ready"] else 0.08
-        state["pct"] += (state["target_pct"] - state["pct"]) * speed
+        rate = 0.28 if state["ready"] else 0.08
+        blend = 1.0 - ((1.0 - rate) ** step)
+        state["pct"] += (state["target_pct"] - state["pct"]) * blend
         if not state["ready"] and state["pct"] < min(94.0, state["target_pct"] + 4.0):
-            state["pct"] += 0.12
+            state["pct"] += 0.12 * step
         if state["ready"] and state["pct"] > 99.3:
             state["pct"] = 100.0
 
-        cur_w = max(dx(12), (state["pct"] / 100.0) * bar_span)
-        fx1 = bar_x2 - cur_w
+        pct_clamped = max(0.0, min(100.0, state["pct"]))
+        cur_w = min(bar_span, max(dx(12), (pct_clamped / 100.0) * bar_span))
+        fx1 = max(bar_x1, bar_x2 - cur_w)
         canvas.coords(fill_bar, fx1, bar_y1, bar_x2, bar_y2)
         tip_w = min(dx(36), cur_w * 0.35)
-        canvas.coords(lead_tip, fx1, bar_y1, fx1 + tip_w, bar_y2)
+        canvas.coords(lead_tip, fx1, bar_y1, min(bar_x2, fx1 + tip_w), bar_y2)
 
-        state["shimmer"] = (state["shimmer"] + 0.032) % 1.38
+        state["shimmer"] = (state["shimmer"] + 0.032 * step) % 1.38
         sh_w = min(dx(56), cur_w * 0.42)
         sx2 = bar_x2 - (state["shimmer"] * cur_w)
         sx1 = max(fx1, sx2 - sh_w)
-        sx2 = min(bar_x2, max(sx1, sx2))
-        if sx2 - sx1 > 2:
+        sx2 = min(bar_x2 - 1, sx2)
+        if sx2 - sx1 > 2.5 and sx1 >= fx1 and sx2 <= bar_x2 - 1:
+            canvas.itemconfigure(shimmer_bar, state="normal")
             canvas.coords(shimmer_bar, sx1, bar_y1, sx2, bar_y2)
         else:
-            canvas.coords(shimmer_bar, bar_x2, bar_y1, bar_x2, bar_y2)
+            canvas.itemconfigure(shimmer_bar, state="hidden")
 
         canvas.itemconfigure(status_txt, text=state["status"])
         canvas.itemconfigure(pct_txt, text=_to_fa_pct(state["pct"]))
@@ -997,13 +1105,27 @@ def main() -> None:
         if state["ready"] and state["pct"] >= 99.5 and (now - state["ready_at"] >= 0.03):
             state["closing"] = True
 
-        root.after(16, _tick)
+        root.after(8, _tick)
 
-    root.after(10, _tick)
+    _hi_res_timer = False
+    if os.name == "nt":
+        try:
+            ctypes.windll.winmm.timeBeginPeriod(1)
+            _hi_res_timer = True
+        except Exception:
+            _hi_res_timer = False
+
+    root.after(8, _tick)
     try:
         root.mainloop()
     except Exception:
         pass
+    finally:
+        if _hi_res_timer:
+            try:
+                ctypes.windll.winmm.timeEndPeriod(1)
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":

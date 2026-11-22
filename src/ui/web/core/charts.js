@@ -2,6 +2,14 @@ window.eHadiCharts = (() => {
   const FA_DIGITS = ['\u06f0','\u06f1','\u06f2','\u06f3','\u06f4','\u06f5','\u06f6','\u06f7','\u06f8','\u06f9'];
   const toFa = (v) => String(v ?? '').replace(/\d/g, d => FA_DIGITS[Number(d)]);
   const fmtNum = (n) => toFa(Number(n || 0).toLocaleString('en-US'));
+  function fmtCompact(n) {
+    const num = Number(n || 0);
+    const abs = Math.abs(num);
+    if (abs >= 1e9) return toFa((num / 1e9).toFixed(1).replace(/\.0$/, '')) + ' م.د';
+    if (abs >= 1e6) return toFa((num / 1e6).toFixed(1).replace(/\.0$/, '')) + ' م';
+    if (abs >= 1e4) return toFa(Math.round(num / 1e3).toLocaleString('en-US')) + ' هـ';
+    return fmtNum(num);
+  }
   const PALETTE = ['#10b981', '#38bdf8', '#f59e0b', '#818cf8', '#14b8a6', '#ec4899', '#f97316'];
 
   function escXml(s) {
@@ -140,47 +148,84 @@ window.eHadiCharts = (() => {
     return d;
   }
 
+  function shortChartWg(s) {
+    const t = String(s || '').trim();
+    if (t.includes('انس با الکافی') || t.includes('حدیث‌خوانی')) return 'انس با الکافی';
+    if (t.includes('تربیت سخنران')) return 'تربیت سخنران';
+    return t.replace(/^کارگروه\s+/, '').trim() || t;
+  }
+
   function renderHBar(container, items, opts = {}) {
     if (!container) return;
     const tc = themeColors();
-    const list = (items || []).slice(0, 8);
+    const list = (items || []).slice(0, opts.limit || 8);
     if (!list.length) {
       container.innerHTML = '<div class="eh-empty-chart">\u062f\u0627\u062f\u0647\u200c\u0627\u06cc \u0628\u0631\u0627\u06cc \u0646\u0645\u0627\u06cc\u0634 \u062b\u0628\u062a \u0646\u0634\u062f\u0647 \u0627\u0633\u062a.</div>';
       return;
     }
-    const W = 540, rowH = 48, H = Math.max(195, list.length * rowH + 20);
-    const labelStartX = W - 10;
-    const barRightX = W - 185;
-    const barLeftEdge = 112;
-    const barAreaW = barRightX - barLeftEdge;
+    const anyV2 = list.some(i => i.v2 !== undefined && i.v2 !== null && Number(i.v2) > 0);
+    const showDual = Boolean(opts.forceDual || anyV2);
+    const W = 620;
+    const rowH = showDual ? 42 : 35;
+    const H = Math.max(176, list.length * rowH + 16);
     const maxV = Math.max(1, ...list.map(i => Math.max(Number(i.v1 || 0), Number(i.v2 || 0))));
+    const fmtVal = (v) => (opts.compact || Math.abs(v) >= 100000) ? fmtCompact(v) : fmtNum(v);
+
+    // Compact left value column: eliminates wasted left margin & shifts bars cleanly left
+    const maxValLen = Math.max(3, ...list.map(i => String(fmtVal(Number(i.v1 || 0))).length));
+    let barLeftEdge;
+    if (showDual) {
+      barLeftEdge = 76;
+    } else if (opts.compact || maxV >= 100000) {
+      barLeftEdge = 64;
+    } else {
+      barLeftEdge = Math.max(46, Math.min(68, Math.ceil(maxValLen * 8.0) + 20));
+    }
+
+    // Dynamic right label column: gives long course/category titles full readability without ellipsis
+    const rawLabels = list.map(it => String(opts.isTeacher ? formatTeacherShort(it.label) : (it.label || '')).trim());
+    const maxLblLen = Math.max(10, ...rawLabels.map(s => s.length));
+    const maxAllowedLabelW = showDual ? 236 : 276;
+    const labelColW = Math.max(162, Math.min(maxAllowedLabelW, Math.ceil(maxLblLen * 6.85) + 22));
+    const maxChars = Math.max(24, Math.floor((labelColW - 18) / 6.85));
+
+    const labelStartX = W - 6;
+    const barRightX = labelStartX - labelColW;
+    const barAreaW = Math.max(195, barRightX - barLeftEdge);
 
     let rows = '';
     list.forEach((it, idx) => {
-      const y = 12 + idx * rowH;
+      const y = 8 + idx * rowH;
       const v1 = Number(it.v1 || 0);
-      const hasV2 = it.v2 !== undefined && it.v2 !== null;
+      const hasV2 = showDual && it.v2 !== undefined && it.v2 !== null;
       const v2 = hasV2 ? Number(it.v2 || 0) : 0;
-      const w1 = Math.max(6, (v1 / maxV) * barAreaW);
-      const w2 = hasV2 ? Math.max(5, (v2 / maxV) * barAreaW) : 0;
-      const rawLbl = opts.isTeacher ? formatTeacherShort(it.label) : it.label;
-      const lbl = escXml(toFa(trimLabel(rawLbl, 23)));
+      const w1 = v1 > 0 ? Math.max(6, (v1 / maxV) * barAreaW) : 0;
+      const w2 = (hasV2 && v2 > 0) ? Math.max(5, (v2 / maxV) * barAreaW) : 0;
+      const rawLbl = rawLabels[idx];
+      const lbl = escXml(toFa(trimLabel(rawLbl, maxChars)));
       const fullTip = escXml(it.label);
       const teacherAttr = opts.isTeacher ? ` class="eh-svg-teacher-lbl" data-teacher-raw="${fullTip}" style="cursor:pointer;"` : '';
+      const unitSuffix = opts.unit ? ` ${opts.unit}` : '';
+      const valAnchorX = barLeftEdge - 10;
 
-      rows += `<text x="${labelStartX}" y="${y + 21}" direction="rtl" unicode-bidi="plaintext" text-anchor="start" font-size="13.5" font-weight="700" fill="${tc.text}"${teacherAttr}><title>${fullTip}</title>${lbl}</text>`;
-      rows += `<rect x="${barLeftEdge}" y="${y + 5}" width="${barAreaW}" height="24" rx="7" fill="${tc.track}"/>`;
       if (hasV2) {
-        rows += `<rect class="eh-svg-bar" x="${barRightX - w1}" y="${y + 5}" width="${w1}" height="11" rx="5" fill="${opts.c1 || tc.primary}"><title>${fullTip} (\u06a9\u0644): ${fmtNum(v1)}</title></rect>`;
-        rows += `<rect class="eh-svg-bar" x="${barRightX - w2}" y="${y + 18}" width="${w2}" height="9" rx="4.5" fill="${opts.c2 || tc.secondary}"><title>${fullTip} (\u06cc\u06a9\u062a\u0627): ${fmtNum(v2)}</title></rect>`;
+        rows += `<text x="${labelStartX}" y="${y + 21}" direction="rtl" unicode-bidi="plaintext" text-anchor="start" font-size="12.5" font-weight="700" fill="${tc.text}"${teacherAttr}><title>${fullTip}</title>${lbl}</text>`;
+        rows += `<rect x="${barLeftEdge}" y="${y + 5}" width="${barAreaW}" height="22" rx="6.5" fill="${tc.track}"/>`;
+        if (w1 > 0) rows += `<rect class="eh-svg-bar" x="${barRightX - w1}" y="${y + 5}" width="${w1}" height="10.5" rx="5" fill="${opts.c1 || tc.primary}"><title>${fullTip} (\u06a9\u0644): ${fmtNum(v1)}${unitSuffix}</title></rect>`;
+        if (w2 > 0) rows += `<rect class="eh-svg-bar" x="${barRightX - w2}" y="${y + 17.5}" width="${w2}" height="9" rx="4.5" fill="${opts.c2 || tc.secondary}"><title>${fullTip} (\u06cc\u06a9\u062a\u0627): ${fmtNum(v2)}${unitSuffix}</title></rect>`;
+        rows += `<text x="${valAnchorX}" y="${y + 14.5}" direction="rtl" unicode-bidi="embed" text-anchor="start" font-size="11.8" font-weight="800" fill="${tc.text}"><title>\u062d\u0636\u0648\u0631 \u06a9\u0644: ${fmtNum(v1)}</title>${fmtVal(v1)}</text>`;
+        const uCol = v2 > 0 ? (opts.c2 || tc.secondary) : tc.muted;
+        const uTxt = v2 > 0 ? `\u06cc\u06a9\u062a\u0627: ${fmtVal(v2)}` : '\u06cc\u06a9\u062a\u0627: \u06f0';
+        rows += `<text x="${valAnchorX}" y="${y + 27.5}" direction="rtl" unicode-bidi="embed" text-anchor="start" font-size="10.5" font-weight="700" fill="${uCol}"><title>\u0645\u062e\u0627\u0637\u0628 \u06cc\u06a9\u062a\u0627: ${fmtNum(v2)}</title>${uTxt}</text>`;
       } else {
-        rows += `<rect class="eh-svg-bar" x="${barRightX - w1}" y="${y + 5}" width="${w1}" height="24" rx="7" fill="${opts.c1 || tc.primary}"><title>${fullTip}: ${fmtNum(v1)}</title></rect>`;
+        rows += `<text x="${labelStartX}" y="${y + 19}" direction="rtl" unicode-bidi="plaintext" text-anchor="start" font-size="12.5" font-weight="700" fill="${tc.text}"${teacherAttr}><title>${fullTip}</title>${lbl}</text>`;
+        rows += `<rect x="${barLeftEdge}" y="${y + 6.5}" width="${barAreaW}" height="16" rx="6" fill="${tc.track}"/>`;
+        if (w1 > 0) rows += `<rect class="eh-svg-bar" x="${barRightX - w1}" y="${y + 6.5}" width="${w1}" height="16" rx="6" fill="${opts.c1 || tc.primary}"><title>${fullTip}: ${fmtNum(v1)}${unitSuffix}</title></rect>`;
+        rows += `<text x="${valAnchorX}" y="${y + 19}" direction="rtl" unicode-bidi="embed" text-anchor="start" font-size="12.2" font-weight="800" fill="${tc.text}"><title>${fullTip}: ${fmtNum(v1)}${unitSuffix}</title>${fmtVal(v1)}</text>`;
       }
-      const valTxt = hasV2 ? `${fmtNum(v1)} / ${fmtNum(v2)}` : fmtNum(v1);
-      rows += `<text x="14" y="${y + 21}" direction="rtl" unicode-bidi="plaintext" text-anchor="start" font-size="12" font-weight="700" fill="${tc.muted}">${toFa(valTxt)}</text>`;
     });
 
-    container.innerHTML = `<svg class="eh-chart-svg" dir="ltr" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${rows}</svg>`;
+    container.innerHTML = `<svg class="eh-chart-svg eh-svg-hbar" dir="ltr" viewBox="0 0 ${W} ${H}" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" xmlns="http://www.w3.org/2000/svg">${rows}</svg>`;
     if (opts.isTeacher) {
       container.querySelectorAll('.eh-svg-teacher-lbl').forEach(el => {
         el.addEventListener('click', () => window.openTeacher360Drawer?.(el.getAttribute('data-teacher-raw')));
@@ -195,7 +240,7 @@ window.eHadiCharts = (() => {
       container.innerHTML = '<div class="eh-empty-chart">\u062f\u0627\u062f\u0647\u200c\u0627\u06cc \u0628\u0631\u0627\u06cc \u0646\u0645\u0627\u06cc\u0634 \u0631\u0648\u0646\u062f \u0632\u0645\u0627\u0646\u06cc \u0648\u062c\u0648\u062f \u0646\u062f\u0627\u0631\u062f.</div>';
       return;
     }
-    const W = 540, H = 235, padL = 46, padR = 20, padT = 32, padB = 36;
+    const W = 580, H = 225, padL = 46, padR = 18, padT = 30, padB = 32;
     const cw = W - padL - padR, ch = H - padT - padB;
     const maxV = Math.max(1, ...series.flatMap(s => s.values)) * 1.15;
 
@@ -211,7 +256,7 @@ window.eHadiCharts = (() => {
     series.forEach((s, si) => {
       const col = s.color || (si === 0 ? tc.primary : tc.secondary);
       const gid = `g_${opts.id || 's'}_${si}_${Math.random().toString(36).slice(2, 6)}`;
-      defs += `<linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity="0.34"/><stop offset="100%" stop-color="${col}" stop-opacity="0.01"/></linearGradient>`;
+      defs += `<linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="${col}" stop-opacity="0.30"/><stop offset="100%" stop-color="${col}" stop-opacity="0.01"/></linearGradient>`;
       const pts = s.values.map((v, idx) => {
         const x = labels.length === 1 ? padL + cw / 2 : padL + (cw * idx) / (labels.length - 1);
         const y = padT + ch - (v / maxV) * ch;
@@ -220,36 +265,39 @@ window.eHadiCharts = (() => {
       const lineD = smoothPath(pts);
       const areaD = pts.length > 1 ? `${lineD} L ${pts[pts.length - 1][0]},${padT + ch} L ${pts[0][0]},${padT + ch} Z` : '';
       if (areaD) paths += `<path d="${areaD}" fill="url(#${gid})"/>`;
-      paths += `<path class="eh-svg-spline" d="${lineD}" fill="none" stroke="${col}" stroke-width="2.8" stroke-linecap="round"/>`;
+      paths += `<path class="eh-svg-spline" d="${lineD}" fill="none" stroke="${col}" stroke-width="2.6" stroke-linecap="round"/>`;
       pts.forEach(([x, y, v], idx) => {
-        dots += `<circle cx="${x}" cy="${y}" r="4.5" fill="${tc.bg}" stroke="${col}" stroke-width="2.4"><title>${escXml(labels[idx])} - ${escXml(s.name)}: ${fmtNum(v)}</title></circle>`;
+        dots += `<circle cx="${x}" cy="${y}" r="4.2" fill="${tc.bg}" stroke="${col}" stroke-width="2.2"><title>${escXml(labels[idx])} - ${escXml(s.name)}: ${fmtNum(v)}</title></circle>`;
       });
     });
     defs += '</defs>';
 
     const xLabels = labels.map((lb, idx) => {
       const x = labels.length === 1 ? padL + cw / 2 : padL + (cw * idx) / (labels.length - 1);
-      return `<text x="${x}" y="${H - 10}" text-anchor="middle" font-size="12" fill="${tc.muted}">${escXml(toFa(lb))}</text>`;
+      return `<text x="${x}" y="${H - 10}" text-anchor="middle" font-size="11.8" fill="${tc.muted}">${escXml(toFa(lb))}</text>`;
     }).join('');
 
     const legend = series.map((s, si) => {
       const col = s.color || (si === 0 ? tc.primary : tc.secondary);
-      const lx = W - padR - si * 155;
-      return `<g transform="translate(${lx}, 15)"><rect x="-11" y="-9" width="11" height="11" rx="3" fill="${col}"/><text x="-17" y="1" direction="rtl" text-anchor="start" font-size="12" font-weight="700" fill="${tc.text}">${escXml(s.name)}</text></g>`;
+      const lx = W - padR - si * 150;
+      return `<g transform="translate(${lx}, 15)"><rect x="-10" y="-8" width="10" height="10" rx="3" fill="${col}"/><text x="-16" y="1" direction="rtl" text-anchor="start" font-size="11.8" font-weight="700" fill="${tc.text}">${escXml(s.name)}</text></g>`;
     }).join('');
 
-    container.innerHTML = `<svg class="eh-chart-svg" dir="ltr" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${defs}${grid}${paths}${dots}${xLabels}${legend}</svg>`;
+    container.innerHTML = `<svg class="eh-chart-svg eh-svg-spline-box" dir="ltr" viewBox="0 0 ${W} ${H}" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" xmlns="http://www.w3.org/2000/svg">${defs}${grid}${paths}${dots}${xLabels}${legend}</svg>`;
   }
 
   function renderDonut(container, items, centerLabel = '\u0645\u062c\u0645\u0648\u0639') {
     if (!container) return;
     const tc = themeColors();
-    const W = 460, H = 230, cx = 108, cy = 115, r = 74, sw = 24;
+    const W = 520, H = 216, cx = 112, cy = 108, r = 70, sw = 19;
     const total = (items || []).reduce((a, b) => a + Number(b.value || 0), 0);
     const circ = 2 * Math.PI * r;
     let offset = 0, segs = '', legend = '';
+    const list = (items || []).slice(0, 6);
+    const rowGap = list.length > 4 ? 30 : 38;
+    const startY = Math.max(32, cy - ((list.length - 1) * rowGap) / 2 + 4);
 
-    (items || []).forEach((it, idx) => {
+    list.forEach((it, idx) => {
       const val = Number(it.value || 0);
       const frac = total > 0 ? val / total : 0;
       const len = frac * circ;
@@ -258,17 +306,17 @@ window.eHadiCharts = (() => {
         segs += `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${col}" stroke-width="${sw}" stroke-dasharray="${len.toFixed(2)} ${(circ - len).toFixed(2)}" stroke-dashoffset="${(-offset).toFixed(2)}" transform="rotate(-90 ${cx} ${cy})"><title>${escXml(it.label)}: ${fmtNum(val)} (${toFa(Math.round(frac * 100))}\u066a)</title></circle>`;
       }
       offset += len;
-      const ly = 50 + idx * 38;
-      legend += `<g transform="translate(215, ${ly})">
-        <rect x="225" y="-10" width="12" height="12" rx="3.5" fill="${col}"/>
-        <text x="217" y="0" direction="rtl" text-anchor="start" font-size="12.5" font-weight="700" fill="${tc.text}"><title>${escXml(it.label)}</title>${escXml(toFa(trimLabel(it.label, 20)))}</text>
+      const ly = startY + idx * rowGap;
+      legend += `<g transform="translate(226, ${ly})">
+        <rect x="268" y="-9.5" width="11" height="11" rx="3.2" fill="${col}"/>
+        <text x="260" y="0" direction="rtl" text-anchor="start" font-size="12.6" font-weight="700" fill="${tc.text}"><title>${escXml(it.label)}</title>${escXml(toFa(trimLabel(it.label, 22)))}</text>
         <text x="0" y="0" direction="ltr" text-anchor="start" font-size="12" fill="${tc.muted}">${fmtNum(val)} (${toFa(Math.round(frac * 100))}\u066a)</text>
       </g>`;
     });
 
     if (total === 0) segs = `<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${tc.grid}" stroke-width="${sw}"/>`;
 
-    container.innerHTML = `<svg class="eh-chart-svg" dir="ltr" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
+    container.innerHTML = `<svg class="eh-chart-svg eh-svg-donut" dir="ltr" viewBox="0 0 ${W} ${H}" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" xmlns="http://www.w3.org/2000/svg">
       ${segs}
       <text x="${cx}" y="${cy - 2}" text-anchor="middle" font-size="21" font-weight="800" fill="${tc.text}">${fmtNum(total)}</text>
       <text x="${cx}" y="${cy + 18}" text-anchor="middle" font-size="11.5" fill="${tc.muted}">${escXml(centerLabel)}</text>
@@ -284,7 +332,7 @@ window.eHadiCharts = (() => {
       container.innerHTML = '<div class="eh-empty-chart">\u0628\u0631\u0627\u06cc \u0646\u0645\u0648\u062f\u0627\u0631 \u0631\u0627\u062f\u0627\u0631\u06cc \u062d\u062f\u0627\u0642\u0644 \u06f3 \u06a9\u0627\u0631\u06af\u0631\u0648\u0647 \u0646\u06cc\u0627\u0632 \u0627\u0633\u062a.</div>';
       return;
     }
-    const W = 460, H = 245, cx = 230, cy = 124, R = 76;
+    const W = 560, H = 264, cx = 280, cy = 132, R = 78;
     const maxV = Math.max(1, ...list.map(x => Number(x.value || 0)));
     const step = (2 * Math.PI) / list.length;
 
@@ -296,43 +344,56 @@ window.eHadiCharts = (() => {
     }
     list.forEach((it, i) => {
       const ang = i * step - Math.PI / 2;
-      const ax = cx + R * Math.cos(ang), ay = cy + R * Math.sin(ang);
-      axes += `<line x1="${cx}" y1="${cy}" x2="${ax}" y2="${ay}" stroke="${tc.grid}"/>`;
-      const lx = cx + (R + 30) * Math.cos(ang), ly = cy + (R + 22) * Math.sin(ang);
-      axes += `<text x="${lx}" y="${ly}" text-anchor="middle" font-size="12" font-weight="700" fill="${tc.text}">${escXml(toFa(trimLabel(it.label, 16)))}</text>`;
+      const cosA = Math.cos(ang), sinA = Math.sin(ang);
+      const ax = cx + R * cosA, ay = cy + R * sinA;
+      axes += `<line x1="${cx}" y1="${cy}" x2="${ax.toFixed(1)}" y2="${ay.toFixed(1)}" stroke="${tc.grid}"/>`;
+
+      const rxLbl = R + (Math.abs(cosA) > 0.4 ? 66 : 24);
+      const ryLbl = R + (Math.abs(sinA) > 0.7 ? 24 : 28);
+      const lx = cx + rxLbl * cosA;
+      const ly = cy + ryLbl * sinA + 4;
+      const cleanLbl = trimLabel(shortChartWg(it.label), 16);
+      axes += `<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" font-size="12.2" font-weight="700" fill="${tc.text}"><title>${escXml(it.label)}: ${fmtNum(it.value)}</title>${escXml(toFa(cleanLbl))}</text>`;
+
       const vr = (Number(it.value || 0) / maxV) * R;
-      pts.push([cx + vr * Math.cos(ang), cy + vr * Math.sin(ang)]);
+      pts.push([cx + vr * cosA, cy + vr * sinA]);
     });
     const poly = pts.map(p => `${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(' ');
-    const dots = pts.map((p, i) => `<circle cx="${p[0]}" cy="${p[1]}" r="4.5" fill="${tc.primary}"><title>${escXml(list[i].label)}: ${fmtNum(list[i].value)}</title></circle>`).join('');
+    const dots = pts.map((p, i) => `<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="4.5" fill="${tc.primary}" stroke="${tc.bg}" stroke-width="1.5"><title>${escXml(list[i].label)}: ${fmtNum(list[i].value)}</title></circle>`).join('');
 
-    container.innerHTML = `<svg class="eh-chart-svg" dir="ltr" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">
-      ${rings}${axes}<polygon points="${poly}" fill="${tc.primary}" fill-opacity="0.22" stroke="${tc.primary}" stroke-width="2.4"/>${dots}
+    container.innerHTML = `<svg class="eh-chart-svg eh-svg-radar" dir="ltr" viewBox="0 0 ${W} ${H}" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" xmlns="http://www.w3.org/2000/svg">
+      ${rings}${axes}<polygon points="${poly}" fill="${tc.primary}" fill-opacity="0.22" stroke="${tc.primary}" stroke-width="2.3"/>${dots}
     </svg>`;
   }
 
   function renderHeatmap(container, months) {
     if (!container) return;
     const tc = themeColors();
-    const W = 580, H = 135;
-    const maxC = Math.max(1, ...(months || []).map(m => Number(m.courses || 0)));
-    const cw = 42, ch = 56, gap = 5, startX = 12;
+    const list = months || [];
+    const totalCourses = list.reduce((s, m) => s + Number(m.courses || 0), 0);
+    const W = 640, H = 144;
+    const maxC = Math.max(1, ...list.map(m => Number(m.courses || 0)));
+    const cw = 46, ch = 54, gap = 5, startX = 16;
     const isNavy = document.body.getAttribute('data-accent-scheme') === 'navy';
 
-    const cells = (months || []).map((m, idx) => {
+    const cells = list.map((m, idx) => {
       const x = startX + idx * (cw + gap);
       const ratio = Number(m.courses || 0) / maxC;
       const rgb = isNavy ? '56, 189, 248' : '16, 185, 129';
-      const fill = ratio === 0 ? tc.track : `rgba(${rgb}, ${(0.24 + ratio * 0.76).toFixed(2)})`;
+      const fill = ratio === 0 ? tc.track : `rgba(${rgb}, ${(0.28 + ratio * 0.72).toFixed(2)})`;
       const txtCol = ratio > 0.45 ? '#ffffff' : tc.text;
       return `<g>
-        <rect x="${x}" y="18" width="${cw}" height="${ch}" rx="8" fill="${fill}"><title>${escXml(m.month)}: ${fmtNum(m.courses)} \u062f\u0648\u0631\u0647 (${fmtNum(m.attendance)} \u0645\u062e\u0627\u0637\u0628)</title></rect>
-        <text x="${x + cw / 2}" y="52" text-anchor="middle" font-size="14" font-weight="800" fill="${txtCol}">${fmtNum(m.courses)}</text>
-        <text x="${x + cw / 2}" y="96" text-anchor="middle" font-size="10.5" fill="${tc.muted}">${escXml(m.month.slice(0, 6))}</text>
+        <rect x="${x}" y="14" width="${cw}" height="${ch}" rx="8.5" fill="${fill}"><title>${escXml(m.month)}: ${fmtNum(m.courses)} \u062f\u0648\u0631\u0647 (${fmtNum(m.attendance)} \u0645\u062e\u0627\u0637\u0628)</title></rect>
+        <text x="${x + cw / 2}" y="47" text-anchor="middle" font-size="13.8" font-weight="800" fill="${txtCol}">${fmtNum(m.courses)}</text>
+        <text x="${x + cw / 2}" y="90" text-anchor="middle" font-size="10.8" font-weight="600" fill="${tc.muted}">${escXml(m.month)}</text>
       </g>`;
     }).join('');
 
-    container.innerHTML = `<svg class="eh-chart-svg" dir="ltr" viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg">${cells}</svg>`;
+    const hint = totalCourses <= 2
+      ? `<text x="${W / 2}" y="126" text-anchor="middle" font-size="11" fill="${tc.muted}">\u062a\u0648\u062c\u0647: \u062f\u0631 \u0628\u06cc\u0634\u062a\u0631 \u0641\u0627\u06cc\u0644\u200c\u0647\u0627\u06cc \u0641\u0639\u0644\u06cc \u062a\u0627\u0631\u06cc\u062e \u0645\u0627\u0647 \u0628\u0631\u06af\u0632\u0627\u0631\u06cc \u062b\u0628\u062a \u0646\u0634\u062f\u0647 \u0627\u0633\u062a\u061b \u0628\u0627 \u062b\u0628\u062a \u062a\u0627\u0631\u06cc\u062e \u062f\u0631 \u0641\u0627\u06cc\u0644\u200c\u0647\u0627\u06cc \u062c\u062f\u06cc\u062f \u0627\u06cc\u0646 \u0646\u0642\u0634\u0647 \u06a9\u0627\u0645\u0644 \u0645\u06cc\u200c\u0634\u0648\u062f.</text>`
+      : '';
+
+    container.innerHTML = `<svg class="eh-chart-svg eh-svg-heatmap" dir="ltr" viewBox="0 0 ${W} ${H}" shape-rendering="geometricPrecision" text-rendering="geometricPrecision" xmlns="http://www.w3.org/2000/svg">${cells}${hint}</svg>`;
   }
 
   function svgToPngDataUri(svgEl, scale = 2.5, whiteBg = false) {
@@ -397,5 +458,5 @@ window.eHadiCharts = (() => {
     a.click();
   }
 
-  return { toFa, fmtNum, formatTeacherShort, renderSplineArea, renderDonut, renderHBar, renderRadar, renderHeatmap, svgToPngDataUri, copyChartToClipboard, downloadChart };
+  return { toFa, fmtNum, fmtCompact, formatTeacherShort, renderSplineArea, renderDonut, renderHBar, renderRadar, renderHeatmap, svgToPngDataUri, copyChartToClipboard, downloadChart };
 })();

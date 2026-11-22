@@ -5,7 +5,7 @@
   <title>پنل مدیریت مؤسسه امام هادی</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="studio_theme.css?v=290" />
-  <link rel="stylesheet" href="luxury_glass_v46.css?v=540" />
+  <link rel="stylesheet" href="luxury_glass_v46.css?v=621" />
 </head>
 <body>
   <div class="bg-grid"></div>
@@ -14,12 +14,12 @@
   <div class="orb orb-3"></div>
 
   <header class="titlebar">
-    <div class="title-drag-area pywebview-drag-region">
+    <div class="title-drag-area">
       <div class="title-badge">
         <span class="status-dot"></span>
         <span>پنل مدیریت مؤسسه امام هادی</span>
       </div>
-      <span class="version-pill">eHadiPanel Beta 0.2</span>
+      <span class="version-pill">eHadiPanel v0.3.0-beta</span>
     </div>
     <div class="win-controls">
       <button class="win-btn" onclick="pywebview.api.minimize()" title="کوچک‌نمایی">
@@ -218,19 +218,22 @@
             </div>
 
             <div class="eh-v48-chat-controls" id="ehV48ChatControls">
-              <div class="eh-v48-ctrl-group" title="تفکیک پاسخ از اسناد مؤسسه یا گفت‌وگوی آزاد">
-                <span class="eh-v48-ctrl-lbl">مسیر:</span>
+              <div class="eh-v48-ctrl-group eh-chat-ctrl-start" title="انتخاب منبع پاسخ‌گویی دستیار هوشمند">
+                <span class="eh-v48-ctrl-lbl">منبع پاسخ:</span>
                 <button type="button" class="eh-v48-pill eh-v48-route-btn active" data-route="auto" onclick="setChatRoute('auto', this)">خودکار</button>
-                <button type="button" class="eh-v48-pill eh-v48-route-btn" data-route="institutional" onclick="setChatRoute('institutional', this)">فقط مؤسسه</button>
-                <button type="button" class="eh-v48-pill eh-v48-route-btn" data-route="free" onclick="setChatRoute('free', this)">آزاد</button>
+                <button type="button" class="eh-v48-pill eh-v48-route-btn" data-route="institutional" onclick="setChatRoute('institutional', this)">اسناد مؤسسه</button>
+                <button type="button" class="eh-v48-pill eh-v48-route-btn" data-route="free" onclick="setChatRoute('free', this)">عمومی</button>
               </div>
-              <div class="eh-v48-ctrl-group" title="تنظیم طول و جزئیات پاسخ">
+              <div class="eh-v48-ctrl-group eh-chat-ctrl-mid" title="تنظیم طول و جزئیات پاسخ">
                 <span class="eh-v48-ctrl-lbl">طول:</span>
                 <button type="button" class="eh-v48-pill eh-v48-len-btn active" data-len="concise" onclick="setChatLength('concise', this)">فوق‌خلاصه</button>
                 <button type="button" class="eh-v48-pill eh-v48-len-btn" data-len="balanced" onclick="setChatLength('balanced', this)">متعادل</button>
                 <button type="button" class="eh-v48-pill eh-v48-len-btn" data-len="analytical" onclick="setChatLength('analytical', this)">تحلیلی</button>
               </div>
-              <button type="button" class="eh-v48-pill eh-v48-cite-pref" id="ehV48CitePrefBtn" onclick="toggleCiteVisibilityPref(this)" title="نمایش کشویی یا مخفی‌سازی کامل منابع زیر پیام">منابع: کشویی</button>
+              <div class="eh-v48-ctrl-group eh-chat-ctrl-end">
+                <button type="button" class="eh-v48-pill eh-v48-cite-pref" id="ehV48CitePrefBtn" onclick="toggleCiteVisibilityPref(this)" title="نمایش کشویی یا مخفی‌سازی کامل منابع زیر پیام">منابع: کشویی</button>
+                <button type="button" class="eh-help-btn" data-eh-help="chat_controls" title="راهنمای تنظیمات دستیار" aria-label="راهنمای تنظیمات دستیار"><svg class="eh-help-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle class="eh-help-ring" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.65"/><path d="M14.91 9a3 3 0 0 0-5.83 1c0 2 2.92 2.75 2.92 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="17.25" r="1.15" fill="currentColor"/></svg></button>
+              </div>
             </div>
             <div class="composer">
               <input id="chatInput" type="text" placeholder="سوال مدیریتی یا آماری خود را بنویسید و Enter بزنید..." onkeydown="if(event.key==='Enter') sendMessage()" />
@@ -259,7 +262,7 @@
       <section id="page-docs" class="page">
         <div class="page-header">
           <div>
-            <h2>مدیریت و پردازش اسناد</h2>
+            <h2 style="display:inline-flex; align-items:center; gap:8px;"><span>مدیریت و پردازش اسناد</span><button type="button" class="eh-help-btn" data-eh-help="docs_engine" title="راهنمای موتور پردازش اسناد" aria-label="راهنمای موتور پردازش اسناد"><svg class="eh-help-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle class="eh-help-ring" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.65"/><path d="M14.91 9a3 3 0 0 0-5.83 1c0 2 2.92 2.75 2.92 3.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="12" cy="17.25" r="1.15" fill="currentColor"/></svg></button></h2>
             <p id="rawDocsPathLabel">پوشه اسناد خام: data\raw_docs</p>
           </div>
           <div class="action-group">
@@ -516,8 +519,20 @@
             tableRegistry[tid] = tbl;
             const cols = tbl.columns || [];
             const rows = (tbl.rows || []).slice(0, 60);
-            const ths = cols.map(c => `<th>${escapeHtml(c)}</th>`).join('');
-            const trs = rows.map(r => `<tr>${r.map(v => `<td>${escapeHtml(v)}</td>`).join('')}</tr>`).join('');
+            const fmtSqlCell = (val) => {
+              if (val === null || val === undefined || val === '') return '—';
+              const s = String(val).trim();
+              if (/^-?\d+(\.\d+)?$/.test(s)) {
+                const n = Number(s);
+                if (Number.isFinite(n)) {
+                  const isYear = Number.isInteger(n) && n >= 1300 && n <= 1500;
+                  return isYear ? s.replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]) : n.toLocaleString('fa-IR');
+                }
+              }
+              return escapeHtml(s);
+            };
+            const ths = cols.map(c => `<th>${escapeHtml(String(c || '').replace(/_/g, ' '))}</th>`).join('');
+            const trs = rows.map(r => `<tr>${r.map(v => `<td>${fmtSqlCell(v)}</td>`).join('')}</tr>`).join('');
             const rowLabel = tbl.total_rows ? `${tbl.total_rows} ردیف` : `${rows.length} ردیف`;
             const collapsedClass = hasMdTable ? 'collapsed' : '';
             const toggleText = hasMdTable ? 'نمایش داده‌های خام SQL' : 'جمع کردن جدول';
@@ -783,7 +798,7 @@
           <td><span class="fmt-badge">${escapeHtml(f.file_type)}</span></td>
           <td>${_faInt(f.chunks_count)}</td>
           <td>${_faInt(f.tables_count)} جدول (${_faInt(f.rows_count)} رکورد)</td>
-          <td>${escapeHtml(f.processed_at)}</td>
+          <td>${escapeHtml(_fmtJalaliTimestamp(f.processed_at))}</td>
           <td>${badge}</td>
         </tr>`;
       }).join('');
@@ -797,6 +812,29 @@
 
     function _faInt(n) {
       return Number(n || 0).toLocaleString('fa-IR');
+    }
+
+    function _fmtJalaliTimestamp(raw) {
+      const s = String(raw || '').trim();
+      if (!s) return '—';
+      const toFaD = (x) => String(x).replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
+      const m = s.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:[\sT\-]+(\d{1,2}:\d{2}))?/);
+      if (m) {
+        const y = Number(m[1]), mo = Number(m[2]), d = Number(m[3]), tm = m[4] || '';
+        if (y >= 1900 && y <= 2150) {
+          try {
+            const dt = new Date(y, mo - 1, d, 12, 0, 0);
+            const parts = new Intl.DateTimeFormat('en-u-ca-persian', { year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(dt);
+            const jy = parts.find(p => p.type === 'year')?.value || '';
+            const jm = parts.find(p => p.type === 'month')?.value || '';
+            const jd = parts.find(p => p.type === 'day')?.value || '';
+            if (jy && jm && jd) {
+              return toFaD(tm ? `${jy}/${jm}/${jd} - ${tm}` : `${jy}/${jm}/${jd}`);
+            }
+          } catch (_) {}
+        }
+      }
+      return toFaD(s);
     }
 
     function applyDashboardData(data) {
@@ -1006,20 +1044,21 @@
     window.addEventListener('pywebviewready', loadInitialData);
   </script>
   <script src="silky_stream.js?v=480"></script>
-  <script src="bi_dashboard.js?v=540"></script>
+  <script src="bi_dashboard.js?v=621"></script>
   <script src="report_studio.js"></script>
 
 
 
 
   <script src="core/icons.js?v=70"></script>
-  <script src="core/charts.js?v=510"></script>
-  <script src="core/app_core.js?v=500"></script>
+  <script src="core/smart_help.js?v=621"></script>
+  <script src="core/charts.js?v=621"></script>
+  <script src="core/app_core.js?v=621"></script>
   <script src="core/plugins.js?v=486"></script>
-  <script src="core/analytics_suite.js?v=530"></script>
+  <script src="core/analytics_suite.js?v=621"></script>
   <script src="core/voice_copilot.js?v=104"></script>
   <script src="core/explorer_fix.js?v=510"></script>
-  <script src="core/modern_dropdown.js?v=510"></script>
+  <script src="core/modern_dropdown.js?v=621"></script>
 
 <script id="ehadiStartupReflow">
 (() => {
@@ -1037,7 +1076,7 @@
   });
 })();
 </script>
-  <script src="core/executive_ux.js?v=510"></script>
+  <script src="core/executive_ux.js?v=621"></script>
   <script src="core/diagnostics_ui.js?v=483"></script>
   <script src="core/memory_ui.js?v=480"></script>
 </body>

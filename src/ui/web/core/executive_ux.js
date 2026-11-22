@@ -4,6 +4,7 @@
   const EITA_TPL_KEY = 'ehadi_eitaa_templates_v1';
   const ic = (name, size = 17) => (window.eHadiIcons ? window.eHadiIcons.get(name, size) : '');
   const toFa = (n) => Number(n || 0).toLocaleString('fa-IR');
+  const toFaDigits = (v) => String(v ?? '').replace(/\d/g, d => '۰۱۲۳۴۵۶۷۸۹'[Number(d)]);
 
   const INST_NAME = '\u0645\u0624\u0633\u0633\u0647 \u0627\u0645\u0627\u0645 \u0647\u0627\u062f\u06cc';
   const ALAYH_TEXT = '\u0639\u0644\u06cc\u0647\u200c\u0627\u0644\u0633\u0644\u0627\u0645';
@@ -116,6 +117,31 @@
       });
     });
 
+    tb.addEventListener('mousedown', (e) => {
+      if (e.button !== 0 || e.detail >= 2) return;
+      if (e.target.closest('button, input, a, select, [role="button"]')) return;
+      const sx = e.screenX, sy = e.screenY;
+      let started = false;
+      const onMv = (mv) => {
+        if (started) return;
+        if (Math.hypot(mv.screenX - sx, mv.screenY - sy) >= 4) {
+          started = true;
+          cleanup();
+          const api = window.pywebview?.api;
+          if (api?.begin_window_resize) api.begin_window_resize('move');
+          else if (api?.start_window_resize) api.start_window_resize('move');
+        }
+      };
+      const cleanup = () => {
+        window.removeEventListener('mousemove', onMv, true);
+        window.removeEventListener('mouseup', cleanup, true);
+        window.removeEventListener('blur', cleanup, true);
+      };
+      window.addEventListener('mousemove', onMv, true);
+      window.addEventListener('mouseup', cleanup, true);
+      window.addEventListener('blur', cleanup, true);
+    });
+
     tb.addEventListener('dblclick', (e) => {
       if (e.target.closest('button, input, a')) return;
       triggerMorph();
@@ -214,18 +240,6 @@
       card.style.setProperty('--mx', Math.round(e.clientX - r.left) + 'px');
       card.style.setProperty('--my', Math.round(e.clientY - r.top) + 'px');
     }
-    const tilt = e.target.closest?.('.stat-card, .eh-quick-card, .bi-kpi, .eh-kpi');
-    if (tilt) {
-      const r = tilt.getBoundingClientRect();
-      const px = (e.clientX - r.left) / Math.max(1, r.width);
-      const py = (e.clientY - r.top) / Math.max(1, r.height);
-      tilt.style.transform = 'perspective(900px) rotateX(' + ((0.5 - py) * 2.6).toFixed(2) + 'deg) rotateY(' + ((px - 0.5) * 2.6).toFixed(2) + 'deg) translateY(-3px)';
-    }
-  }, { passive: true });
-
-  document.addEventListener('pointerout', (e) => {
-    const tilt = e.target.closest?.('.stat-card, .eh-quick-card, .bi-kpi, .eh-kpi');
-    if (tilt && (!e.relatedTarget || !tilt.contains(e.relatedTarget))) tilt.style.transform = '';
   }, { passive: true });
 
   document.addEventListener('pointerdown', (e) => {
@@ -341,7 +355,7 @@
     document.getElementById('ehTeacherDrawer360')?.remove();
     const bd = document.createElement('div');
     bd.id = 'ehTeacherDrawer360';
-    bd.className = 'eh-drawer-backdrop open';
+    bd.className = 'eh-drawer-backdrop';
     bd.innerHTML = `
       <div class="eh-drawer-panel" role="dialog" aria-modal="true">
         <div class="eh-drawer-head">
@@ -378,7 +392,9 @@
       </div>
     `;
     document.body.appendChild(bd);
-    const close = () => bd.remove();
+    void bd.offsetWidth;
+    requestAnimationFrame(() => bd.classList.add('open'));
+    const close = () => { bd.classList.remove('open'); setTimeout(() => bd.remove(), 320); };
     bd.addEventListener('click', e => { if (e.target === bd) close(); });
     bd.querySelector('#btnCloseT360').addEventListener('click', close);
     bd.querySelector('#btnAskAiTeacher').addEventListener('click', () => {
@@ -401,34 +417,114 @@
       inp.addEventListener('focus', () => {
         document.querySelector('.eh-jalali-pop')?.remove();
         let yr = 1405, mo = 8;
+        const lblEl = inp.closest('.eitaa-field')?.querySelector('label');
+        const lblTxt = (lblEl?.textContent || inp.placeholder || '');
+        let rangeMode = (inp.id === 'msDate' && lblTxt.includes('بازه')) || lblTxt.includes('بازه');
+        let startPick = null;
+        let endPick = null;
+
+        const cmpDate = (a, b) => (a.yr * 10000 + a.mo * 100 + a.d) - (b.yr * 10000 + b.mo * 100 + b.d);
+        const fmtSingle = (dt) => `${toFaDigits(dt.d)} ${J_MONTHS[dt.mo - 1]} ${toFaDigits(dt.yr)}`;
+        const fmtSlash = (dt) => `${dt.yr}/${String(dt.mo).padStart(2, '0')}/${String(dt.d).padStart(2, '0')}`;
+        const fmtRange = (a, b) => {
+          const [s, e] = cmpDate(a, b) <= 0 ? [a, b] : [b, a];
+          if (s.yr === e.yr && s.mo === e.mo && s.d === e.d) return fmtSingle(s);
+          if (s.yr === e.yr && s.mo === e.mo) return `${toFaDigits(s.d)} تا ${toFaDigits(e.d)} ${J_MONTHS[s.mo - 1]} ${toFaDigits(s.yr)}`;
+          if (s.yr === e.yr) return `${toFaDigits(s.d)} ${J_MONTHS[s.mo - 1]} تا ${toFaDigits(e.d)} ${J_MONTHS[e.mo - 1]} ${toFaDigits(s.yr)}`;
+          return `${fmtSingle(s)} تا ${fmtSingle(e)}`;
+        };
+
         const pop = document.createElement('div');
         pop.className = 'eh-jalali-pop';
         const r = inp.getBoundingClientRect();
-        pop.style.top = Math.min(window.innerHeight - 250, r.bottom + 6) + 'px';
-        pop.style.left = Math.max(12, Math.min(window.innerWidth - 270, r.left)) + 'px';
+        const popH = 295;
+        const topPos = (r.bottom + popH > window.innerHeight - 10) ? Math.max(12, r.top - popH - 6) : (r.bottom + 6);
+        pop.style.top = topPos + 'px';
+        pop.style.left = Math.max(12, Math.min(window.innerWidth - 285, r.left)) + 'px';
+
+        const applyValue = (val) => {
+          inp.value = val;
+          inp.dispatchEvent(new Event('input', { bubbles: true }));
+          inp.dispatchEvent(new Event('change', { bubbles: true }));
+        };
 
         const renderCal = () => {
           const maxD = mo <= 6 ? 31 : (mo <= 11 ? 30 : 29);
-          const days = Array.from({ length: maxD }, (_, i) =>
-            `<button type="button" class="eh-jalali-day" data-d="${i + 1}">${toFa(i + 1)}</button>`
-          ).join('');
+          const days = Array.from({ length: maxD }, (_, i) => {
+            const dNum = i + 1;
+            const cur = { yr, mo, d: dNum };
+            let cls = 'eh-jalali-day';
+            if (startPick && cmpDate(cur, startPick) === 0) cls += ' range-edge';
+            if (endPick && cmpDate(cur, endPick) === 0) cls += ' range-edge';
+            if (startPick && endPick) {
+              const [lo, hi] = cmpDate(startPick, endPick) <= 0 ? [startPick, endPick] : [endPick, startPick];
+              if (cmpDate(cur, lo) > 0 && cmpDate(cur, hi) < 0) cls += ' in-range';
+            }
+            return `<button type="button" class="${cls}" data-d="${dNum}">${toFaDigits(dNum)}</button>`;
+          }).join('');
+
+          const statusHint = rangeMode
+            ? (!startPick ? 'روز شروع بازه را انتخاب کنید' : (!endPick ? `شروع: ${fmtSingle(startPick)} — روز پایان را انتخاب کنید` : `بازه: ${fmtRange(startPick, endPick)}`))
+            : 'یک تاریخ را انتخاب کنید';
+
           pop.innerHTML = `
-            <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div class="eh-jp-mode-bar">
+              <button type="button" class="eh-jp-mode-btn ${rangeMode ? 'active' : ''}" data-jpm="range">بازه تاریخ</button>
+              <button type="button" class="eh-jp-mode-btn ${!rangeMode ? 'active' : ''}" data-jpm="single">تک‌روز</button>
+            </div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
               <button type="button" class="eh-mini-btn" id="jpPrev">\u203a</button>
-              <strong style="font-size:12px;">${J_MONTHS[mo - 1]} ${toFa(yr)}</strong>
+              <strong style="font-size:12px;">${J_MONTHS[mo - 1]} ${toFaDigits(yr)}</strong>
               <button type="button" class="eh-mini-btn" id="jpNext">\u2039</button>
             </div>
+            <div class="eh-jp-hint">${statusHint}</div>
             <div class="eh-jalali-grid">${days}</div>
+            ${rangeMode && startPick ? `<div class="eh-jp-foot"><button type="button" class="eh-mini-btn" id="jpUseSingle">ثبت همین تک‌روز</button><button type="button" class="eh-mini-btn" id="jpClearRange">پاک کردن</button></div>` : ''}
           `;
+
+          pop.querySelectorAll('[data-jpm]').forEach(mb => {
+            mb.onclick = (ev) => {
+              ev.stopPropagation();
+              rangeMode = mb.dataset.jpm === 'range';
+              startPick = null;
+              endPick = null;
+              renderCal();
+            };
+          });
           pop.querySelector('#jpPrev').onclick = (ev) => { ev.stopPropagation(); mo--; if (mo < 1) { mo = 12; yr--; } renderCal(); };
           pop.querySelector('#jpNext').onclick = (ev) => { ev.stopPropagation(); mo++; if (mo > 12) { mo = 1; yr++; } renderCal(); };
+          pop.querySelector('#jpUseSingle')?.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            if (startPick) applyValue(inp.id === 'msDate' ? fmtSingle(startPick) : fmtSlash(startPick));
+            pop.remove();
+          });
+          pop.querySelector('#jpClearRange')?.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            startPick = null;
+            endPick = null;
+            renderCal();
+          });
+
           pop.querySelectorAll('[data-d]').forEach(b => {
-            b.onclick = () => {
-              const dd = String(b.dataset.d).padStart(2, '0');
-              const mm = String(mo).padStart(2, '0');
-              inp.value = `${yr}/${mm}/${dd}`;
-              inp.dispatchEvent(new Event('change', { bubbles: true }));
-              pop.remove();
+            b.onclick = (ev) => {
+              ev.stopPropagation();
+              const picked = { yr, mo, d: Number(b.dataset.d) };
+              if (!rangeMode) {
+                applyValue(inp.id === 'msDate' ? fmtSingle(picked) : fmtSlash(picked));
+                pop.remove();
+                return;
+              }
+              if (!startPick || (startPick && endPick)) {
+                startPick = picked;
+                endPick = null;
+                applyValue(fmtSingle(startPick));
+                renderCal();
+              } else {
+                endPick = picked;
+                applyValue(fmtRange(startPick, endPick));
+                renderCal();
+                setTimeout(() => pop.remove(), 220);
+              }
             };
           });
         };
@@ -465,13 +561,14 @@
     rootEl.querySelectorAll('.eh-chart-box').forEach(box => {
       const head = box.querySelector('.eh-chart-head');
       const body = box.querySelector('[id^="ch"]');
-      if (!head || !body || head.querySelector('.eh-copy-chart-btn')) return;
+      if (!head || !body || head.querySelector('.eh-copy-chart-btn, .eh-exp-trigger')) return;
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'eh-mini-btn eh-copy-chart-btn';
       btn.textContent = '\u06a9\u067e\u06cc \u062a\u0635\u0648\u06cc\u0631';
       btn.addEventListener('click', () => window.eHadiCharts?.copyChartToClipboard(body));
-      head.appendChild(btn);
+      const actWrap = head.querySelector('.eh-chart-actions') || head;
+      actWrap.appendChild(btn);
     });
   }
 
@@ -798,7 +895,7 @@
               </div>
             </div>
             <div class="pro-modal-footer">
-              <span style="font-size:11px; color:var(--s-text-dim);">eHadiPanel Beta 0.2 — ${INST_HTML}</span>
+              <span style="font-size:11px; color:var(--s-text-dim);">eHadiPanel v0.3.0-beta — ${INST_HTML}</span>
               <button type="button" class="primary-btn" data-close-modal style="padding:7px 22px;">\u062a\u0623\u06cc\u06cc\u062f \u0648 \u0628\u0633\u062a\u0646</button>
             </div>
           </div>
@@ -1089,6 +1186,7 @@
         window.pywebview?.api?.get_executive_analytics?.({}).catch(() => null),
         window.pywebview?.api?.get_event_pipelines?.().catch(() => null),
       ]).then(([res, evRes]) => {
+        if (res && res.ok) window.__ehExecCache = res;
         if (res && res.ok && !document.getElementById('ehHealthGaugeWrap')) {
           const score = Number(res.kpis?.data_health_score ?? 100);
           const r = 17, c = 2 * Math.PI * r;
@@ -1096,15 +1194,19 @@
           const wrap = document.createElement('div');
           wrap.id = 'ehHealthGaugeWrap';
           wrap.className = 'eh-health-ring-wrap';
+          const dupsCnt = (res.data_health && res.data_health.duplicates) ? res.data_health.duplicates.length : 0;
+          const dupSub = dupsCnt > 0 ? (toFa(dupsCnt) + ' مورد مشکوک به تکرار نیازمند بررسی') : 'داده‌ها سالم و بدون تکرار مشکوک هستند';
           wrap.innerHTML =
             '<svg class="eh-health-ring" viewBox="0 0 42 42">' +
             '<circle cx="21" cy="21" r="' + r + '" fill="none" stroke="rgba(148,163,184,0.18)" stroke-width="4"/>' +
             '<circle class="fg" cx="21" cy="21" r="' + r + '" fill="none" stroke-width="4" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '" transform="rotate(-90 21 21)"/>' +
-            '<text x="21" y="25" text-anchor="middle" font-size="10.5" font-weight="800" fill="currentColor">' + toFa(score) + '%</text>' +
+            '<text x="21" y="25" text-anchor="middle" font-size="10.5" font-weight="800" fill="currentColor">' + toFa(score) + '٪</text>' +
             '</svg>' +
-            '<div style="flex:1;"><strong style="font-size:12px;">\u0633\u0644\u0627\u0645\u062a \u0648 \u06cc\u06a9\u062a\u0627\u06cc\u06cc \u062f\u0627\u062f\u0647\u200c\u0647\u0627</strong>' +
-            '<div style="font-size:10.8px; color:var(--s-text-muted); margin-top:2px;">\u067e\u0627\u06cc\u0634 \u062e\u0648\u062f\u06a9\u0627\u0631 \u062a\u06a9\u0631\u0627\u0631\u0647\u0627 \u0648 \u0633\u0644\u0627\u0645\u062a \u062c\u062f\u0627\u0648\u0644</div></div>';
+            '<div style="flex:1;"><strong style="font-size:12px;">سلامت و یکتایی داده‌ها</strong>' +
+            '<div style="font-size:10.8px; color:var(--s-text-muted); margin-top:2px;">' + dupSub + '</div></div>' +
+            '<button type="button" class="eh-mini-btn" id="btnRadarHealthOpen">بررسی</button>';
           radarItems.parentNode.insertBefore(wrap, radarItems);
+          wrap.querySelector('#btnRadarHealthOpen')?.addEventListener('click', () => window.eHadiApp?.openModal('data_health'));
         }
 
         const pendingEvs = ((evRes && evRes.events) || []).filter(ev => {
@@ -1745,22 +1847,30 @@
 
         card.classList.add('eh-bi-quad-card', 'eh-bi-theme-' + type);
 
-        const headRow = titleEl.closest('.eh-bi-hdr') || titleEl.parentElement;
+        const headRow = titleEl.closest('.eh-bi-hdr, .card-title') || titleEl.parentElement;
         if (headRow && headRow !== card) {
           headRow.classList.add('eh-bi-hdr', 'eh-bi-hdr-' + type);
           if (!headRow.querySelector('.eh-bi-ico')) {
+            const preWrap = titleEl.closest('.eh-bi-title-grp');
+            const preHelp = (preWrap ? preWrap.querySelector('.eh-help-btn') : null) || headRow.querySelector(':scope > .eh-help-btn');
             const grp = document.createElement('div');
             grp.className = 'eh-bi-title-group';
             const ico = document.createElement('span');
             ico.className = 'eh-bi-ico';
             ico.innerHTML = ICONS[type];
-            headRow.insertBefore(grp, titleEl);
+            const anchor = (preWrap && preWrap.parentElement === headRow) ? preWrap : (titleEl.parentElement === headRow ? titleEl : headRow.firstChild);
+            headRow.insertBefore(grp, anchor);
             grp.appendChild(ico);
             grp.appendChild(titleEl);
+            if (preHelp) grp.appendChild(preHelp);
+            if (preWrap && preWrap !== grp) preWrap.remove();
           }
           const grpEl = headRow.querySelector('.eh-bi-title-group');
           Array.from(headRow.children).forEach(ch => {
-            if (ch !== grpEl && (ch.textContent || '').trim().length > 2) {
+            if (ch === grpEl) return;
+            if (ch.classList.contains('eh-help-btn')) { grpEl && grpEl.appendChild(ch); return; }
+            if (ch.classList.contains('eh-seg-switch') || ch.querySelector('button, .eh-seg-switch')) return;
+            if ((ch.textContent || '').trim().length > 2) {
               ch.classList.add('eh-bi-sub-pill');
             }
           });
@@ -2613,6 +2723,11 @@
   }
 
   function positionTip(targetEl, tipNode) {
+    // Reset coordinates BEFORE measuring so previous right-edge left never squeezes/wraps text!
+    tipNode.style.left = '0px';
+    tipNode.style.top = '0px';
+    tipNode.style.right = 'auto';
+
     const r = targetEl.getBoundingClientRect();
     const tw = tipNode.offsetWidth;
     const th = tipNode.offsetHeight;
@@ -2621,14 +2736,17 @@
     const margin = 10;
 
     let top, left, placement = 'top';
-    const inCollapsedSb = Boolean(targetEl.closest('#sidebar') && document.body.classList.contains('sidebar-collapsed'));
+    const sb = targetEl.closest('#sidebar');
+    const inCollapsedSb = Boolean(sb && document.body.classList.contains('sidebar-collapsed'));
 
     if (inCollapsedSb) {
+      const sbRect = sb.getBoundingClientRect();
+      const anchorLeft = Math.min(r.left, sbRect.left);
       placement = 'left';
-      left = r.left - tw - 10;
+      left = anchorLeft - tw - 10;
       top = r.top + (r.height - th) / 2;
       if (left < margin) {
-        left = r.right + 10;
+        left = Math.max(r.right, sbRect.right) + 10;
         placement = 'right';
       }
     } else {
@@ -2646,6 +2764,16 @@
     tipNode.dataset.pos = placement;
     tipNode.style.left = `${Math.round(left)}px`;
     tipNode.style.top = `${Math.round(top)}px`;
+
+    // Second-pass safety sync if font/wrapping adjusted height after placement
+    const tw2 = tipNode.offsetWidth;
+    const th2 = tipNode.offsetHeight;
+    if (inCollapsedSb && placement === 'left' && (tw2 !== tw || th2 !== th)) {
+      const sbRect = sb.getBoundingClientRect();
+      const anchorLeft = Math.min(r.left, sbRect.left);
+      tipNode.style.left = `${Math.round(Math.max(margin, anchorLeft - tw2 - 10))}px`;
+      tipNode.style.top = `${Math.round(Math.max(margin, Math.min(vh - th2 - margin, r.top + (r.height - th2) / 2)))}px`;
+    }
   }
 
   function showTip(targetEl, text) {

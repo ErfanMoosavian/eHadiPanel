@@ -24,6 +24,9 @@
     if (sel.id === 'selEitaaTpl' || sel.closest('#ehEitaaTplBar')) {
       wrap.classList.add('eh-eitaa-cselect');
     }
+    if (sel.classList.contains('eh-mem-select') || sel.closest('.eh-mem-modal')) {
+      wrap.classList.add('eh-mem-cselect');
+    }
     if (sel.style.minWidth) wrap.style.minWidth = sel.style.minWidth;
 
     const trigger = document.createElement('button');
@@ -107,8 +110,18 @@
   }
 
   function scanSelects(root = document) {
-    root.querySelectorAll('select.glass-select, select.bi-select').forEach(enhanceSelect);
+    root.querySelectorAll('select.glass-select, select.bi-select, select.eh-mem-select, .eh-mem-modal select').forEach(enhanceSelect);
   }
+
+  document.addEventListener('click', (e) => {
+    const seg = e.target && e.target.closest ? e.target.closest('.eh-mem-seg-group .eh-mem-seg') : null;
+    if (!seg) return;
+    const grp = seg.closest('.eh-mem-seg-group');
+    if (grp) {
+      grp.querySelectorAll('.eh-mem-seg').forEach(b => b.classList.remove('active'));
+      seg.classList.add('active');
+    }
+  }, true);
   window.__ehScanSelects = scanSelects;
 
   document.addEventListener('click', closePortal);
@@ -194,7 +207,6 @@
       const k = (res && res.kpis) || {};
       const dups = (res && res.data_health && res.data_health.duplicates) ? res.data_health.duplicates.length : 0;
       const rows = [
-        `<span>امتیاز سلامت داده‌ها: <strong>${k.data_health_score ?? 100}٪</strong> (${dups} مورد مشکوک به تکرار)</span><button type="button" class="eh-mini-btn" onclick="window.eHadiApp?.openModal('data_health')">بررسی</button>`,
         `<span>مجموع حضور ثبت‌شده: <strong>${Number(k.total_attendance || 0).toLocaleString('fa-IR')}</strong> نفر در ${Number(k.total_courses || 0).toLocaleString('fa-IR')} دوره</span><button type="button" class="eh-mini-btn" onclick="window.eHadiApp?.openModal('exec_analytics')">مرکز آمار</button>`,
         `<span>دبیرخانه هوشمند: <strong>${Number(k.letters_count || 0).toLocaleString('fa-IR')}</strong> نامه و گزارش رسمی ثبت‌شده</span><button type="button" class="eh-mini-btn" onclick="window.eHadiApp?.openModal('letter_registry')">دبیرخانه</button>`,
       ];

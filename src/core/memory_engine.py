@@ -46,6 +46,33 @@ class _NoOpLock:
     def __exit__(self, *args): return False
 
 _MEM_LOCK = _NoOpLock()  # Unified single-lock architecture via db_manager.get_db_lock()
+_INIT_DONE_PATHS: set[str] = set()
+_FUZZY_CACHE: dict[str, Any] = {"key": None, "results": []}
+_REBUILD_GEN_LOCK = threading.Lock()
+_REBUILD_GEN = 0
+
+
+def _invalidate_fuzzy_cache() -> None:
+    _FUZZY_CACHE["key"] = None
+
+
+def _schedule_teacher_rebuild(db_path: Path | str | None) -> None:
+    """Schedules rebuild_clean_teacher_layer in background so UI toggles respond instantly."""
+    global _REBUILD_GEN
+    with _REBUILD_GEN_LOCK:
+        _REBUILD_GEN += 1
+        my_gen = _REBUILD_GEN
+
+    def _worker():
+        try:
+            with _REBUILD_GEN_LOCK:
+                if my_gen != _REBUILD_GEN:
+                    return
+            rebuild_clean_teacher_layer(db_path, force=True)
+        except Exception as exc:
+            logger.warning("background teacher rebuild skipped: %s", exc)
+
+    threading.Thread(target=_worker, daemon=True).start()
 _MEM_HOOKED = False
 
 DEFAULT_HONORIFICS: list[str] = [
@@ -116,6 +143,9 @@ def init_memory_tables(db_path: Path | str | None = None) -> None:
     p = _resolve_db_path(db_path)
     if not p:
         return
+    p_key = str(p.resolve())
+    if p_key in _INIT_DONE_PATHS and p.exists():
+        return
     with _MEM_LOCK:
         try:
             with duckdb_session(p) as con:
@@ -142,6 +172,7 @@ def init_memory_tables(db_path: Path | str | None = None) -> None:
                         undo_json VARCHAR, created_at VARCHAR, is_undone BOOLEAN DEFAULT FALSE
                     )
                 """)
+            _INIT_DONE_PATHS.add(p_key)
         except Exception as exc:
             logger.warning("init_memory_tables warning: %s", exc)
 
@@ -234,14 +265,17 @@ def save_brain_config(payload: dict[str, Any], db_path: Path | str | None = None
             if record_undo:
                 _record_history(con, "config_update", "بروزرسانی تنظیمات هسته هوشمند موجودیت‌ها", {"type": "restore_config", "prev_config": prev_cfg})
 
+    fuzzy_keys_changed = any(
+        k in payload for k in ("honorifics", "collective_keywords", "compound_names", "common_surnames", "entity_type_overrides")
+    )
+    if fuzzy_keys_changed:
+        _invalidate_fuzzy_cache()
+
     teacher_keys_changed = any(
-        k in payload for k in ("honorifics", "collective_keywords", "compound_names", "common_surnames", "hours_policy", "data_mode", "course_hour_overrides", "entity_type_overrides")
+        k in payload for k in ("honorifics", "collective_keywords", "compound_names", "common_surnames", "hours_policy", "course_hour_overrides", "entity_type_overrides")
     )
     if teacher_keys_changed:
-        try:
-            rebuild_clean_teacher_layer(p, force=True)
-        except Exception as exc:
-            logger.warning("rebuild after save_brain_config skipped: %s", exc)
+        _schedule_teacher_rebuild(p)
     return {"ok": True, "config": new_cfg}
 
 
@@ -599,11 +633,9 @@ def save_alias(canonical_name: str, alias_name: str, entity_type: str = "teacher
                 con.execute("INSERT INTO entity_aliases VALUES (?, ?, ?, ?, ?, ?, ?)", [updated_id, et, c_clean, a_clean, st, float(confidence), now_s])
                 _record_history(con, "add_alias", f"{'ادغام' if st == 'approved' else 'منع ادغام'}: «{a_clean}» ← «{c_clean}»", {"type": "delete_alias", "alias_id": updated_id})
 
+    _invalidate_fuzzy_cache()
     if et == "teacher":
-        try:
-            rebuild_clean_teacher_layer(p, force=True)
-        except Exception as exc:
-            logger.warning("Could not refresh smart_teachers_exploded after save_alias: %s", exc)
+        _schedule_teacher_rebuild(p)
     return {"ok": True, "id": updated_id}
 
 
@@ -618,10 +650,8 @@ def delete_alias(alias_id: int, db_path: Path | str | None = None) -> dict[str, 
             con.execute("DELETE FROM entity_aliases WHERE id = ?", [int(alias_id)])
             if old:
                 _record_history(con, "delete_alias", f"حذف تطبیق: «{old[3]}» / «{old[2]}»", {"type": "restore_alias", "row": {"id": int(old[0]), "entity_type": old[1], "canonical_name": old[2], "alias_name": old[3], "status": old[4], "confidence": float(old[5] or 1.0), "created_at": old[6]}})
-    try:
-        rebuild_clean_teacher_layer(p, force=True)
-    except Exception:
-        pass
+    _invalidate_fuzzy_cache()
+    _schedule_teacher_rebuild(p)
     return {"ok": True}
 
 
@@ -666,10 +696,8 @@ def undo_brain_action(history_id: int, db_path: Path | str | None = None) -> dic
             else:
                 return {"ok": False, "error": "نوع بازگردانی پشتیبانی نمی‌شود."}
             con.execute("UPDATE entity_brain_history SET is_undone = TRUE WHERE id = ?", [int(history_id)])
-    try:
-        rebuild_clean_teacher_layer(p, force=True)
-    except Exception:
-        pass
+    _invalidate_fuzzy_cache()
+    _schedule_teacher_rebuild(p)
     return {"ok": True}
 
 
@@ -709,10 +737,8 @@ def import_brain_json(raw_json: str, db_path: Path | str | None = None) -> dict[
             res = save_alias(a["canonical_name"], a["alias_name"], a.get("entity_type", "teacher"), a.get("status", "approved"), float(a.get("confidence", 1.0)), db_path=p)
             if res.get("ok"):
                 imported_counts["aliases"] += 1
-    try:
-        rebuild_clean_teacher_layer(p, force=True)
-    except Exception:
-        pass
+    _invalidate_fuzzy_cache()
+    _schedule_teacher_rebuild(p)
     return {"ok": True, "imported": imported_counts}
 
 
@@ -1113,9 +1139,41 @@ def scan_fuzzy_candidates(db_path: Path | str | None = None, min_score: float = 
     if not p:
         return []
     cfg = load_brain_config(p)
+    all_aliases = list_aliases(db_path=p)
+    try:
+        with duckdb_session(p) as con_chk:
+            data_tbls = sorted(
+                str(r[0]) for r in con_chk.execute("SHOW TABLES").fetchall()
+                if str(r[0]).lower() not in INTERNAL_TABLES and not str(r[0]).lower().startswith("view_")
+            )
+            tbl_counts = []
+            for dt in data_tbls:
+                try:
+                    c_val = con_chk.execute(f'SELECT COUNT(*) FROM "{dt.replace(chr(34), chr(34)*2)}"').fetchone()[0]
+                    tbl_counts.append((dt, int(c_val)))
+                except Exception:
+                    tbl_counts.append((dt, -1))
+    except Exception:
+        tbl_counts = []
+    fuzzy_sig_payload = {
+        "p": str(p.resolve()),
+        "tbls": tbl_counts,
+        "aliases": [(a["entity_type"], a["canonical_name"], a["alias_name"], a["status"]) for a in all_aliases],
+        "honorifics": cfg.get("honorifics") or [],
+        "collective_keywords": cfg.get("collective_keywords") or [],
+        "compound_names": cfg.get("compound_names") or [],
+        "common_surnames": cfg.get("common_surnames") or [],
+        "entity_type_overrides": cfg.get("entity_type_overrides") or {},
+        "min_score": min_score,
+        "max_results": max_results,
+    }
+    cache_key = hashlib.md5(json.dumps(fuzzy_sig_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()
+    if _FUZZY_CACHE.get("key") == cache_key:
+        return list(_FUZZY_CACHE.get("results") or [])
+
     decided = {
         (ex["entity_type"], *sorted([_clean_for_compare(ex["canonical_name"], ex["entity_type"], cfg), _clean_for_compare(ex["alias_name"], ex["entity_type"], cfg)]))
-        for ex in list_aliases(db_path=p)
+        for ex in all_aliases
     }
     core_buckets: dict[str, dict[str, dict[str, Any]]] = {"teacher": {}, "workgroup": {}, "finance": {}, "person": {}}
     with _MEM_LOCK:
@@ -1182,7 +1240,10 @@ def scan_fuzzy_candidates(db_path: Path | str | None = None, min_score: float = 
                     "suggested_canonical": sug, "alias_candidate": ali, "confidence": round(score * 100), "caution": caution,
                 })
     candidates.sort(key=lambda x: (-x["confidence"], -(x["count_a"] + x["count_b"])))
-    return candidates[:max_results]
+    res_list = candidates[:max_results]
+    _FUZZY_CACHE["key"] = cache_key
+    _FUZZY_CACHE["results"] = list(res_list)
+    return res_list
 
 
 def build_memory_prompt_block(db_path: Path | str | None = None) -> str:

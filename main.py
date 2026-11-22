@@ -7,6 +7,23 @@ if getattr(_sys, 'frozen', False):
     _os.environ['EHADI_BUNDLE_DIR'] = str(_Path(getattr(_sys, '_MEIPASS', _APP_DIR)))
     _os.environ['EHADI_APP_DIR'] = str(_APP_DIR)
 
+# _EHADI_DPI_AWARENESS_V2 (crisp 1:1 native rendering on Windows High-DPI displays)
+if _os.name == "nt":
+    try:
+        import ctypes as _ct_dpi
+        try:
+            _ct_dpi.windll.user32.SetProcessDpiAwarenessContext(_ct_dpi.c_void_p(-4))
+        except Exception:
+            try:
+                _ct_dpi.windll.shcore.SetProcessDpiAwareness(2)
+            except Exception:
+                try:
+                    _ct_dpi.windll.user32.SetProcessDPIAware()
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
 # _EHADI_PROCESS_SPLASH_FIRST (launch splash BEFORE heavy imports for instant appearance)
 import os as _os, sys as _sys, subprocess as _subprocess, tempfile as _tempfile, threading as _threading, time as _time
 from pathlib import Path as _Path
@@ -76,7 +93,7 @@ _launch_ehadi_splash_proc()
 # _EH_DIAGNOSTICS_V43_HOOK
 try:
     from src.core.diagnostics import install_diagnostics as _eh_install_diag
-    _eh_install_diag(app_version="Beta 0.2")
+    _eh_install_diag(app_version="v0.3.0-beta")
 except Exception:
     pass
 # _EH_MEMORY_ENGINE_V45_HOOK
@@ -188,7 +205,14 @@ class AppAPI:
         self.bi = BIDashboardEngine()
         self.exec_engine = ExecutiveAnalyticsEngine()
         self._bi_cache = None
+        self._exec_cache: dict[str, dict] = {}
+        self._exec_cache_lock = threading.Lock()
         self._warmed_up = False
+
+    def _invalidate_caches(self):
+        self._bi_cache = None
+        with self._exec_cache_lock:
+            self._exec_cache.clear()
 
     def set_window(self, window):
         self._window = window
@@ -216,11 +240,11 @@ class AppAPI:
         from src.core.memory_engine import save_finance_category_rule as _save_fcr
         res = _save_fcr(item_key, category)
         if res.get("ok"):
-            self._bi_cache = None
+            self._invalidate_caches()
         return res
 
     def scan_documents(self):
-        self._bi_cache = None
+        self._invalidate_caches()
         data = self.engine.ingest_all()
         self.agent.invalidate_cache()
         def _refresh_after_scan():
@@ -600,10 +624,29 @@ class AppAPI:
 
                 def _do_hit():
                     try:
-                        if dir_low != "move" and native.WindowState == FormWindowState.Maximized:
-                            self._maximized = True
-                            return
+                        from System.Windows.Forms import Cursor
                         hwnd = int(native.Handle.ToInt64())
+                        if native.WindowState == FormWindowState.Maximized:
+                            if dir_low != "move":
+                                self._maximized = True
+                                return
+                            # Smooth Chrome/Win11-style restore-on-drag from maximized state
+                            cur = Cursor.Position
+                            old_w = max(1, int(native.Width))
+                            rx = max(0.08, min(0.92, (cur.X - int(native.Left)) / float(old_w)))
+                            native.WindowState = FormWindowState.Normal
+                            self._maximized = False
+                            new_w = max(800, int(native.Width))
+                            native.Left = int(cur.X - new_w * rx)
+                            native.Top = max(0, int(cur.Y - 18))
+                            try:
+                                pref = ctypes.c_int(2)
+                                ctypes.windll.dwmapi.DwmSetWindowAttribute(hwnd, 33, ctypes.byref(pref), ctypes.sizeof(pref))
+                            except Exception:
+                                pass
+                        # Only start drag if left mouse button is still physically held
+                        if (ctypes.windll.user32.GetAsyncKeyState(0x01) & 0x8000) == 0:
+                            return
                         ctypes.windll.user32.ReleaseCapture()
                         ctypes.windll.user32.SendMessageW(hwnd, 0x00A1, ht, 0)
                     except Exception:
@@ -614,6 +657,9 @@ class AppAPI:
         except Exception:
             pass
         return {"ok": False, "mode": "fallback"}
+
+    def start_window_resize(self, direction: str):
+        return self.begin_window_resize(direction)
 
     def resize_window_absolute(self, width: int, height: int):
         if not self._window:
@@ -638,20 +684,78 @@ class AppAPI:
 
     # ==================== v6.0 Pro: مرکز آمار، پرس‌لاین، دبیرخانه، چرخه رویدادها و پرونده ۳۶۰ ====================
     def get_executive_analytics(self, filters: dict | None = None):
-        return self.exec_engine.get_executive_analytics(filters)
+        f_raw = dict(filters or {})
+        force = bool(f_raw.pop("_force", False) or f_raw.pop("force", False))
+        key = json.dumps(
+            {
+                "group": str(f_raw.get("group") or ""),
+                "teacher": str(f_raw.get("teacher") or ""),
+                "year": str(f_raw.get("year") or ""),
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+        if not force:
+            with self._exec_cache_lock:
+                cached = self._exec_cache.get(key)
+            if cached is not None:
+                return cached
+        res = self.exec_engine.get_executive_analytics(f_raw)
+        if isinstance(res, dict) and res.get("ok"):
+            with self._exec_cache_lock:
+                if len(self._exec_cache) > 24:
+                    self._exec_cache.clear()
+                self._exec_cache[key] = res
+        return res
 
     def get_teacher_profile(self, name: str):
         return self.exec_engine.get_teacher_profile(name)
 
     def save_teacher_meta(self, name: str, bio: str, works: str):
+        self._invalidate_caches()
         return self.exec_engine.save_teacher_meta(name, bio, works)
 
     def get_participant_profile(self, key: str):
         return self.exec_engine.get_participant_profile(key)
 
+    def save_participant_meta(self, profile_key: str, meta: dict):
+        self._invalidate_caches()
+        return self.exec_engine.save_participant_meta(profile_key, meta or {})
+
+    def export_filtered_participants_excel(self, payload: dict):
+        if not self._window:
+            return {"ok": False, "error": "پنجره آماده نیست."}
+        try:
+            st = webview.FileDialog.SAVE if hasattr(webview, "FileDialog") else getattr(webview, "SAVE_DIALOG", 20)
+            fname = f"eHadi_Participants_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+            sel = self._window.create_file_dialog(st, save_filename=fname, file_types=("Excel Files (*.xlsx)",))
+            if not sel:
+                return {"ok": False, "cancelled": True}
+            dest = Path(sel[0] if isinstance(sel, (list, tuple)) else str(sel))
+            if dest.suffix.lower() != ".xlsx":
+                dest = dest.with_suffix(".xlsx")
+            from src.reports.report_studio import export_styled_excel
+            rows = (payload or {}).get("rows") or []
+            cols = (payload or {}).get("columns") or [
+                "ردیف", "نام و نام خانوادگی", "شماره تماس", "کد ملی", "سطح",
+                "تعداد دوره", "جلسات حاضر", "کل جلسات", "نرخ حضور (%)",
+                "رده وفاداری", "امتیاز مشارکت", "کارگروه‌ها", "برچسب‌ها", "یادداشت",
+            ]
+            title = str((payload or {}).get("title") or "فهرست مخاطبان یکتاسازی‌شده مؤسسه")
+            out_p = export_styled_excel({"title": title, "columns": cols, "rows": rows}, dest)
+            if Path(out_p).exists():
+                os.startfile(out_p)
+            return {"ok": True, "path": str(out_p), "count": len(rows)}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
     def merge_duplicate_records(self, canonical_name: str, alias_name: str):
-        self._bi_cache = None
+        self._invalidate_caches()
         return self.exec_engine.merge_duplicate_records(canonical_name, alias_name)
+
+    def reject_duplicate_records(self, name_a: str, name_b: str):
+        self._invalidate_caches()
+        return self.exec_engine.reject_duplicate_records(name_a, name_b)
 
     def select_and_preview_porsline(self):
         if not self._window:
@@ -666,7 +770,7 @@ class AppAPI:
             return {"ok": False, "error": str(exc)}
 
     def commit_porsline_import(self, payload: dict):
-        self._bi_cache = None
+        self._invalidate_caches()
         return self.exec_engine.commit_porsline_import(payload)
 
     def export_attendance_sheet(self, payload: dict):
@@ -725,6 +829,7 @@ class AppAPI:
         return {"ok": True, "letters": self.exec_engine.get_letters()}
 
     def delete_registered_letter(self, letter_id: str):
+        self._invalidate_caches()
         return self.exec_engine.delete_letter(letter_id)
 
     def open_registered_file(self, file_path: str, reveal_folder: bool = False):
@@ -748,6 +853,7 @@ class AppAPI:
         return self.exec_engine.save_event(payload)
 
     def delete_event_pipeline(self, event_id: str):
+        self._invalidate_caches()
         return self.exec_engine.delete_event(event_id)
 
 
@@ -799,7 +905,7 @@ class AppAPI:
 
     def resolve_fuzzy_pair(self, canonical_name: str = "", alias_name: str = "", entity_type: str = "teacher", decision: str = "approved", confidence: float = 1.0):
         from src.core.memory_engine import save_alias as _sa
-        self._bi_cache = None
+        self._invalidate_caches()
         self.agent.invalidate_cache()
         return _sa(
             canonical_name=canonical_name,
@@ -811,7 +917,7 @@ class AppAPI:
 
     def delete_entity_alias(self, alias_id: int = 0):
         from src.core.memory_engine import delete_alias as _da
-        self._bi_cache = None
+        self._invalidate_caches()
         return _da(int(alias_id))
 
     # --- Beta 0.2: هسته هوشمند موجودیت‌ها (کنترل ۱۰۰٪ از رابط کاربری)، سیاست ساعات و حسابرسی ---
@@ -821,37 +927,37 @@ class AppAPI:
 
     def save_brain_config(self, payload: dict | None = None):
         from src.core.memory_engine import save_brain_config as _sbc
-        self._bi_cache = None
+        self._invalidate_caches()
         self.agent.invalidate_cache()
         return _sbc(payload or {})
 
     def add_compound_name(self, name: str = ""):
         from src.core.memory_engine import add_compound_name as _acn
-        self._bi_cache = None
+        self._invalidate_caches()
         self.agent.invalidate_cache()
         return _acn(name)
 
     def delete_compound_name(self, name: str = ""):
         from src.core.memory_engine import delete_compound_name as _dcn
-        self._bi_cache = None
+        self._invalidate_caches()
         self.agent.invalidate_cache()
         return _dcn(name)
 
     def set_entity_type_override(self, raw_name: str = "", entity_mode: str = "auto"):
         from src.core.memory_engine import set_entity_type_override as _seto
-        self._bi_cache = None
+        self._invalidate_caches()
         self.agent.invalidate_cache()
         return _seto(raw_name, entity_mode)
 
     def set_hours_policy(self, policy: str = "equal"):
         from src.core.memory_engine import set_hours_policy as _shp
-        self._bi_cache = None
+        self._invalidate_caches()
         self.agent.invalidate_cache()
         return _shp(policy)
 
     def set_course_hour_override(self, course_key: str = "", teacher_shares: dict | None = None):
         from src.core.memory_engine import set_course_hour_override as _scho
-        self._bi_cache = None
+        self._invalidate_caches()
         self.agent.invalidate_cache()
         return _scho(course_key, teacher_shares)
 
@@ -861,7 +967,7 @@ class AppAPI:
 
     def undo_brain_action(self, history_id: int = 0):
         from src.core.memory_engine import undo_brain_action as _uba
-        self._bi_cache = None
+        self._invalidate_caches()
         self.agent.invalidate_cache()
         return _uba(int(history_id))
 
@@ -871,7 +977,7 @@ class AppAPI:
 
     def import_brain_config(self, raw_json: str = ""):
         from src.core.memory_engine import import_brain_json as _ibj
-        self._bi_cache = None
+        self._invalidate_caches()
         self.agent.invalidate_cache()
         return _ibj(raw_json)
 
@@ -1015,7 +1121,16 @@ def main():
             threading.Thread(target=_reveal_main_when_splash_done, daemon=True).start()
         if not getattr(api, "_warmed_up", False):
             api._warmed_up = True
-            threading.Thread(target=api.agent.warmup, daemon=True).start()
+            def _bg_warmup_all():
+                try:
+                    api.get_executive_analytics({})
+                except Exception:
+                    pass
+                try:
+                    api.agent.warmup()
+                except Exception:
+                    pass
+            threading.Thread(target=_bg_warmup_all, daemon=True).start()
 
     window.events.shown += _on_window_shown
     webview.start()

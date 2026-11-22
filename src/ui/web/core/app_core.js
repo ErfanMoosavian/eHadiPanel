@@ -55,16 +55,10 @@ window.eHadiApp = (() => {
     return tip;
   }
 
-  function showNavTooltip(btn) {
-    if (!document.body.classList.contains('sidebar-collapsed')) return;
-    const text = btn.getAttribute('data-tooltip');
-    if (!text) return;
-    const tip = ensureTooltipPortal();
-    const rect = btn.getBoundingClientRect();
-    tip.textContent = text;
-    tip.style.top = `${Math.round(rect.top + rect.height / 2)}px`;
-    tip.style.left = `${Math.round(rect.left - 12)}px`;
-    tip.classList.add('visible');
+  function showNavTooltip(_btn) {
+    // Unified tooltip engine (#ehGlassTooltip in executive_ux.js) handles all tooltips cleanly
+    const legacy = document.getElementById('proFloatingTooltip');
+    if (legacy) legacy.remove();
   }
 
   function hideNavTooltip() {

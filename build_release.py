@@ -1,5 +1,5 @@
 """
-اسکریپت ساخت بسته نصب و انتشار نسخه Beta 0.2 سامانه eHadiPanel
+اسکریپت ساخت بسته نصب و انتشار نسخه v0.3.0-beta سامانه eHadiPanel
 مؤسسه علمی فرهنگی امام هادی علیه‌السلام
 - بدون هیچ اثر از v20 یا Enterprise
 - بسته‌بندی کامل فایل‌های وب، اسپلش اسکرین جدید eHP و فونت‌های Vazirmatn
@@ -21,8 +21,8 @@ PY = str(VENV_PY) if VENV_PY.exists() else sys.executable
 BUILD_DIR = ROOT / "build"
 DIST_DIR = ROOT / "dist"
 APP_NAME = "eHadiPanel"
-APP_VER = "0.2.0-beta"
-RELEASE_TAG = "Beta 0.2"
+APP_VER = "0.3.0-beta"
+RELEASE_TAG = "v0.3.0-beta"
 
 
 def run(cmd, check=True):
@@ -201,8 +201,8 @@ def create_installer_or_package(ico_path: Path | None):
         dist_ico.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ico_path, dist_ico)
 
-    # Generate clean Beta 0.2 Inno Setup script (.iss)
-    iss_path = BUILD_DIR / "eHadiPanel_Beta_0.2_Installer.iss"
+    # Generate clean v0.3.0-beta Inno Setup script (.iss)
+    iss_path = BUILD_DIR / "eHadiPanel_v0.3.0-beta_Installer.iss"
     font_entries = []
     if fonts_dst.exists():
         for fp in sorted(fonts_dst.iterdir()):
@@ -223,7 +223,7 @@ def create_installer_or_package(ico_path: Path | None):
         f"DefaultGroupName=eHadiPanel {RELEASE_TAG}\n"
         "AllowNoIcons=yes\n"
         f"OutputDir={DIST_DIR}\n"
-        "OutputBaseFilename=eHadiPanel_Beta_0.2_Setup\n"
+        "OutputBaseFilename=eHadiPanel_v0.3.0-beta_Setup\n"
         + ("Compression=lzma2/fast\nSolidCompression=no\n" if FAST_MODE else "Compression=lzma2/ultra64\nSolidCompression=yes\n")
         + "WizardStyle=modern\n"
         "PrivilegesRequired=lowest\n"
@@ -253,12 +253,12 @@ def create_installer_or_package(ico_path: Path | None):
     iscc = next((p for p in iscc_candidates if p.exists()), None)
 
     if iscc:
-        print(f"[INFO] Inno Setup found! Building eHadiPanel_Beta_0.2_Setup.exe (mode={'FAST' if FAST_MODE else 'ULTRA'})...", flush=True)
+        print(f"[INFO] Inno Setup found! Building eHadiPanel_v0.3.0-beta_Setup.exe (mode={'FAST' if FAST_MODE else 'ULTRA'})...", flush=True)
         run([str(iscc), str(iss_path)])
-        print(f"\n[SUCCESS] Windows Setup created: {DIST_DIR / 'eHadiPanel_Beta_0.2_Setup.exe'}", flush=True)
+        print(f"\n[SUCCESS] Windows Setup created: {DIST_DIR / 'eHadiPanel_v0.3.0-beta_Setup.exe'}", flush=True)
     else:
-        zip_path = DIST_DIR / "eHadiPanel_Beta_0.2_Install_Package.zip"
-        print("[INFO] Inno Setup not installed; creating clean Beta 0.2 installation package...", flush=True)
+        zip_path = DIST_DIR / "eHadiPanel_v0.3.0-beta_Install_Package.zip"
+        print("[INFO] Inno Setup not installed; creating clean v0.3.0-beta installation package...", flush=True)
         with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zf:
             for file in app_out.rglob("*"):
                 if file.is_file():
