@@ -5,7 +5,7 @@
   <title>پنل مدیریت مؤسسه امام هادی</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="stylesheet" href="studio_theme.css?v=290" />
-  <link rel="stylesheet" href="luxury_glass_v46.css?v=621" />
+  <link rel="stylesheet" href="luxury_glass_v46.css?v=645" />
 </head>
 <body>
   <div class="bg-grid"></div>
@@ -19,7 +19,7 @@
         <span class="status-dot"></span>
         <span>پنل مدیریت مؤسسه امام هادی</span>
       </div>
-      <span class="version-pill">eHadiPanel v0.3.0-beta</span>
+      <span class="version-pill">eHadiPanel v0.4.0-beta</span>
     </div>
     <div class="win-controls">
       <button class="win-btn" onclick="pywebview.api.minimize()" title="کوچک‌نمایی">
@@ -159,12 +159,22 @@
         </div>
 
         <div class="dash-split">
-          <div class="glass-card spotlight-card" style="display:flex; flex-direction:column; min-height:0;">
-            <div class="card-title">
-              <span>آخرین فایل‌های نمایه‌سازی‌شده</span>
+          <div class="glass-card spotlight-card eh-flush-card" style="display:flex; flex-direction:column; min-height:0;">
+            <div class="eh-sec-hdr">
+              <div class="eh-card-title-wrap">
+                <span class="eh-card-ico eh-ico-sky" aria-hidden="true">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+                </span>
+                <div class="eh-card-title-txt">
+                  <div class="eh-card-title-row">
+                    <strong>آخرین فایل‌های نمایه‌سازی‌شده</strong>
+                  </div>
+                  <span class="eh-card-sub">اسناد پردازش‌شده در پایگاه داده تحلیلی و جست‌وجوی معنایی</span>
+                </div>
+              </div>
               <span class="stat-pill" id="dashFileBadge">۰ فایل</span>
             </div>
-            <div id="dashFilesContainer" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+            <div id="dashFilesContainer" class="eh-dash-files-body" style="flex:1; display:flex; flex-direction:column; min-height:0;">
               <div class="empty-state">
                 <p>هنوز فایلی پردازش نشده است. از بخش «مدیریت و پردازش اسناد» فایل‌های مؤسسه را اضافه و اسکن کنید.</p>
               </div>
@@ -211,7 +221,7 @@
             <div class="glass-card chat-stream" id="chatStream"></div>
 
             <div class="quick-prompts">
-              <button class="prompt-chip" onclick="sendQuickPrompt('جدول ۱۰ دوره پرمخاطب مؤسسه را به ترتیب بیشترین تعداد شرکت‌کننده همراه با نام استاد تهیه کن')">۱۰ دوره پرمخاطب (SQL + اکسل)</button>
+              <button class="prompt-chip" onclick="sendQuickPrompt('جدول ۱۰ دوره پراستقبال مؤسسه را به ترتیب بیشترین تعداد شرکت‌کننده همراه با نام استاد تهیه کن')">۱۰ دوره پراستقبال (SQL + اکسل)</button>
               <button class="prompt-chip" onclick="sendQuickPrompt('مجموع شرکت‌کنندگان و تعداد دوره‌های هر کارگروه را محاسبه و مقایسه کن')">مقایسه آماری کارگروه‌ها</button>
               <button class="prompt-chip" onclick="sendQuickPrompt('کدام اساتید بیشترین تعداد دوره و بیشترین مجموع شرکت‌کننده را داشته‌اند؟ در قالب جدول نشان بده')">رتبه‌بندی اساتید</button>
               <button class="prompt-chip" onclick="sendQuickPrompt('خصوصیات دوره‌های کوتاه‌مدت مؤسسه امام هادی و کلان موضوعات آن چیست؟')">خصوصیات دوره‌های کوتاه‌مدت</button>
@@ -1044,21 +1054,21 @@
     window.addEventListener('pywebviewready', loadInitialData);
   </script>
   <script src="silky_stream.js?v=480"></script>
-  <script src="bi_dashboard.js?v=621"></script>
+  <script src="bi_dashboard.js?v=645"></script>
   <script src="report_studio.js"></script>
 
 
 
 
   <script src="core/icons.js?v=70"></script>
-  <script src="core/smart_help.js?v=621"></script>
-  <script src="core/charts.js?v=621"></script>
-  <script src="core/app_core.js?v=621"></script>
+  <script src="core/smart_help.js?v=645"></script>
+  <script src="core/charts.js?v=645"></script>
+  <script src="core/app_core.js?v=645"></script>
   <script src="core/plugins.js?v=486"></script>
-  <script src="core/analytics_suite.js?v=621"></script>
+  <script src="core/analytics_suite.js?v=645"></script>
   <script src="core/voice_copilot.js?v=104"></script>
   <script src="core/explorer_fix.js?v=510"></script>
-  <script src="core/modern_dropdown.js?v=621"></script>
+  <script src="core/modern_dropdown.js?v=645"></script>
 
 <script id="ehadiStartupReflow">
 (() => {
@@ -1076,7 +1086,7 @@
   });
 })();
 </script>
-  <script src="core/executive_ux.js?v=621"></script>
+  <script src="core/executive_ux.js?v=645"></script>
   <script src="core/diagnostics_ui.js?v=483"></script>
   <script src="core/memory_ui.js?v=480"></script>
 </body>

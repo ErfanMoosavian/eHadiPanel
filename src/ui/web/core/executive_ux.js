@@ -313,21 +313,45 @@
     if (!api || api._v29Wrapped) return;
     api._v29Wrapped = true;
 
+    window.__ehInvalidateAnalyticsCache = function () {
+      cachedAnalytics = null;
+      cacheTs = 0;
+      window.__ehExecCache = null;
+      window.__ehClearSuiteCache?.();
+    };
+
     const origAnalytics = api.get_executive_analytics?.bind(api);
     if (origAnalytics) {
       api.get_executive_analytics = async function (filters = {}) {
-        const isDefault = !filters || Object.values(filters).every(v => v === '' || v === null || v === undefined);
-        if (isDefault && cachedAnalytics && (Date.now() - cacheTs < 45000)) return cachedAnalytics;
-        const res = await origAnalytics(filters);
-        if (isDefault && res && res.ok) { cachedAnalytics = res; cacheTs = Date.now(); }
+        const f = filters || {};
+        const isForce = Boolean(f._force || f.force);
+        const isDefault = !f.group && !f.teacher && !f.year && !f.data_mode && !f.hours_policy;
+        if (!isForce && isDefault && cachedAnalytics && (Date.now() - cacheTs < 45000)) return cachedAnalytics;
+        const res = await origAnalytics(f);
+        if (isDefault && res && res.ok) {
+          cachedAnalytics = res;
+          cacheTs = Date.now();
+          window.__ehExecCache = res;
+        }
         return res;
       };
     }
 
-    ['scan_documents', 'import_porsline_excel', 'merge_participants', 'save_event_pipeline', 'delete_document'].forEach(fn => {
+    [
+      'scan_documents', 'commit_porsline_import', 'merge_duplicate_records',
+      'reject_duplicate_records', 'save_participant_meta', 'save_teacher_meta',
+      'save_event_pipeline', 'delete_event_pipeline', 'delete_registered_letter',
+      'save_finance_category_rule', 'resolve_fuzzy_pair', 'delete_entity_alias',
+      'save_brain_config', 'add_compound_name', 'delete_compound_name',
+      'set_entity_type_override', 'set_hours_policy', 'set_course_hour_override',
+      'undo_brain_action', 'import_brain_config',
+    ].forEach(fn => {
       if (typeof api[fn] === 'function') {
         const orig = api[fn].bind(api);
-        api[fn] = async function () { cachedAnalytics = null; return orig.apply(this, arguments); };
+        api[fn] = async function () {
+          window.__ehInvalidateAnalyticsCache();
+          return orig.apply(this, arguments);
+        };
       }
     });
   }
@@ -360,11 +384,12 @@
       <div class="eh-drawer-panel" role="dialog" aria-modal="true">
         <div class="eh-drawer-head">
           <div>
-            <strong style="font-size:15px;">${shortName}</strong>
-            <div style="font-size:11px; color:var(--s-text-muted); margin-top:2px;">${tObj.name}</div>
+            <strong style="font-size:15px;">${String(shortName || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</strong>
+            <div style="font-size:11px; color:var(--s-text-muted); margin-top:2px;">${String(tObj.name || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}</div>
           </div>
           <button type="button" class="pro-icon-btn" id="btnCloseT360">${ic('close', 15)}</button>
         </div>
+        <div class="eh-drawer-body">
         <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:8px;">
           <div class="eh-set-card" style="padding:10px; text-align:center;">
             <span style="font-size:11px; color:var(--s-text-muted);">\u062a\u0639\u062f\u0627\u062f \u062f\u0648\u0631\u0647</span>
@@ -375,7 +400,7 @@
             <strong style="font-size:18px; color:var(--lg-accent);">${toFa(tObj.attendance)}</strong>
           </div>
           <div class="eh-set-card" style="padding:10px; text-align:center;">
-            <span style="font-size:11px; color:var(--s-text-muted);">\u0645\u062e\u0627\u0637\u0628 \u06cc\u06a9\u062a\u0627</span>
+            <span style="font-size:11px; color:var(--s-text-muted);">دانش‌پژوه یکتا</span>
             <strong style="font-size:18px; color:var(--lg-accent);">${toFa(tObj.unique)}</strong>
           </div>
         </div>
@@ -386,8 +411,9 @@
             ${(tObj.groups || []).map(g => `<span class="eh-badge">${g}</span>`).join('') || '<span class="eh-badge">\u062f\u0648\u0631\u0647\u200c\u0647\u0627\u06cc \u0639\u0644\u0645\u06cc</span>'}
           </div>
         </div>
-        <div style="display:flex; gap:8px; margin-top:auto;">
+        <div style="display:flex; gap:8px; margin-top:auto; padding-top:8px;">
           <button type="button" class="primary-btn" id="btnAskAiTeacher" style="flex:1;">\u062a\u062d\u0644\u06cc\u0644 \u0639\u0645\u0644\u06a9\u0631\u062f \u062f\u0631 \u062f\u0633\u062a\u06cc\u0627\u0631 \u0647\u0648\u0634\u0645\u0646\u062f</button>
+        </div>
         </div>
       </div>
     `;
@@ -402,7 +428,7 @@
       window.switchPageById?.('chat');
       const inp = document.getElementById('chatInput');
       if (inp) {
-        inp.value = '\u06af\u0632\u0627\u0631\u0634 \u06a9\u0627\u0645\u0644 \u062f\u0648\u0631\u0647\u200c\u0647\u0627 \u0648 \u0622\u0645\u0627\u0631 \u0645\u062e\u0627\u0637\u0628\u0627\u0646 ' + shortName + ' \u0631\u0627 \u0628\u0646\u0648\u06cc\u0633';
+        inp.value = 'گزارش کامل دوره‌ها و آمار دانش‌پژوهان ' + shortName + ' \u0631\u0627 \u0628\u0646\u0648\u06cc\u0633';
         inp.focus();
       }
     });
@@ -895,7 +921,7 @@
               </div>
             </div>
             <div class="pro-modal-footer">
-              <span style="font-size:11px; color:var(--s-text-dim);">eHadiPanel v0.3.0-beta — ${INST_HTML}</span>
+              <span style="font-size:11px; color:var(--s-text-dim);">eHadiPanel v0.4.0-beta — ${INST_HTML}</span>
               <button type="button" class="primary-btn" data-close-modal style="padding:7px 22px;">\u062a\u0623\u06cc\u06cc\u062f \u0648 \u0628\u0633\u062a\u0646</button>
             </div>
           </div>
@@ -1821,8 +1847,8 @@
 
       // 2. Four Main BI Quad Cards
       const matchers = [
-        { type: 'donut', test: (t) => t.includes('\u0633\u0647\u0645 \u0645\u062e\u0627\u0637\u0628\u0627\u0646') },
-        { type: 'top', test: (t) => t.includes('\u067e\u0631\u0645\u062e\u0627\u0637\u0628') && !t.includes('\u067e\u0631\u0645\u062e\u0627\u0637\u0628\u200c\u062a\u0631\u06cc\u0646') && !t.includes('\u067e\u0631\u0645\u062e\u0627\u0637\u0628 \u062a\u0631\u06cc\u0646') },
+        { type: 'donut', test: (t) => t.includes('سهم دانش') || t.includes('سهم مخاطبان') },
+        { type: 'top', test: (t) => (t.includes('پراستقبال') && !t.includes('پراستقبال‌ترین')) || (t.includes('پرمخاطب') && !t.includes('پرمخاطب‌ترین')) },
         { type: 'compare', test: (t) => t.includes('\u0645\u0642\u0627\u06cc\u0633\u0647 \u06a9\u0627\u0631\u06af\u0631\u0648\u0647') },
         { type: 'teachers', test: (t) => t.includes('\u0627\u0633\u0627\u062a\u06cc\u062f \u0634\u0627\u062e\u0635') },
       ];
@@ -1904,9 +1930,10 @@
 
         if (type === 'compare') {
           // 1. Find & hoist the color legend to the top (right below card header) with NO hover
-          const legendEl = Array.from(card.querySelectorAll('div')).find(d => {
+          const legendEl = card.querySelector('.bi-cmp-legend') || Array.from(card.querySelectorAll('div')).find(d => {
+            if (d.classList.contains('eh-bi-hdr') || d.classList.contains('card-title') || d.closest('.eh-bi-hdr, .card-title')) return false;
             const dt = (d.textContent || '').trim();
-            return dt.includes('\u0645\u06cc\u0627\u0646\u06af\u06cc\u0646 \u0645\u062e\u0627\u0637\u0628 \u0647\u0631 \u062f\u0648\u0631\u0647') && dt.includes('\u062a\u0639\u062f\u0627\u062f \u062f\u0648\u0631\u0647') && dt.length < 75;
+            return (dt.includes('میانگین دانش') || dt.includes('میانگین مخاطب هر دوره')) && dt.includes('تعداد دوره') && dt.length < 85;
           });
           if (legendEl) {
             legendEl.classList.remove('eh-cmp-item', 'eh-compare-legend-pad', 'eh-hover-row');
@@ -2230,7 +2257,7 @@
       if (parentCard && inDash) parentCard.classList.add('eh-has-dropdown-open');
     });
 
-    const menus = new Set(document.querySelectorAll('.eh-cselect-menu, .eh-cselect-panel, .eh-cselect-dropdown, [class*="cselect-menu"], [class*="cselect-list"]'));
+    const menus = new Set(document.querySelectorAll('.eh-cselect-panel, .eh-cselect-dropdown'));
     document.querySelectorAll('div, ul').forEach(el => {
       if (el.children.length >= 4 && el.children.length <= 150) {
         const cs = getComputedStyle(el);
@@ -2247,6 +2274,7 @@
     });
 
     menus.forEach(menu => {
+      if (menu.dataset.ehPortalManaged === '1' || menu.closest('.eh-cselect-menu')) return;
       menu.classList.add('eh-select-menu-fixed');
       const mTxt = menu.textContent || '';
       const isTeacherMenu = mTxt.includes('\u0647\u0645\u0647 \u0627\u0633\u0627\u062a\u06cc\u062f');

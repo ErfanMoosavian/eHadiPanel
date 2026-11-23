@@ -66,7 +66,11 @@ body[data-studio-theme="light"][data-accent-scheme="navy"] {
 }
 
 body[data-ui-density="compact"] .page { gap: 10px !important; }
-body[data-ui-density="compact"] .glass-card { padding: 12px 14px !important; border-radius: 13px !important; }
+body[data-ui-density="compact"] .glass-card:where(:not(.eh-chart-box):not(.eh-crm-card):not(.eh-flush-card):not(.eh-bi-quad-card)) { padding: 12px 14px !important; border-radius: 13px !important; }
+body[data-ui-density="compact"] .eh-chart-box,
+body[data-ui-density="compact"] .eh-crm-card,
+body[data-ui-density="compact"] .eh-flush-card,
+body[data-ui-density="compact"] .eh-bi-quad-card { padding: 0 !important; border-radius: 13px !important; }
 body[data-ui-density="compact"] .stat-card { padding: 12px 14px !important; }
 
 /* Small, clean honorific "???????????" with proper breathing space (never sticks to ?) */
@@ -824,14 +828,9 @@ body[data-studio-theme="light"] .eh-subsys-online-pill {
   margin: 0 !important;
   width: 100% !important;
   display: grid !important;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  grid-template-columns: repeat(auto-fit, minmax(242px, 1fr)) !important;
   gap: 10px !important;
   align-items: stretch !important;
-}
-@media (max-width: 1060px) {
-  .eh-subsys-wrapper {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
 }
 
 .eh-subsys-item {
@@ -6440,4 +6439,802 @@ body[data-studio-theme="light"] .eh-skel-bar {
     rgba(15, 23, 42, 0.05) 75%
   ) !important;
   background-size: 220% 100% !important;
+}
+
+
+/* ============================================================================
+   eHadiPanel v0.4.0-beta (FINAL r4) —
+   Gentle Sidebar Breathing-Room Balance on Shorter Screens (Preserves Full Fonts & Logo)
+   ============================================================================ */
+@media (max-height: 820px) {
+  :root { --eh-nav-h: 36px; }
+  #sidebar, .sidebar { padding: 8px 10px !important; }
+  #sidebar .brand.eh-brand-logo-only, .sidebar .brand.eh-brand-logo-only { gap: 4px !important; padding: 5px 5px 8px 5px !important; margin: 0 0 6px 0 !important; }
+  #sidebar .brand.eh-brand-logo-only .brand-logo.eh-brand-logo-crest { width: 138px !important; height: 80px !important; }
+  #sidebar .eh-brand-logo-img { max-width: 138px !important; max-height: 80px !important; }
+  .studio-theme-switcher { margin: 0 0 6px !important; }
+  #sidebar .nav-list { gap: 2px !important; }
+  .eh-nav-group-lbl { padding: 5px 10px 2px !important; }
+  .sidebar-footer { padding-top: 5px !important; gap: 5px !important; }
+}
+
+
+/* ============================================================================
+   eHadiPanel v0.4.0-beta (QA-2) — Searchable Modern Dropdowns
+   ============================================================================ */
+.eh-cselect-menu { display: flex !important; flex-direction: column !important; overflow: hidden !important; }
+.eh-cselect-search-wrap { padding: 6px 6px 5px !important; border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important; flex-shrink: 0 !important; }
+body[data-studio-theme="light"] .eh-cselect-search-wrap { border-bottom-color: rgba(15, 23, 42, 0.09) !important; }
+.eh-cselect-search { width: 100% !important; box-sizing: border-box !important; padding: 5px 9px !important; border-radius: 8px !important; border: 1px solid rgba(var(--lg-accent-rgb), 0.30) !important; background: rgba(2, 6, 23, 0.45) !important; color: var(--s-text, #f8fafc) !important; font-family: inherit !important; font-size: 11.4px !important; outline: none !important; }
+.eh-cselect-search:focus { border-color: rgba(var(--lg-accent-rgb), 0.72) !important; }
+body[data-studio-theme="light"] .eh-cselect-search { background: rgba(241, 245, 249, 0.92) !important; color: #0f172a !important; border-color: rgba(15, 23, 42, 0.16) !important; }
+.eh-cselect-list { overflow-y: auto !important; flex: 1 1 auto !important; display: flex !important; flex-direction: column !important; gap: 2px !important; }
+.eh-cselect-empty { padding: 12px 8px !important; text-align: center !important; font-size: 11px !important; color: var(--s-text-muted, #94a3b8) !important; }
+
+
+/* ============================================================================
+   eHadiPanel v0.4.0-beta (Drawer 360° Precision Fix) —
+   1. Eliminates Flex-Shrink + overflow:hidden Crushing on Drawer & Modal Cards
+   2. Replaces Curved Border-Right Artifact with Crisp Floating Vertical Accent Pill
+   3. Semantic Rate Pills, Collapsible Form Toggle & Live Timeline Filter Bar
+   ============================================================================ */
+
+/* ROOT FIX: Direct children of scrollable column flex containers MUST NEVER shrink or clip! */
+.eh-drawer-body > *,
+.pro-modal-content > * {
+  flex-shrink: 0 !important;
+}
+.eh-drawer-body .eh-dr-sec,
+.eh-drawer-body .eh-dr-sec.glass-card {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: auto !important;
+  overflow: visible !important;
+  padding: 13px 15px !important;
+  transform: none !important;
+}
+.eh-drawer-body .eh-dr-sec.glass-card:hover {
+  transform: none !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
+}
+body[data-studio-theme="light"] .eh-drawer-body .eh-dr-sec.glass-card:hover {
+  border-color: rgba(15, 23, 42, 0.11) !important;
+}
+.eh-drawer-body .eh-dr-sec.glass-card::before {
+  display: none !important;
+}
+
+.eh-dr-sec-title-flex {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+}
+.eh-dr-toggle-btn {
+  padding: 2px 9px !important;
+  border-radius: 99px !important;
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: var(--s-text-muted) !important;
+  font-family: inherit !important;
+  font-size: 10.4px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease !important;
+}
+.eh-dr-toggle-btn:hover {
+  background: rgba(var(--lg-accent-rgb), 0.16) !important;
+  border-color: rgba(var(--lg-accent-rgb), 0.45) !important;
+  color: var(--lg-pill-color, #7dd3fc) !important;
+}
+body[data-studio-theme="light"] .eh-dr-toggle-btn {
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  background: rgba(15, 23, 42, 0.04) !important;
+}
+
+.eh-dr-id-pill {
+  padding: 1px 7px !important;
+  border-radius: 6px !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  border: 1px solid rgba(255, 255, 255, 0.11) !important;
+  font-size: 10.5px !important;
+}
+body[data-studio-theme="light"] .eh-dr-id-pill {
+  background: rgba(15, 23, 42, 0.05) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+
+/* Crisp Timeline Filter Bar inside Drawer */
+.eh-dr-tl-tools {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  margin-bottom: 10px !important;
+  flex-wrap: wrap !important;
+}
+.eh-dr-tl-search {
+  flex: 1 1 170px !important;
+  padding: 5px 10px !important;
+  font-size: 11.4px !important;
+  height: 31px !important;
+}
+.eh-dr-tl-pills {
+  display: flex !important;
+  gap: 4px !important;
+  flex-shrink: 0 !important;
+}
+.eh-dr-tl-pill {
+  padding: 4px 10px !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: var(--s-text-muted) !important;
+  font-family: inherit !important;
+  font-size: 10.8px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+}
+.eh-dr-tl-pill.active {
+  background: rgba(var(--lg-accent-rgb), 0.22) !important;
+  border-color: rgba(var(--lg-accent-rgb), 0.58) !important;
+  color: var(--lg-pill-color, #7dd3fc) !important;
+}
+body[data-studio-theme="light"] .eh-dr-tl-pill {
+  border-color: rgba(15, 23, 42, 0.12) !important;
+  background: rgba(15, 23, 42, 0.03) !important;
+}
+body[data-studio-theme="light"] .eh-dr-tl-pill.active {
+  color: var(--lg-pill-light, #0369a1) !important;
+}
+
+/* Crisp Geometric Course Cards — NO curved crescent border-right artifact! */
+.eh-tl-course {
+  position: relative !important;
+  padding: 10px 14px 10px 12px !important;
+  border-radius: 11px !important;
+  background: rgba(255, 255, 255, 0.028) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  transition: border-color 0.18s ease, background 0.18s ease !important;
+}
+.eh-tl-course::before {
+  content: "" !important;
+  position: absolute !important;
+  right: 0 !important;
+  top: 9px !important;
+  bottom: 9px !important;
+  width: 3px !important;
+  border-radius: 99px !important;
+  background: var(--lg-accent, #38bdf8) !important;
+  opacity: 0.85 !important;
+}
+.eh-tl-course.eh-tl-ok::before { background: #10b981 !important; }
+.eh-tl-course.eh-tl-mid::before { background: #f59e0b !important; }
+.eh-tl-course.eh-tl-low::before { background: #f43f5e !important; }
+.eh-tl-course.eh-tl-neutral::before { background: rgba(148, 163, 184, 0.55) !important; }
+.eh-tl-course:hover {
+  background: rgba(255, 255, 255, 0.048) !important;
+  border-color: rgba(var(--lg-accent-rgb), 0.28) !important;
+}
+body[data-studio-theme="light"] .eh-tl-course {
+  background: rgba(15, 23, 42, 0.022) !important;
+  border: 1px solid rgba(15, 23, 42, 0.09) !important;
+}
+.eh-tl-course-name {
+  font-size: 12.2px !important;
+  font-weight: 700 !important;
+  color: var(--s-text) !important;
+}
+
+/* Semantic Attendance Rate Pills inside Drawer Timeline */
+.eh-dr-rate-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 2px 9px !important;
+  border-radius: 99px !important;
+  font-size: 10.6px !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+  border: 1px solid transparent !important;
+}
+.eh-dr-rate-pill.eh-tl-ok {
+  background: rgba(16, 185, 129, 0.14) !important;
+  border-color: rgba(16, 185, 129, 0.38) !important;
+  color: #34d399 !important;
+}
+.eh-dr-rate-pill.eh-tl-mid {
+  background: rgba(245, 158, 11, 0.14) !important;
+  border-color: rgba(245, 158, 11, 0.40) !important;
+  color: #fbbf24 !important;
+}
+.eh-dr-rate-pill.eh-tl-low {
+  background: rgba(244, 63, 94, 0.13) !important;
+  border-color: rgba(244, 63, 94, 0.36) !important;
+  color: #fb7185 !important;
+}
+.eh-dr-rate-pill.eh-tl-neutral {
+  background: rgba(148, 163, 184, 0.12) !important;
+  border-color: rgba(148, 163, 184, 0.28) !important;
+  color: var(--s-text-muted) !important;
+}
+body[data-studio-theme="light"] .eh-dr-rate-pill.eh-tl-ok { color: #047857 !important; }
+body[data-studio-theme="light"] .eh-dr-rate-pill.eh-tl-mid { color: #b45309 !important; }
+body[data-studio-theme="light"] .eh-dr-rate-pill.eh-tl-low { color: #be123c !important; }
+
+
+/* ============================================================================
+   eHadiPanel v0.4.0-beta (FINAL r3) —
+   1. Bug-Free RTL Portal Dropdowns
+   2. Zero-Jitter Fixed CRM Table + Directional Page Transitions + 5-Tier Colors
+   3. High-Contrast Multi-Stop Affinity Matrix + Mode Toggle & Legend
+   4. Student Vetting (Graylist / Blacklist) & Drawer Scroll Isolation
+   ============================================================================ */
+
+/* 1. RTL PORTAL DROPDOWNS */
+@keyframes ehDropdownPopIn {
+  0%   { opacity: 0; transform: translateY(-5px) scale(0.985); }
+  100% { opacity: 1; transform: none; }
+}
+.eh-cselect-menu[data-eh-portal-managed="1"] {
+  position: fixed !important;
+  z-index: 999998 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  padding: 6px !important;
+  border-radius: 13px !important;
+  direction: rtl !important;
+  text-align: right !important;
+  background: rgba(11, 20, 36, 0.985) !important;
+  border: 1px solid rgba(var(--lg-accent-rgb), 0.34) !important;
+  box-shadow: 0 22px 50px -12px rgba(0, 0, 0, 0.72) !important;
+  backdrop-filter: blur(20px) saturate(160%) !important;
+  box-sizing: border-box !important;
+  animation: ehDropdownPopIn 0.16s cubic-bezier(0.22, 1, 0.36, 1) both !important;
+}
+body[data-studio-theme="light"] .eh-cselect-menu[data-eh-portal-managed="1"] {
+  background: rgba(255, 255, 255, 0.99) !important;
+  border-color: rgba(15, 23, 42, 0.14) !important;
+  box-shadow: 0 18px 42px -10px rgba(15, 23, 42, 0.20) !important;
+}
+.eh-cselect-menu[data-eh-portal-managed="1"] > .eh-cselect-list {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain !important;
+  padding: 2px !important;
+  margin: 0 !important;
+  gap: 2px !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  border-radius: 0 !important;
+  direction: rtl !important;
+  text-align: right !important;
+}
+.eh-cselect-menu[data-eh-portal-managed="1"] .eh-cselect-item {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  width: 100% !important;
+  min-height: 35px !important;
+  height: auto !important;
+  flex-shrink: 0 !important;
+  padding: 7px 11px !important;
+  margin: 0 !important;
+  gap: 10px !important;
+  border-radius: 9px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  color: var(--s-text, #e2e8f0) !important;
+  font-family: inherit !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 1.45 !important;
+  text-align: right !important;
+  direction: rtl !important;
+  cursor: pointer !important;
+  box-sizing: border-box !important;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease !important;
+}
+.eh-cselect-menu[data-eh-portal-managed="1"] .eh-cselect-item[hidden] { display: none !important; }
+.eh-cselect-menu[data-eh-portal-managed="1"] .eh-cselect-item:hover,
+.eh-cselect-menu[data-eh-portal-managed="1"] .eh-cselect-item.kbd-focus {
+  background: rgba(var(--lg-accent-rgb), 0.16) !important;
+  border-color: rgba(var(--lg-accent-rgb), 0.26) !important;
+  color: #ffffff !important;
+}
+.eh-cselect-menu[data-eh-portal-managed="1"] .eh-cselect-item.selected {
+  background: rgba(var(--lg-accent-rgb), 0.22) !important;
+  border-color: rgba(var(--lg-accent-rgb), 0.48) !important;
+  color: var(--lg-pill-color, #7dd3fc) !important;
+  font-weight: 800 !important;
+}
+body[data-studio-theme="light"] .eh-cselect-menu[data-eh-portal-managed="1"] .eh-cselect-item { color: #1e293b !important; }
+body[data-studio-theme="light"] .eh-cselect-menu[data-eh-portal-managed="1"] .eh-cselect-item:hover,
+body[data-studio-theme="light"] .eh-cselect-menu[data-eh-portal-managed="1"] .eh-cselect-item.kbd-focus { background: rgba(var(--lg-accent-rgb), 0.12) !important; color: #0f172a !important; }
+body[data-studio-theme="light"] .eh-cselect-menu[data-eh-portal-managed="1"] .eh-cselect-item.selected { background: rgba(var(--lg-accent-rgb), 0.16) !important; color: var(--lg-pill-light, #0369a1) !important; }
+.eh-cselect-menu[data-eh-portal-managed="1"] .eh-cselect-item-txt {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+  display: block !important;
+  text-align: right !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.eh-cselect-menu[data-eh-portal-managed="1"] .eh-cselect-check {
+  flex-shrink: 0 !important;
+  font-size: 12px !important;
+  font-weight: 900 !important;
+  color: var(--lg-pill-color, #38bdf8) !important;
+  margin-inline-start: 6px !important;
+}
+
+/* 2. ZERO-JITTER FIXED CRM TABLE + DIRECTIONAL PAGING + 5-TIER COLORS */
+.eh-avatar.eh-loy-steady { background: linear-gradient(135deg, #8b5cf6, #6366f1) !important; }
+.eh-avatar.eh-loy-semi   { background: linear-gradient(135deg, #14b8a6, #0d9488) !important; }
+.eh-loy-badge.eh-loy-steady { background: rgba(139, 92, 246, 0.18) !important; color: #a78bfa !important; border: 1px solid rgba(139, 92, 246, 0.42) !important; }
+.eh-loy-badge.eh-loy-semi   { background: rgba(20, 184, 166, 0.16) !important; color: #2dd4bf !important; border: 1px solid rgba(20, 184, 166, 0.38) !important; }
+body[data-studio-theme="light"] .eh-loy-badge.eh-loy-steady { color: #6d28d9 !important; }
+body[data-studio-theme="light"] .eh-loy-badge.eh-loy-semi   { color: #0f766e !important; }
+
+.eh-crm-table { width: 100% !important; table-layout: fixed !important; border-collapse: collapse !important; }
+.eh-crm-table thead th, .eh-crm-table tbody td { box-sizing: border-box !important; overflow: hidden !important; vertical-align: middle !important; }
+.eh-crm-table thead th:nth-child(3), .eh-crm-table tbody td:nth-child(3),
+.eh-crm-table thead th:nth-child(4), .eh-crm-table tbody td:nth-child(4),
+.eh-crm-table thead th:nth-child(6), .eh-crm-table tbody td:nth-child(6) { text-align: center !important; }
+.eh-crm-row td { height: 56px !important; padding: 8px 10px !important; }
+.eh-person-cell { min-width: 0 !important; }
+.eh-person-meta { min-width: 0 !important; overflow: hidden !important; }
+.eh-person-link { display: block !important; max-width: 100% !important; overflow: hidden !important; text-overflow: ellipsis !important; white-space: nowrap !important; text-align: right !important; }
+.eh-att-cell { width: 100% !important; min-width: 0 !important; }
+.eh-tags-wrap { flex-wrap: nowrap !important; overflow: hidden !important; }
+.eh-tags-wrap .eh-mini-tag, .eh-tags-wrap .eh-crm-tag { max-width: 112px !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+
+@keyframes ehCrmSlideNext { 0% { opacity: 0.15; transform: translateX(-16px); } 100% { opacity: 1; transform: none; } }
+@keyframes ehCrmSlidePrev { 0% { opacity: 0.15; transform: translateX(16px); } 100% { opacity: 1; transform: none; } }
+@keyframes ehCrmFadeIn { 0% { opacity: 0.25; transform: translateY(4px); } 100% { opacity: 1; transform: none; } }
+#tblParticipantsBody.eh-crm-anim-next { animation: ehCrmSlideNext 0.24s cubic-bezier(0.22, 1, 0.36, 1) both !important; }
+#tblParticipantsBody.eh-crm-anim-prev { animation: ehCrmSlidePrev 0.24s cubic-bezier(0.22, 1, 0.36, 1) both !important; }
+#tblParticipantsBody.eh-crm-anim-fade { animation: ehCrmFadeIn 0.20s cubic-bezier(0.22, 1, 0.36, 1) both !important; }
+
+/* 3. HIGH-CONTRAST AFFINITY MATRIX, DISTINCT DIAGONAL, TOGGLE & LEGEND */
+.eh-aff-mode-seg {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 3px !important;
+  padding: 3px !important;
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  flex-shrink: 0 !important;
+}
+body[data-studio-theme="light"] .eh-aff-mode-seg {
+  background: rgba(15, 23, 42, 0.04) !important;
+  border-color: rgba(15, 23, 42, 0.12) !important;
+}
+.eh-aff-mode-btn {
+  padding: 4px 10px !important;
+  border-radius: 7px !important;
+  border: none !important;
+  background: transparent !important;
+  color: var(--s-text-muted) !important;
+  font-family: inherit !important;
+  font-size: 10.8px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+  transition: background 0.16s ease, color 0.16s ease !important;
+}
+.eh-aff-mode-btn.active {
+  background: rgba(var(--lg-accent-rgb), 0.24) !important;
+  color: var(--lg-pill-color, #7dd3fc) !important;
+}
+body[data-studio-theme="light"] .eh-aff-mode-btn.active {
+  background: rgba(var(--lg-accent-rgb), 0.16) !important;
+  color: var(--lg-pill-light, #0369a1) !important;
+}
+.eh-aff-table td.eh-aff-diag {
+  background: rgba(148, 163, 184, 0.13) !important;
+  border: 1px dashed rgba(148, 163, 184, 0.44) !important;
+  color: var(--s-text, #f1f5f9) !important;
+}
+body[data-studio-theme="light"] .eh-aff-table td.eh-aff-diag {
+  background: rgba(15, 23, 42, 0.07) !important;
+  border-color: rgba(15, 23, 42, 0.28) !important;
+  color: #0f172a !important;
+}
+.eh-aff-table td.eh-aff-hit {
+  border: 1px solid rgba(255, 255, 255, 0.06) !important;
+  transition: transform 0.14s ease, filter 0.14s ease !important;
+}
+.eh-aff-table td.eh-aff-hit:hover {
+  transform: scale(1.04) !important;
+  filter: brightness(1.12) !important;
+}
+.eh-aff-legend {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-wrap: wrap !important;
+  gap: 10px !important;
+  margin-top: 10px !important;
+  padding-top: 8px !important;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08) !important;
+  font-size: 10.6px !important;
+  color: var(--s-text-muted) !important;
+}
+body[data-studio-theme="light"] .eh-aff-legend { border-top-color: rgba(15, 23, 42, 0.10) !important; }
+.eh-aff-leg-item { display: inline-flex !important; align-items: center !important; gap: 5px !important; }
+.eh-aff-leg-sep { opacity: 0.35 !important; }
+.eh-aff-sw { display: inline-block !important; width: 12px !important; height: 12px !important; border-radius: 4px !important; }
+.eh-sw-diag { background: rgba(148, 163, 184, 0.20) !important; border: 1px dashed rgba(148, 163, 184, 0.55) !important; }
+.eh-sw-low  { background: rgba(56, 189, 248, 0.22) !important; }
+.eh-sw-mid  { background: rgba(16, 185, 129, 0.45) !important; }
+.eh-sw-high { background: rgba(245, 158, 11, 0.78) !important; border: 1px solid rgba(251, 191, 36, 0.65) !important; }
+
+/* 4. DRAWER SCROLL ISOLATION, BACK BUTTON & STUDENT VETTING SYSTEM */
+.eh-drawer-body { overscroll-behavior: contain !important; }
+.eh-dr-back-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+  padding: 2px 9px !important;
+  margin-bottom: 4px !important;
+  border-radius: 99px !important;
+  border: 1px solid rgba(var(--lg-accent-rgb), 0.42) !important;
+  background: rgba(var(--lg-accent-rgb), 0.14) !important;
+  color: var(--lg-pill-color, #7dd3fc) !important;
+  font-family: inherit !important;
+  font-size: 10.5px !important;
+  font-weight: 700 !important;
+  cursor: pointer !important;
+}
+.eh-dr-back-btn:hover { background: rgba(var(--lg-accent-rgb), 0.26) !important; }
+body[data-studio-theme="light"] .eh-dr-back-btn { color: var(--lg-pill-light, #0369a1) !important; }
+
+.eh-vet-pill { display: inline-flex !important; align-items: center !important; padding: 1px 7px !important; border-radius: 99px !important; font-size: 10px !important; font-weight: 800 !important; white-space: nowrap !important; border: 1px solid transparent !important; }
+.eh-vet-black { background: rgba(244, 63, 94, 0.20) !important; border-color: rgba(244, 63, 94, 0.55) !important; color: #fb7185 !important; }
+.eh-vet-gray  { background: rgba(148, 163, 184, 0.22) !important; border-color: rgba(245, 158, 11, 0.48) !important; color: #fbbf24 !important; }
+.eh-vet-warn  { background: rgba(245, 158, 11, 0.12) !important; border-color: rgba(245, 158, 11, 0.36) !important; color: #f59e0b !important; }
+body[data-studio-theme="light"] .eh-vet-black { color: #be123c !important; background: rgba(244, 63, 94, 0.12) !important; }
+body[data-studio-theme="light"] .eh-vet-gray  { color: #b45309 !important; background: rgba(245, 158, 11, 0.14) !important; }
+body[data-studio-theme="light"] .eh-vet-warn  { color: #b45309 !important; }
+
+.eh-vet-auto-banner { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 8px !important; flex-wrap: wrap !important; padding: 8px 10px !important; margin-bottom: 9px !important; border-radius: 10px !important; background: rgba(245, 158, 11, 0.11) !important; border: 1px solid rgba(245, 158, 11, 0.36) !important; font-size: 11px !important; color: #fcd34d !important; }
+body[data-studio-theme="light"] .eh-vet-auto-banner { color: #92400e !important; }
+
+.eh-vet-seg { display: grid !important; grid-template-columns: repeat(3, 1fr) !important; gap: 6px !important; }
+.eh-vet-opt { padding: 7px 8px !important; border-radius: 9px !important; border: 1px solid rgba(255, 255, 255, 0.11) !important; background: rgba(255, 255, 255, 0.03) !important; color: var(--s-text-muted) !important; font-family: inherit !important; font-size: 11.2px !important; font-weight: 700 !important; cursor: pointer !important; transition: all 0.16s ease !important; }
+.eh-vet-opt-ok.active    { background: rgba(16, 185, 129, 0.18) !important; border-color: rgba(16, 185, 129, 0.52) !important; color: #34d399 !important; }
+.eh-vet-opt-gray.active  { background: rgba(245, 158, 11, 0.18) !important; border-color: rgba(245, 158, 11, 0.55) !important; color: #fbbf24 !important; }
+.eh-vet-opt-black.active { background: rgba(244, 63, 94, 0.22) !important; border-color: rgba(244, 63, 94, 0.58) !important; color: #fb7185 !important; }
+body[data-studio-theme="light"] .eh-vet-opt { border-color: rgba(15, 23, 42, 0.12) !important; background: rgba(15, 23, 42, 0.03) !important; }
+body[data-studio-theme="light"] .eh-vet-opt-ok.active    { color: #047857 !important; }
+body[data-studio-theme="light"] .eh-vet-opt-gray.active  { color: #b45309 !important; }
+body[data-studio-theme="light"] .eh-vet-opt-black.active { color: #be123c !important; }
+
+.eh-pl-row-black td { background: rgba(244, 63, 94, 0.10) !important; }
+.eh-pl-row-gray td  { background: rgba(245, 158, 11, 0.08) !important; }
+.eh-pl-chk { width: 16px !important; height: 16px !important; accent-color: var(--lg-accent, #10b981) !important; cursor: pointer !important; }
+
+
+/* ============================================================================
+   eHadiPanel v0.4.0-beta (FINAL r5) —
+   1. Affinity Matrix Vertical Stack (Table Top + Centered Legend Bottom)
+   2. Flush Full-Bleed Card Headers Across All Cards & Modals
+   3. Sleek Vector-Icon Vetting Cards (Zero Emojis) & Data Health Diff Badges
+   ============================================================================ */
+
+/* 1. AFFINITY MATRIX LEGEND BELOW TABLE (FIXES SIDE-BY-SIDE SQUISH) */
+.eh-aff-wrap {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 10px !important;
+  padding: 12px 14px !important;
+  overflow-x: auto !important;
+}
+.eh-aff-wrap > .eh-aff-table {
+  width: 100% !important;
+  flex-shrink: 0 !important;
+}
+.eh-aff-wrap > .eh-aff-legend {
+  width: 100% !important;
+  flex-shrink: 0 !important;
+  margin-top: 2px !important;
+}
+
+/* 2. FLUSH FULL-BLEED CARD HEADERS */
+.glass-card.eh-flush-card,
+body[data-ui-density="compact"] .glass-card.eh-flush-card,
+.eh-drawer-body .eh-dr-sec.glass-card.eh-flush-card {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+.eh-dash-files-body {
+  padding: 12px 14px !important;
+}
+.eh-uni-bars-body {
+  padding: 12px 14px !important;
+}
+.eh-dh-scroll-list {
+  padding: 12px 14px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 7px !important;
+  max-height: 255px !important;
+  overflow-y: auto !important;
+}
+.eh-dr-sec-body {
+  padding: 12px 14px !important;
+}
+.eh-dr-more-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 2px 8px !important;
+  border-radius: 99px !important;
+  font-size: 10.2px !important;
+  font-weight: 700 !important;
+  background: rgba(var(--lg-accent-rgb), 0.12) !important;
+  border: 1px dashed rgba(var(--lg-accent-rgb), 0.36) !important;
+  color: var(--lg-pill-color, #7dd3fc) !important;
+}
+body[data-studio-theme="light"] .eh-dr-more-pill {
+  color: var(--lg-pill-light, #0369a1) !important;
+}
+
+/* 3. DATA HEALTH POSITIVE / NEGATIVE DIFF PILLS */
+.eh-badge.eh-disc-pos {
+  background: rgba(16, 185, 129, 0.16) !important;
+  border-color: rgba(16, 185, 129, 0.42) !important;
+  color: #34d399 !important;
+  font-weight: 800 !important;
+}
+.eh-badge.eh-disc-neg {
+  background: rgba(245, 158, 11, 0.16) !important;
+  border-color: rgba(245, 158, 11, 0.44) !important;
+  color: #fbbf24 !important;
+  font-weight: 800 !important;
+}
+body[data-studio-theme="light"] .eh-badge.eh-disc-pos { color: #047857 !important; }
+body[data-studio-theme="light"] .eh-badge.eh-disc-neg { color: #b45309 !important; }
+
+/* 4. SLEEK VECTOR-ICON VETTING SELECTOR CARDS (ZERO EMOJIS) */
+.eh-vet-seg {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 8px !important;
+}
+.eh-vet-opt {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  padding: 9px 10px !important;
+  border-radius: 11px !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  background: rgba(255, 255, 255, 0.025) !important;
+  color: var(--s-text-muted) !important;
+  font-family: inherit !important;
+  text-align: right !important;
+  cursor: pointer !important;
+  transition: transform 0.15s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease !important;
+}
+.eh-vet-opt:hover {
+  transform: translateY(-1px) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.22) !important;
+}
+body[data-studio-theme="light"] .eh-vet-opt {
+  border-color: rgba(15, 23, 42, 0.11) !important;
+  background: rgba(15, 23, 42, 0.025) !important;
+}
+.eh-vet-opt-ico {
+  width: 28px !important;
+  height: 28px !important;
+  border-radius: 8px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  background: rgba(255, 255, 255, 0.06) !important;
+  color: inherit !important;
+}
+body[data-studio-theme="light"] .eh-vet-opt-ico {
+  background: rgba(15, 23, 42, 0.06) !important;
+}
+.eh-vet-opt-txt {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 1px !important;
+  min-width: 0 !important;
+}
+.eh-vet-opt-txt strong {
+  font-size: 11.4px !important;
+  font-weight: 800 !important;
+  line-height: 1.3 !important;
+  white-space: nowrap !important;
+}
+.eh-vet-opt-txt small {
+  font-size: 9.6px !important;
+  opacity: 0.78 !important;
+  line-height: 1.3 !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+.eh-vet-opt-ok.active {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.20), rgba(16, 185, 129, 0.08)) !important;
+  border-color: rgba(16, 185, 129, 0.56) !important;
+  color: #34d399 !important;
+  box-shadow: 0 6px 18px -8px rgba(16, 185, 129, 0.55) !important;
+}
+.eh-vet-opt-ok.active .eh-vet-opt-ico {
+  background: rgba(16, 185, 129, 0.22) !important;
+  color: #34d399 !important;
+}
+.eh-vet-opt-gray.active {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.20), rgba(245, 158, 11, 0.08)) !important;
+  border-color: rgba(245, 158, 11, 0.58) !important;
+  color: #fbbf24 !important;
+  box-shadow: 0 6px 18px -8px rgba(245, 158, 11, 0.55) !important;
+}
+.eh-vet-opt-gray.active .eh-vet-opt-ico {
+  background: rgba(245, 158, 11, 0.22) !important;
+  color: #fbbf24 !important;
+}
+.eh-vet-opt-black.active {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.22), rgba(244, 63, 94, 0.09)) !important;
+  border-color: rgba(244, 63, 94, 0.60) !important;
+  color: #fb7185 !important;
+  box-shadow: 0 6px 18px -8px rgba(244, 63, 94, 0.55) !important;
+}
+.eh-vet-opt-black.active .eh-vet-opt-ico {
+  background: rgba(244, 63, 94, 0.24) !important;
+  color: #fb7185 !important;
+}
+body[data-studio-theme="light"] .eh-vet-opt-ok.active { color: #047857 !important; }
+body[data-studio-theme="light"] .eh-vet-opt-gray.active { color: #b45309 !important; }
+body[data-studio-theme="light"] .eh-vet-opt-black.active { color: #be123c !important; }
+
+
+/* ============================================================================
+   eHadiPanel v0.4.0-beta (FINAL r7) —
+   1. Flush Full-Bleed Card Headers on ALL BI Dashboard Quad Cards (.eh-bi-quad-card & .eh-bi-hdr)
+   2. Fix Donut Workgroup Legend Clipping (All 7 Workgroups Visible Cleanly From Top)
+   ============================================================================ */
+
+/* 1. FLUSH FULL-BLEED HEADERS ON ALL BI QUAD CARDS & FLUSH CARDS (BOTH COMFORTABLE & COMPACT MODES) */
+body #page-dashboard .glass-card.bi-card.eh-bi-quad-card,
+body #biLensViewport .glass-card.bi-card.eh-bi-quad-card,
+body[data-ui-density="compact"] #page-dashboard .glass-card.bi-card.eh-bi-quad-card,
+body[data-ui-density="compact"] #biLensViewport .glass-card.bi-card.eh-bi-quad-card,
+body #page-dashboard .glass-card.eh-flush-card,
+body #biLensViewport .glass-card.bi-card.eh-flush-card,
+body[data-ui-density="compact"] #page-dashboard .glass-card.eh-flush-card,
+body[data-ui-density="compact"] .glass-card.eh-flush-card,
+body[data-ui-density="compact"] .glass-card.eh-bi-quad-card,
+.glass-card.eh-bi-quad-card,
+.glass-card.eh-flush-card {
+  padding: 0 !important;
+  overflow: hidden !important;
+}
+
+.eh-bi-quad-card > .eh-bi-hdr,
+.bi-card > .eh-bi-hdr {
+  margin: 0 !important;
+  padding: 13px 16px !important;
+  min-height: 60px !important;
+  border-radius: 15px 15px 0 0 !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  justify-content: space-between !important;
+  align-items: center !important;
+}
+body[data-ui-density="compact"] .eh-bi-quad-card > .eh-bi-hdr,
+body[data-ui-density="compact"] .bi-card > .eh-bi-hdr {
+  border-radius: 13px 13px 0 0 !important;
+}
+.eh-bi-quad-card > .eh-bi-hdr .eh-bi-ico,
+.bi-card > .eh-bi-hdr .eh-bi-ico {
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 10px !important;
+}
+.eh-bi-quad-card > .eh-bi-hdr .eh-bi-title-group > span:not(.eh-bi-ico),
+.bi-card > .eh-bi-hdr .eh-bi-title-group > span:not(.eh-bi-ico) {
+  font-size: 13.8px !important;
+  font-weight: 800 !important;
+  color: var(--s-text, #f8fafc) !important;
+  line-height: 1.35 !important;
+}
+
+.eh-bi-quad-card > .eh-bi-hdr.eh-bi-hdr-donut,
+.bi-card > .eh-bi-hdr.eh-bi-hdr-donut {
+  border-top: 2.5px solid rgba(56, 189, 248, 0.88) !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 1px solid rgba(56, 189, 248, 0.26) !important;
+  box-shadow: inset 0 1px 14px -4px rgba(56, 189, 248, 0.26) !important;
+}
+.eh-bi-quad-card > .eh-bi-hdr.eh-bi-hdr-top,
+.bi-card > .eh-bi-hdr.eh-bi-hdr-top {
+  border-top: 2.5px solid rgba(52, 211, 153, 0.88) !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 1px solid rgba(16, 185, 129, 0.26) !important;
+  box-shadow: inset 0 1px 14px -4px rgba(16, 185, 129, 0.24) !important;
+}
+.eh-bi-quad-card > .eh-bi-hdr.eh-bi-hdr-compare,
+.bi-card > .eh-bi-hdr.eh-bi-hdr-compare {
+  border-top: 2.5px solid rgba(129, 140, 248, 0.90) !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 1px solid rgba(129, 140, 248, 0.26) !important;
+  box-shadow: inset 0 1px 14px -4px rgba(129, 140, 248, 0.26) !important;
+}
+.eh-bi-quad-card > .eh-bi-hdr.eh-bi-hdr-teachers,
+.bi-card > .eh-bi-hdr.eh-bi-hdr-teachers {
+  border-top: 2.5px solid rgba(251, 191, 36, 0.88) !important;
+  border-left: 0 !important;
+  border-right: 0 !important;
+  border-bottom: 1px solid rgba(245, 158, 11, 0.26) !important;
+  box-shadow: inset 0 1px 14px -4px rgba(245, 158, 11, 0.22) !important;
+}
+
+.eh-bi-quad-card > .eh-compare-legend-top {
+  margin: 0 !important;
+  padding: 7px 14px !important;
+}
+
+.eh-bi-quad-card > *:not(.eh-bi-hdr):not(.eh-compare-legend-top) {
+  padding: 11px 14px 12px 14px !important;
+  box-sizing: border-box !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+}
+
+/* 2. DONUT WORKGROUP LEGEND — NEVER CLIP TOP ROWS; FIT ALL 7 WORKGROUPS CLEANLY */
+.eh-bi-quad-card .bi-donut-wrap {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+.eh-bi-quad-card .bi-donut-svg-box {
+  flex-shrink: 0 !important;
+}
+.eh-bi-quad-card .bi-legend-list,
+.eh-bi-quad-card .eh-donut-scroll {
+  align-self: stretch !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  padding: 2px 2px 4px 10px !important;
+  gap: 5px !important;
+}
+.eh-bi-quad-card .eh-donut-item {
+  padding: 6px 11px !important;
+  margin-bottom: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+.eh-bi-quad-card > .eh-rank-scroll,
+.eh-bi-quad-card > .eh-cmp-scroll {
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: flex-start !important;
 }

@@ -1182,6 +1182,16 @@ def export_styled_table_excel(table_data: dict[str, Any], dest_path: Path) -> st
         c = ws.cell(row=hdr_row, column=c_i, value=str(col_name))
         c.fill, c.font, c.alignment, c.border = hdr_fill, hdr_font, Alignment(horizontal="center", vertical="center", wrap_text=True), border
 
+    _TEXT_ID_COL_HINTS = (
+        "شماره", "موبایل", "همراه", "تلفن", "کد ملی", "کدملی", "گذرنامه", "پاسپورت",
+        "فراگیر", "فیدا", "آمایش", "شناسه", "کد", "تاریخ", "سال", "فاکتور", "سند",
+        "phone", "mobile", "passport", "nid", "fida", "cnic", "date", "id",
+    )
+    text_id_col_mask = [
+        any(h in str(cn).lower() for h in _TEXT_ID_COL_HINTS)
+        for cn in columns
+    ]
+
     numeric_hits = [0] * n_cols
     data_start = hdr_row + 1
     for offset, row in enumerate(rows):
@@ -1189,12 +1199,15 @@ def export_styled_table_excel(table_data: dict[str, Any], dest_path: Path) -> st
         ws.row_dimensions[r_idx].height = 23
         for c_i in range(1, n_cols + 1):
             val = row[c_i - 1] if (c_i - 1) < len(row) else ""
+            is_text_id_col = text_id_col_mask[c_i - 1]
             parsed_val, is_num = val, False
-            if isinstance(val, (int, float)) and not isinstance(val, bool):
+            if is_text_id_col:
+                parsed_val = "" if val is None else str(val).strip()
+            elif isinstance(val, (int, float)) and not isinstance(val, bool):
                 is_num = True
             else:
                 s_en = (str(val).strip() if val is not None else "").translate(en_trans).replace(",", "").replace("٬", "")
-                if re.fullmatch(r"-?\d+", s_en):
+                if re.fullmatch(r"-?\d+", s_en) and not (len(s_en) > 1 and s_en.startswith("0")) and len(s_en.lstrip("-")) <= 10:
                     parsed_val, is_num = int(s_en), True
                 elif re.fullmatch(r"-?\d+\.\d+", s_en):
                     parsed_val, is_num = float(s_en), True
@@ -1206,6 +1219,9 @@ def export_styled_table_excel(table_data: dict[str, Any], dest_path: Path) -> st
                 numeric_hits[c_i - 1] += 1
                 cell.alignment = Alignment(horizontal="center", vertical="center")
                 cell.number_format = "#,##0" if isinstance(parsed_val, int) else "#,##0.##"
+            elif is_text_id_col:
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+                cell.number_format = "@"
             else:
                 cell.alignment = Alignment(horizontal="right", vertical="center", wrap_text=True, indent=1)
 
@@ -1234,6 +1250,9 @@ def export_styled_table_excel(table_data: dict[str, Any], dest_path: Path) -> st
     return str(dest_path)
 
 
+export_styled_excel = export_styled_table_excel
+
+
 def export_analytics_excel(analytics: dict[str, Any], dest_path: Path) -> dict[str, Any]:
     try:
         from openpyxl import Workbook
@@ -1255,7 +1274,7 @@ def export_analytics_excel(analytics: dict[str, Any], dest_path: Path) -> dict[s
     hdr_fill, zebra_fill, tot_fill, card_lbl_fill = PatternFill("solid", fgColor=pal["primary"]), PatternFill("solid", fgColor=pal["zebra"]), PatternFill("solid", fgColor=pal["total_bg"]), PatternFill("solid", fgColor=pal["accent_soft"])
     hdr_font, body_font, tot_font = Font(name=ef, size=10, bold=True, color="FFFFFF"), Font(name=ef, size=9.8, color=pal["text"]), Font(name=ef, size=10, bold=True, color=pal["dark"])
 
-    def build_data_sheet(ws, banner_title, banner_sub, headers, rows, sum_cols=(), avg_cols=(), bar_col=None, int_cols=(), dec_cols=()):
+    def build_data_sheet(ws, banner_title, banner_sub, headers, rows, sum_cols=(), avg_cols=(), bar_col=None, int_cols=(), dec_cols=(), text_cols=()):
         hdr_row = _add_sheet_banner(ws, len(headers), banner_title, banner_sub, ef, pal)
         ws.row_dimensions[hdr_row].height = 28
         for ci, h in enumerate(headers, start=1):
@@ -1271,9 +1290,12 @@ def export_analytics_excel(analytics: dict[str, Any], dest_path: Path) -> dict[s
                 c.font, c.border = body_font, border
                 if off % 2 == 1:
                     c.fill = zebra_fill
-                if ci in int_cols:
+                if ci in text_cols:
+                    c.value = "" if val is None else str(val)
+                    c.alignment, c.number_format = Alignment(horizontal="center", vertical="center"), "@"
+                elif ci in int_cols and isinstance(val, (int, float)):
                     c.alignment, c.number_format = Alignment(horizontal="center", vertical="center"), "#,##0"
-                elif ci in dec_cols:
+                elif ci in dec_cols and isinstance(val, (int, float)):
                     c.alignment, c.number_format = Alignment(horizontal="center", vertical="center"), "#,##0.0"
                 else:
                     c.alignment = Alignment(horizontal="right", vertical="center", wrap_text=True, indent=1)
@@ -1312,7 +1334,7 @@ def export_analytics_excel(analytics: dict[str, Any], dest_path: Path) -> dict[s
     groups = list(analytics.get("groups") or [])
     grp_start, grp_end = build_data_sheet(
         ws_grp, f"{org_name} — عملکرد تفکیکی کارگروه‌ها", f"تاریخ گزارش: {today_jalali_str()}  |  تعداد کارگروه‌ها: {to_fa_digits(len(groups))}",
-        ["کارگروه", "تعداد دوره‌ها", "مجموع نفر-دوره", "مخاطبان یکتا", "میانگین جذب", "میانه جذب", "مجموع ساعات", "نرخ بازگشت (%)", "هزینه (تومان)"],
+        ["کارگروه", "تعداد دوره‌ها", "مجموع نفر-دوره", "دانش‌پژوهان یکتا", "میانگین جذب", "میانه جذب", "مجموع ساعات", "نرخ بازگشت (%)", f"هزینه ({analytics.get('cost_unit') or (analytics.get('kpis') or {}).get('cost_unit') or 'ریال'})"],
         [[g["name"], g["courses"], g["attendance"], g.get("unique", 0), g.get("avg_attendance", 0), g.get("median_attendance", 0), g.get("hours", 0), g.get("repeat_rate", 0), g.get("cost", 0)] for g in groups],
         sum_cols=(2, 3, 7, 9), avg_cols=(5, 6, 8), bar_col=3, int_cols=(2, 3, 4, 9), dec_cols=(5, 6, 7, 8),
     )
@@ -1322,18 +1344,30 @@ def export_analytics_excel(analytics: dict[str, Any], dest_path: Path) -> dict[s
     ws_tch = wb.create_sheet("عملکرد اساتید")
     tch_start, tch_end = build_data_sheet(
         ws_tch, f"{org_name} — کارنامه تفکیکی اساتید", f"تاریخ گزارش: {today_jalali_str()}  |  تعداد اساتید فعال: {to_fa_digits(len(teachers))}  |  سیاست ساعات مشترک: {pol_lbl}",
-        ["نام استاد", "کل دوره‌ها", "دوره مستقل", "دوره مشترک", "نفر-دوره (خام)", "سهم تعدیل‌شده مخاطب", "میانگین جذب", "میانه جذب", "جلسات", "ساعت مؤثر", "ساعت مستقل", "ساعت مشترک", "کارگروه‌ها"],
+        ["نام استاد", "کل دوره‌ها", "دوره مستقل", "دوره مشترک", "نفر-دوره (خام)", "سهم تعدیل‌شده دانش‌پژوه", "میانگین جذب", "میانه جذب", "جلسات", "ساعت مؤثر", "ساعت مستقل", "ساعت مشترک", "کارگروه‌ها"],
         [[t["name"], t["courses"], t.get("independent_courses", t["courses"]), t.get("joint_courses", 0), t["attendance"], t.get("adjusted_attendance", t["attendance"]), t.get("avg_attendance", 0), t.get("median_attendance", 0), t.get("sessions", 0), t.get("hours_effective", 0), t.get("hours_independent", 0), t.get("hours_joint", 0), "، ".join(t.get("groups") or [])] for t in teachers],
         sum_cols=(2, 3, 4, 6, 9, 10), avg_cols=(7, 8), bar_col=2, int_cols=(2, 3, 4, 5, 9), dec_cols=(6, 7, 8, 10, 11, 12),
     )
 
     participants = list(analytics.get("participants") or [])
-    ws_prs = wb.create_sheet("مخاطبان یکتا")
+    ws_prs = wb.create_sheet("دانش‌پژوهان یکتا")
     build_data_sheet(
-        ws_prs, f"{org_name} — فهرست مخاطبان یکتا", f"تاریخ گزارش: {today_jalali_str()}  |  مخاطبان ثبت‌شده: {to_fa_digits(len(participants))}",
-        ["نام و نام خانوادگی", "شماره تماس", "سطح", "تعداد دوره‌ها", "وضعیت وفاداری", "کارگروه‌ها", "عناوین دوره‌ها"],
-        [[p["name"], p.get("phone") or "—", p.get("level") or "—", p.get("courses_count", 1), p.get("loyalty") or "جدید", "، ".join(p.get("groups") or []), " | ".join(p.get("courses") or [])] for p in participants],
-        sum_cols=(4,), bar_col=4, int_cols=(4,),
+        ws_prs, f"{org_name} — فهرست دانش‌پژوهان یکتا", f"تاریخ گزارش: {today_jalali_str()}  |  دانش‌پژوهان ثبت‌شده: {to_fa_digits(len(participants))}",
+        ["نام و نام خانوادگی", "شماره تماس", "کد ملی / گذرنامه (اتباع)", "سطح", "تعداد دوره‌ها", "جلسات حاضر", "نرخ حضور (%)", "سابقه حضور", "وضعیت ارزیابی", "کارگروه‌ها", "عناوین دوره‌ها"],
+        [[
+            p["name"],
+            p.get("phone") or "—",
+            p.get("nid") or "—",
+            p.get("level") or "—",
+            p.get("courses_count", 1),
+            p.get("attended_sessions", 0),
+            p.get("attendance_rate") if p.get("attendance_rate") is not None else "—",
+            p.get("loyalty") or "جدیدالورود",
+            {"blacklist": "لیست سیاه", "graylist": "لیست خاکستری", "approved": "تأییدشده"}.get(p.get("vetting_status"), "هشدار غیبت" if p.get("auto_graylist_reason") else "مجاز"),
+            "، ".join(p.get("groups") or []),
+            " | ".join(p.get("courses") or []),
+        ] for p in participants],
+        sum_cols=(5, 6), avg_cols=(7,), bar_col=5, int_cols=(5, 6), dec_cols=(7,), text_cols=(2, 3),
     )
 
     if branding.get("include_transparency", True):
@@ -1345,10 +1379,16 @@ def export_analytics_excel(analytics: dict[str, Any], dest_path: Path) -> dict[s
             ["امتیاز سلامت داده‌ها", f"{k.get('data_health_score', 100)}٪", f"دوره‌های بدون عدد حضور ثبت‌شده: {k.get('missing_attendance_courses', 0)}"],
             ["حالت محاسبه داده‌ها", "داده‌های تمیزشده" if analytics.get("data_mode", "clean") == "clean" else "داده‌های خام", "تفکیک دوره‌های مشترک، حذف ردیف جمع کل و اعمال قوانین ادغام"],
             ["سیاست ساعات دوره‌های مشترک", pol_lbl, "قابل تغییر در تنظیمات هسته هوشمند"],
-            ["تفکیک مخاطب یکتا", "تأییدشده با لیست اسامی/تماس" if k.get("unique_verified") else "لیست اسامی مخاطبان بارگذاری نشده (فقط نفر-دوره گزارش شده)", "بدون هرگونه ضریب تخمینی"],
+            ["تفکیک دانش‌پژوه یکتا", "تأییدشده با لیست اسامی/تماس" if k.get("unique_verified") else "لیست اسامی دانش‌پژوهان بارگذاری نشده (فقط نفر-دوره گزارش شده)", "بدون هرگونه ضریب تخمینی"],
         ]
         for df in (dh.get("duplicate_files") or []):
             tr_rows.append(["هشدار فایل مشابه/تکراری", " ، ".join(df.get("files") or []), df.get("reason", "")])
+        for disc in (dh.get("source_discrepancies") or [])[:25]:
+            tr_rows.append([
+                "اختلاف آمار بین منابع (یکتاشده)",
+                str(disc.get("course") or ""),
+                f"گزارش خلاصه: {disc.get('summary_count', 0)} نفر | لیست اکسل: {disc.get('roster_count', 0)} نفر (اختلاف: {disc.get('diff', 0):+d})",
+            ])
         try:
             from src.core.memory_engine import list_aliases, load_brain_config
             bcfg = load_brain_config()
@@ -1372,12 +1412,12 @@ def export_analytics_excel(analytics: dict[str, Any], dest_path: Path) -> dict[s
         kpi_rows = [
             ("تعداد کل دوره‌ها و رویدادها", f"=SUM('تفکیک کارگروه‌ها'!B{grp_start}:B{grp_end})" if has_grp else k.get("total_courses", 0), "#,##0", f"دوره‌های مشترک: {k.get('joint_courses', 0)}"),
             ("مجموع نفر-دوره (کل حضور)", f"=SUM('تفکیک کارگروه‌ها'!C{grp_start}:C{grp_end})" if has_grp else k.get("total_attendance", 0), "#,##0", "جمع دقیق بدون دوباره‌شماری دوره‌های مشترک"),
-            ("مخاطبان یکتا (غیرتکراری)", k.get("unique_participants", 0) if k.get("unique_verified") else "ثبت‌نشده", "#,##0", "تأییدشده با لیست اسامی" if k.get("unique_verified") else "نیازمند فایل لیست مخاطبان"),
-            ("میانگین جذب در هر دوره", f"=IFERROR(AVERAGE('تفکیک کارگروه‌ها'!E{grp_start}:E{grp_end}),0)" if has_grp else k.get("avg_per_course", 0), "#,##0.0", f"میانه (Median): {k.get('median_per_course', 0)}"),
+            ("دانش‌پژوهان یکتا (غیرتکراری)", k.get("unique_participants", 0) if k.get("unique_verified") else "ثبت‌نشده", "#,##0", "تأییدشده با لیست اسامی" if k.get("unique_verified") else "نیازمند فایل لیست دانش‌پژوهان"),
+            ("میانگین جذب در هر دوره", f"=IFERROR(SUM('تفکیک کارگروه‌ها'!C{grp_start}:C{grp_end})/SUM('تفکیک کارگروه‌ها'!B{grp_start}:B{grp_end}),0)" if has_grp else k.get("avg_per_course", 0), "#,##0.0", f"میانه (Median): {k.get('median_per_course', 0)}"),
             ("تعداد اساتید فعال", f"=COUNTA('عملکرد اساتید'!A{tch_start}:A{tch_end})" if has_tch else k.get("total_teachers", 0), "#,##0", f"توازن بار کاری: {wb_bal.get('score', 100)}٪ ({wb_bal.get('label', '—')})"),
-            ("تعداد کارگروه‌های فعال", f"=COUNTA('تفکیک کارگروه‌ها'!A{grp_start}:A{grp_end})" if has_grp else k.get("total_groups", 0), "#,##0", f"همپوشانی مخاطبان بین کارگروه‌ها: {k.get('cross_group_overlap_count', 0)} نفر"),
+            ("تعداد کارگروه‌های فعال", f"=COUNTA('تفکیک کارگروه‌ها'!A{grp_start}:A{grp_end})" if has_grp else k.get("total_groups", 0), "#,##0", f"همپوشانی دانش‌پژوهان بین کارگروه‌ها: {k.get('cross_group_overlap_count', 0)} نفر"),
             ("مجموع ساعات آموزشی", f"=SUM('تفکیک کارگروه‌ها'!G{grp_start}:G{grp_end})" if has_grp else k.get("total_hours", 0), "#,##0.0", f"مجموع جلسات ثبت‌شده: {k.get('total_sessions', 0)}"),
-            ("نرخ بازگشت و وفاداری (%)", k.get("repeat_rate", 0), "#,##0.0", "مخاطبان حاضر در ۲ دوره یا بیشتر"),
+            ("نرخ تداوم حضور (%)", k.get("repeat_rate", 0), "#,##0.0", "دانش‌پژوهان حاضر در ۲ دوره یا بیشتر"),
             ("مجموع هزینه‌ها (تومان)", f"=SUM('تفکیک کارگروه‌ها'!I{grp_start}:I{grp_end})" if has_grp else k.get("total_cost", 0), "#,##0", f"هزینه هر نفر-دوره: {k.get('cost_per_attendee', 0):,}"),
             ("شاخص اطمینان داده (%)", k.get("data_confidence_pct", 100), "#,##0", f"امتیاز سلامت داده: {k.get('data_health_score', 100)}٪"),
         ]

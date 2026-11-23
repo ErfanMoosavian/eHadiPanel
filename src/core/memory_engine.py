@@ -30,6 +30,7 @@ from src.core.db_manager import (
     JALALI_MONTHS,
     is_banner_header_col,
     is_non_entity_value,
+    clean_participant_name,
     is_valid_teacher_name,
     promote_banner_headers,
     resolve_default_duckdb_path,
@@ -119,7 +120,7 @@ COURSE_COL_HINTS = ("نام دوره", "عنوان دوره", "دوره", "عن�
 ATTEND_COL_HINTS = ("شرکت کننده", "شرکت کنندگان", "مخاطب", "تعداد نفر", "حاضر", "ثبت نام", "participants", "attendance")
 GROUP_COL_HINTS = ("کارگروه", "بخش", "گروه موضوعی", "گروه علمی", "گروه", "دسته", "حوزه", "واحد", "workgroup", "category", "department")
 FINANCE_COL_HINTS = ("فروشنده", "طرف حساب", "تامین", "شرکت", "فروشگاه", "شرح", "بابت", "عنوان هزینه", "vendor", "payee")
-PERSON_COL_HINTS = ("نام و نام خانوادگی", "نام شرکت", "شرکت کننده", "مخاطب", "پرسنل", "عضو", "full_name", "name")
+PERSON_COL_HINTS = ("نام و نام خانوادگی", "نام شرکت", "شرکت کننده", "دانش پژوه", "مخاطب", "پرسنل", "عضو", "full_name", "name")
 DATE_COL_HINTS = ("تاریخ", "سال", "فصل", "ماه", "زمان", "date", "year")
 HOURS_COL_HINTS = ("ساعت", "مدت", "ساعات", "hours", "duration")
 SESSIONS_COL_HINTS = ("جلسه", "تعداد جلسات", "جلسات", "sessions")
@@ -1120,7 +1121,7 @@ def _classify_column(col_name: str) -> str | None:
     if is_banner_header_col(col_name):
         return None
     cn = normalize_persian(col_name).lower()
-    if any(k in cn for k in ("تاریخ", "شماره", "ردیف", "موبایل", "تلفن", "کد ملی", "مبلغ", "مانده", "بدهکار", "بستانکار")):
+    if any(k in cn for k in ("تاریخ", "شماره", "ردیف", "موبایل", "تلفن", "کد ملی", "کدملی", "گذرنامه", "پاسپورت", "فراگیر", "فیدا", "آمایش", "جلسه", "جلسات", "تعداد", "مبلغ", "مانده", "بدهکار", "بستانکار")):
         return None
     if any(k in cn for k in TEACHER_COL_HINTS):
         return "teacher"
@@ -1190,18 +1191,38 @@ def scan_fuzzy_candidates(db_path: Path | str | None = None, min_score: float = 
                 cols, clean_rows, _ = promote_banner_headers(raw_cols, raw_rows)
                 if not cols or not clean_rows:
                     continue
+                _row_phone_ci = next(
+                    (i for i, cn in enumerate(cols) if any(k in normalize_persian(cn).lower() for k in ("موبایل", "همراه", "تلفن", "شماره تماس", "phone", "mobile"))),
+                    -1,
+                )
+                _row_id_ci = next(
+                    (i for i, cn in enumerate(cols) if any(k in normalize_persian(cn).lower() for k in ("کد ملی", "کدملی", "گذرنامه", "پاسپورت", "فراگیر", "فیدا", "passport", "national"))),
+                    -1,
+                )
                 for c_idx, cname in enumerate(cols):
                     etype = _classify_column(cname)
                     if not etype:
                         continue
                     val_counts: dict[str, int] = {}
+                    val_ids: dict[str, set[str]] = {}
                     for r in clean_rows:
                         if c_idx < len(r) and r[c_idx] is not None:
-                            sv = str(r[c_idx]).strip()
+                            raw_sv = str(r[c_idx]).strip()
+                            sv = clean_participant_name(raw_sv) if etype == "person" else raw_sv
                             if sv:
                                 val_counts[sv] = val_counts.get(sv, 0) + 1
+                                if etype == "person":
+                                    id_bag = val_ids.setdefault(sv, set())
+                                    if _row_phone_ci != -1 and _row_phone_ci < len(r) and r[_row_phone_ci]:
+                                        d_ph = re.sub(r"\D", "", normalize_persian(r[_row_phone_ci]))
+                                        if len(d_ph) >= 10:
+                                            id_bag.add("ph:" + d_ph[-10:])
+                                    if _row_id_ci != -1 and _row_id_ci < len(r) and r[_row_id_ci]:
+                                        d_id = re.sub(r"[^A-Za-z0-9]", "", normalize_persian(r[_row_id_ci])).upper()
+                                        if len(d_id) >= 6:
+                                            id_bag.add("id:" + d_id)
                     for sv, cnt in sorted(val_counts.items(), key=lambda kv: -kv[1])[:200]:
-                        if len(sv) < 3 or len(sv) > 90 or is_summary_row_smart([sv]) or is_non_entity_value(sv):
+                        if len(sv) < 3 or len(sv) > 165 or is_summary_row_smart([sv]) or is_non_entity_value(sv):
                             continue
                         if etype == "teacher" and not is_valid_teacher_name(sv):
                             continue
@@ -1212,11 +1233,13 @@ def scan_fuzzy_candidates(db_path: Path | str | None = None, min_score: float = 
                             core = _clean_for_compare(pt, etype, cfg)
                             if len(core) < 3:
                                 continue
-                            entry = core_buckets[etype].setdefault(core, {"count": 0, "displays": {}})
+                            entry = core_buckets[etype].setdefault(core, {"count": 0, "displays": {}, "ids": set()})
                             entry["count"] += int(cnt)
                             entry["displays"][pt] = entry["displays"].get(pt, 0) + int(cnt)
+                            if etype == "person" and sv in val_ids:
+                                entry["ids"].update(val_ids[sv])
 
-    type_labels = {"teacher": "استاد / سخنران", "workgroup": "کارگروه / دسته‌بندی", "finance": "شرح / فروشنده مالی", "person": "مخاطب / پرسنل"}
+    type_labels = {"teacher": "استاد / سخنران", "workgroup": "کارگروه / دسته‌بندی", "finance": "شرح / فروشنده مالی", "person": "دانش‌پژوه / پرسنل"}
     candidates, seen = [], set()
     for etype, cmap in core_buckets.items():
         cores = sorted(cmap.keys(), key=lambda c: (-cmap[c]["count"], len(c)))[:140]
@@ -1226,6 +1249,11 @@ def scan_fuzzy_candidates(db_path: Path | str | None = None, min_score: float = 
                 pk = (etype, min(ca, cb), max(ca, cb))
                 if pk in decided or pk in seen:
                     continue
+                if etype == "person":
+                    ids_a = cmap[ca].get("ids") or set()
+                    ids_b = cmap[cb].get("ids") or set()
+                    if ids_a and ids_b and not (ids_a & ids_b):
+                        continue
                 disp_a = sorted(cmap[ca]["displays"].items(), key=lambda kv: (-kv[1], -len(kv[0])))[0][0]
                 disp_b = sorted(cmap[cb]["displays"].items(), key=lambda kv: (-kv[1], -len(kv[0])))[0][0]
                 score, caution = _fuzzy_score(disp_a, disp_b, etype, cfg)

@@ -65,13 +65,71 @@
       if (activePortal && activePortal.sel === sel) { closePortal(); return; }
       closePortal();
 
+      const normFaSearch = (s) => String(s || '')
+        .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+        .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+        .replace(/[يیى]/g, 'ی').replace(/[كک]/g, 'ک').replace(/[ھہۀة]/g, 'ه').replace(/[آأإ]/g, 'ا').replace(/\u200c/g, ' ')
+        .replace(/\s+/g, ' ').trim().toLowerCase();
+
       const menu = document.createElement('div');
       menu.className = 'eh-cselect-menu';
-      Array.from(sel.options).forEach((opt, idx) => {
+      menu.setAttribute('dir', 'rtl');
+      menu.dataset.ehPortalManaged = '1';
+
+      const optsArr = Array.from(sel.options);
+      const isTeacherSel = (sel.id === 'fltTeacher');
+      const listWrap = document.createElement('div');
+      listWrap.className = 'eh-cselect-list';
+      listWrap.setAttribute('dir', 'rtl');
+      let searchInp = null;
+
+      if (optsArr.length > 10) {
+        const sw = document.createElement('div');
+        sw.className = 'eh-cselect-search-wrap';
+        searchInp = document.createElement('input');
+        searchInp.type = 'text';
+        searchInp.className = 'eh-cselect-search';
+        searchInp.placeholder = 'جست‌وجو در گزینه‌ها...';
+        searchInp.addEventListener('click', (ev) => ev.stopPropagation());
+        searchInp.addEventListener('mousedown', (ev) => ev.stopPropagation());
+        sw.appendChild(searchInp);
+        menu.appendChild(sw);
+      }
+
+      const emptyNote = document.createElement('div');
+      emptyNote.className = 'eh-cselect-empty';
+      emptyNote.textContent = 'موردی یافت نشد';
+      emptyNote.hidden = true;
+
+      const itemNodes = [];
+      let longestLen = 0;
+      optsArr.forEach((opt, idx) => {
+        const rawTxt = (opt.textContent || '').trim();
+        let dispTxt = rawTxt;
+        if (isTeacherSel && opt.value && typeof window.formatTeacherShort === 'function') {
+          const st = window.formatTeacherShort(rawTxt);
+          if (st) dispTxt = st;
+        }
+        if (dispTxt.length > longestLen) longestLen = dispTxt.length;
+
         const item = document.createElement('button');
         item.type = 'button';
         item.className = 'eh-cselect-item' + (idx === sel.selectedIndex ? ' selected' : '');
-        item.innerHTML = `<span>${opt.textContent}</span>${idx === sel.selectedIndex ? '<span class="eh-cselect-check">✓</span>' : ''}`;
+        item.title = rawTxt;
+
+        const spTxt = document.createElement('span');
+        spTxt.className = 'eh-cselect-item-txt';
+        spTxt.textContent = dispTxt;
+        item.appendChild(spTxt);
+
+        if (idx === sel.selectedIndex) {
+          const spChk = document.createElement('span');
+          spChk.className = 'eh-cselect-check';
+          spChk.textContent = '✓';
+          item.appendChild(spChk);
+        }
+
+        item.dataset.searchKey = normFaSearch(`${dispTxt} ${rawTxt}`);
         item.addEventListener('click', (ev) => {
           ev.stopPropagation();
           sel.selectedIndex = idx;
@@ -79,21 +137,72 @@
           syncLabel();
           closePortal();
         });
-        menu.appendChild(item);
+        listWrap.appendChild(item);
+        itemNodes.push(item);
       });
+      listWrap.appendChild(emptyNote);
+      menu.appendChild(listWrap);
 
-      // Prevent wheel/scroll/mousedown inside menu from bubbling up and closing it
+      const getVisibleItems = () => itemNodes.filter(b => !b.hidden);
+      let focusIdx = Math.max(0, optsArr.findIndex((_, i) => i === sel.selectedIndex));
+
+      const highlightIdx = (nextI) => {
+        const vis = getVisibleItems();
+        if (!vis.length) return;
+        focusIdx = (nextI + vis.length) % vis.length;
+        vis.forEach((b, i) => b.classList.toggle('kbd-focus', i === focusIdx));
+        vis[focusIdx].scrollIntoView({ block: 'nearest' });
+      };
+
+      const onMenuKey = (ev) => {
+        if (ev.key === 'Escape') { ev.preventDefault(); closePortal(); return; }
+        if (ev.key === 'ArrowDown') { ev.preventDefault(); highlightIdx(focusIdx + 1); return; }
+        if (ev.key === 'ArrowUp') { ev.preventDefault(); highlightIdx(focusIdx - 1); return; }
+        if (ev.key === 'Enter') {
+          const vis = getVisibleItems();
+          if (vis.length) {
+            ev.preventDefault();
+            (vis[focusIdx] || vis[0]).click();
+          }
+        }
+      };
+      if (searchInp) {
+        searchInp.addEventListener('keydown', onMenuKey);
+        searchInp.addEventListener('input', () => {
+          const q = normFaSearch(searchInp.value);
+          let shown = 0;
+          itemNodes.forEach(btn => {
+            const ok = !q || (btn.dataset.searchKey || '').includes(q);
+            btn.hidden = !ok;
+            btn.classList.remove('kbd-focus');
+            if (ok) shown += 1;
+          });
+          focusIdx = 0;
+          emptyNote.hidden = shown > 0;
+        });
+      }
+
       menu.addEventListener('click', (ev) => ev.stopPropagation());
       menu.addEventListener('mousedown', (ev) => ev.stopPropagation());
-      menu.addEventListener('wheel', (ev) => ev.stopPropagation(), { passive: true });
+      menu.addEventListener('wheel', (ev) => {
+        ev.stopPropagation();
+        if (listWrap.scrollHeight > listWrap.clientHeight + 1) {
+          const atTop = listWrap.scrollTop <= 0 && ev.deltaY < 0;
+          const atBot = listWrap.scrollTop + listWrap.clientHeight >= listWrap.scrollHeight - 1 && ev.deltaY > 0;
+          if (atTop || atBot) ev.preventDefault();
+        }
+      }, { passive: false });
+
       document.body.appendChild(menu);
 
       const r = trigger.getBoundingClientRect();
-      const menuW = Math.min(Math.max(r.width, 220), Math.min(540, window.innerWidth - 24));
+      const estTextW = Math.ceil(longestLen * 6.9) + 56;
+      const menuW = Math.min(Math.max(r.width, estTextW, 236), Math.min(430, window.innerWidth - 24));
       const spaceBelow = window.innerHeight - r.bottom - 14;
       const spaceAbove = r.top - 14;
-      const openAbove = spaceBelow < 210 && spaceAbove > spaceBelow;
-      const maxH = Math.max(140, Math.min(320, openAbove ? spaceAbove : spaceBelow));
+      const openAbove = spaceBelow < 220 && spaceAbove > spaceBelow;
+      const maxH = Math.max(150, Math.min(340, openAbove ? spaceAbove : spaceBelow));
+
       menu.style.width = `${menuW}px`;
       menu.style.maxHeight = `${maxH}px`;
 
@@ -104,7 +213,12 @@
       menu.style.top = `${topPos}px`;
       menu.style.left = `${leftPos}px`;
       trigger.classList.add('open');
-      requestAnimationFrame(() => menu.classList.add('open'));
+      requestAnimationFrame(() => {
+        menu.classList.add('open');
+        const selItem = listWrap.querySelector('.eh-cselect-item.selected');
+        if (selItem) { try { selItem.scrollIntoView({ block: 'nearest' }); } catch (_) {} }
+        if (searchInp) { try { searchInp.focus({ preventScroll: true }); } catch (_) {} }
+      });
       activePortal = { sel, trigger, menu };
     });
   }
@@ -134,7 +248,24 @@
   }, true);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closePortal(); });
 
-  new MutationObserver(() => scanSelects()).observe(document.documentElement, { childList: true, subtree: true });
+  let _selScanTmr = null;
+  new MutationObserver((muts) => {
+    let maybeSelect = false;
+    for (let i = 0; i < muts.length; i++) {
+      const added = muts[i].addedNodes;
+      for (let j = 0; j < added.length; j++) {
+        const n = added[j];
+        if (n && n.nodeType === 1 && (n.tagName === 'SELECT' || (n.querySelector && n.querySelector('select')))) {
+          maybeSelect = true;
+          break;
+        }
+      }
+      if (maybeSelect) break;
+    }
+    if (!maybeSelect) return;
+    clearTimeout(_selScanTmr);
+    _selScanTmr = setTimeout(() => scanSelects(), 45);
+  }).observe(document.documentElement, { childList: true, subtree: true });
 
   // ===== ۲. رادار مدیریتی امروز + دفترچه تصمیم‌ها و بکاپ فوری در داشبورد =====
   function mountExecutiveRadar() {

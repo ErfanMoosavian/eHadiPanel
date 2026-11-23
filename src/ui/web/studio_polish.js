@@ -278,7 +278,7 @@
                 </div>
 
                 <div class="eitaa-field" data-modes="course">
-                  <label>مخاطبین (اختیاری)</label>
+                  <label>دانش‌پژوهان / شرکت‌کنندگان (اختیاری)</label>
                   <input id="msAudience" class="glass-input" type="text" placeholder="مخصوص طلاب سطح ۲ و ۳" />
                 </div>
 

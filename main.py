@@ -1,5 +1,6 @@
 # _EHADI_FROZEN_PATCHED
 import os as _os, sys as _sys
+_os.environ.setdefault("RUST_LOG", "error")
 from pathlib import Path as _Path
 if getattr(_sys, 'frozen', False):
     _APP_DIR = _Path(_sys.executable).resolve().parent
@@ -93,7 +94,7 @@ _launch_ehadi_splash_proc()
 # _EH_DIAGNOSTICS_V43_HOOK
 try:
     from src.core.diagnostics import install_diagnostics as _eh_install_diag
-    _eh_install_diag(app_version="v0.3.0-beta")
+    _eh_install_diag(app_version="v0.4.0-beta")
 except Exception:
     pass
 # _EH_MEMORY_ENGINE_V45_HOOK
@@ -279,8 +280,12 @@ class AppAPI:
     def save_dropped_chunk(self, file_name: str, chunk_b64: str, is_first: bool):
         try:
             Config.ensure_directories()
-            safe_name = Path(file_name).name
-            dest = Config.RAW_DOCS_DIR / safe_name
+            safe_name = Path(str(file_name or "").replace("\\", "/")).name.strip()
+            if not safe_name or safe_name in (".", ".."):
+                return {"ok": False, "error": "نام فایل نامعتبر است."}
+            dest = (Config.RAW_DOCS_DIR / safe_name).resolve()
+            if dest.parent != Config.RAW_DOCS_DIR.resolve():
+                return {"ok": False, "error": "مسیر فایل مجاز نیست."}
             mode = "wb" if is_first else "ab"
             raw_bytes = base64.b64decode(chunk_b64) if chunk_b64 else b""
             with open(dest, mode) as f:
@@ -299,7 +304,7 @@ class AppAPI:
                 dialog_type = getattr(webview, "OPEN_DIALOG", 10)
 
             file_types = (
-                "Supported Documents (*.pdf;*.docx;*.pptx;*.xlsx;*.xls;*.accdb;*.mdb)",
+                "Supported Documents (*.pdf;*.docx;*.pptx;*.xlsx;*.xls;*.csv;*.accdb;*.mdb)",
                 "All Files (*.*)",
             )
             selected = self._window.create_file_dialog(
@@ -691,6 +696,8 @@ class AppAPI:
                 "group": str(f_raw.get("group") or ""),
                 "teacher": str(f_raw.get("teacher") or ""),
                 "year": str(f_raw.get("year") or ""),
+                "data_mode": str(f_raw.get("data_mode") or ""),
+                "hours_policy": str(f_raw.get("hours_policy") or ""),
             },
             sort_keys=True,
             ensure_ascii=False,
@@ -709,14 +716,16 @@ class AppAPI:
         return res
 
     def get_teacher_profile(self, name: str):
-        return self.exec_engine.get_teacher_profile(name)
+        cached_t = self.get_executive_analytics({"teacher": name})
+        return self.exec_engine.get_teacher_profile(name, precomputed=cached_t)
 
     def save_teacher_meta(self, name: str, bio: str, works: str):
         self._invalidate_caches()
         return self.exec_engine.save_teacher_meta(name, bio, works)
 
     def get_participant_profile(self, key: str):
-        return self.exec_engine.get_participant_profile(key)
+        cached_all = self.get_executive_analytics({})
+        return self.exec_engine.get_participant_profile(key, precomputed=cached_all)
 
     def save_participant_meta(self, profile_key: str, meta: dict):
         self._invalidate_caches()
@@ -734,15 +743,15 @@ class AppAPI:
             dest = Path(sel[0] if isinstance(sel, (list, tuple)) else str(sel))
             if dest.suffix.lower() != ".xlsx":
                 dest = dest.with_suffix(".xlsx")
-            from src.reports.report_studio import export_styled_excel
+            from src.reports.report_studio import export_styled_table_excel
             rows = (payload or {}).get("rows") or []
             cols = (payload or {}).get("columns") or [
-                "ردیف", "نام و نام خانوادگی", "شماره تماس", "کد ملی", "سطح",
+                "ردیف", "نام و نام خانوادگی", "شماره تماس", "کد ملی / گذرنامه (اتباع)", "سطح",
                 "تعداد دوره", "جلسات حاضر", "کل جلسات", "نرخ حضور (%)",
-                "رده وفاداری", "امتیاز مشارکت", "کارگروه‌ها", "برچسب‌ها", "یادداشت",
+                "سابقه حضور", "امتیاز مشارکت", "کارگروه‌ها", "برچسب‌ها", "یادداشت",
             ]
-            title = str((payload or {}).get("title") or "فهرست مخاطبان یکتاسازی‌شده مؤسسه")
-            out_p = export_styled_excel({"title": title, "columns": cols, "rows": rows}, dest)
+            title = str((payload or {}).get("title") or "فهرست دانش‌پژوهان یکتاسازی‌شده مؤسسه")
+            out_p = export_styled_table_excel({"title": title, "columns": cols, "rows": rows}, dest)
             if Path(out_p).exists():
                 os.startfile(out_p)
             return {"ok": True, "path": str(out_p), "count": len(rows)}
@@ -808,7 +817,7 @@ class AppAPI:
             if dest.suffix.lower() != ext:
                 dest = dest.with_suffix(ext)
             if fmt == "xlsx":
-                analytics = self.exec_engine.get_executive_analytics(payload.get("filters") or {})
+                analytics = self.get_executive_analytics(payload.get("filters") or {})
                 res = export_analytics_excel(analytics, dest)
                 if res.get("ok"):
                     os.startfile(res["path"])

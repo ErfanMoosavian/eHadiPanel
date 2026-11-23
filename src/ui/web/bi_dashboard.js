@@ -23,6 +23,7 @@
     uniGroupCol: '',
     uniMetricCol: '__COUNT__',
     uniAgg: 'sum',
+    uniChartMode: 'auto',
     uniSearch: '',
   };
 
@@ -32,6 +33,11 @@
 
   const faNum = n => Number(n || 0).toLocaleString('fa-IR');
   const faDec = n => Number(n || 0).toLocaleString('fa-IR', { maximumFractionDigits: 1 });
+  const normBiSearch = s => String(s ?? '')
+    .replace(/[۰-۹]/g, d => String('۰۱۲۳۴۵۶۷۸۹'.indexOf(d)))
+    .replace(/[٠-٩]/g, d => String('٠١٢٣٤٥٦٧٨٩'.indexOf(d)))
+    .replace(/[يیى]/g, 'ی').replace(/[كک]/g, 'ک').replace(/[ھہۀة]/g, 'ه').replace(/[آأإ]/g, 'ا')
+    .replace(/\u200c/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 
   function parseClientNum(v) {
     if (v === null || v === undefined) return null;
@@ -97,7 +103,7 @@
       });
     });
 
-    document.getElementById('biGlobalRefresh').addEventListener('click', loadBiData);
+    document.getElementById('biGlobalRefresh').addEventListener('click', () => loadBiData(true));
 
     // Proxy hubHdr.insertBefore & observe appendChild so report_studio.js PDF/Word buttons
     // ALWAYS mount cleanly inside #biHubActions (zero NotFoundError, 100% centered tabs!)
@@ -188,10 +194,10 @@
 
   function getFilteredEdu() {
     const edu = (state.data && state.data.education) || { records: [] };
-    const q = (state.eduSearch || '').trim().toLowerCase();
+    const q = normBiSearch(state.eduSearch);
     return (edu.records || []).filter(r => {
       if (state.eduWorkgroup !== 'ALL' && r.workgroup !== state.eduWorkgroup) return false;
-      if (q && !(r.course.toLowerCase().includes(q) || r.teacher.toLowerCase().includes(q) || r.workgroup.toLowerCase().includes(q))) {
+      if (q && !normBiSearch(`${r.course} ${r.teacher} ${r.workgroup}`).includes(q)) {
         return false;
       }
       return true;
@@ -230,7 +236,7 @@
     const wgItems = Object.values(wgMap).sort((a, b) => b.value - a.value);
     const wgTotal = wgItems.reduce((s, x) => s + x.value, 0);
 
-    // ۱۰ دوره پرمخاطب فیلترشده
+    // ۱۰ دوره پراستقبال فیلترشده
     const topCourses = valid.slice().sort((a, b) => b.participants - a.participants).slice(0, 10);
     const maxC = Math.max(...topCourses.map(x => x.participants), 1);
 
@@ -310,7 +316,7 @@
           <div class="bi-kpi-sub">نفر به‌ازای هر دوره آماری</div>
         </div>
         <div class="glass-card bi-kpi">
-          <div class="bi-kpi-label">پرمخاطب‌ترین دوره</div>
+          <div class="bi-kpi-label">پراستقبال‌ترین دوره</div>
           <div class="bi-kpi-val bi-kpi-text" style="color:#f59e0b;">${topRec ? esc(topRec.course) : '—'}</div>
           <div class="bi-kpi-sub">${topRec ? `${faNum(topRec.participants)} نفر • ${esc(topRec.workgroup)}` : ''}</div>
         </div>
@@ -318,12 +324,12 @@
 
       <div class="bi-grid">
         <div class="glass-card bi-card">
-          <div class="card-title"><span>سهم مخاطبان به تفکیک کارگروه</span><span class="bi-hint">برای فیلتر روی برش کلیک کنید</span></div>
+          <div class="card-title"><span>سهم دانش‌پژوهان به تفکیک کارگروه</span><span class="bi-hint">برای فیلتر روی برش کلیک کنید</span></div>
           <div class="bi-donut-wrap" id="eduDonutBox">${buildDonutHtml(wgItems, wgTotal, state.eduWorkgroup, 'کل مؤسسه', 'نفر')}</div>
         </div>
 
         <div class="glass-card bi-card">
-          <div class="card-title"><span>${state.eduWorkgroup === 'ALL' ? '۱۰ دوره پرمخاطب مؤسسه' : `دوره‌های پرمخاطب (${esc(state.eduWorkgroup)})`}</span><span class="bi-hint">بر اساس تعداد شرکت‌کنندگان</span></div>
+          <div class="card-title"><span>${state.eduWorkgroup === 'ALL' ? '۱۰ دوره پراستقبال مؤسسه' : `دوره‌های پراستقبال (${esc(state.eduWorkgroup)})`}</span><span class="bi-hint">بر اساس تعداد شرکت‌کنندگان</span></div>
           <div class="bi-bars">
             ${topCourses.length ? topCourses.map((it, idx) => `
               <div class="bi-bar-row" title="${esc(it.course)} — ${esc(it.teacher)} (${esc(it.source)})">
@@ -340,7 +346,7 @@
         </div>
 
         <div class="glass-card bi-card">
-          <div class="card-title"><span>مقایسه کارگروه‌ها: میانگین مخاطب و تعداد دوره</span><span class="bi-hint">کلیک برای فیلتر</span></div>
+          <div class="card-title"><span>مقایسه کارگروه‌ها: میانگین دانش‌پژوه و تعداد دوره</span><span class="bi-hint">کلیک برای فیلتر</span></div>
           <div class="bi-wg-compare" id="eduCmpBox">
             ${cmpItems.map(it => `
               <div class="bi-cmp-item ${state.eduWorkgroup === it.name ? 'active' : ''}" data-slice="${esc(it.name)}">
@@ -351,7 +357,7 @@
                 </div>
               </div>
             `).join('')}
-            <div class="bi-cmp-legend"><span><i style="background:#38bdf8;"></i>میانگین مخاطب هر دوره</span><span><i style="background:#818cf8;"></i>تعداد دوره‌ها</span></div>
+            <div class="bi-cmp-legend"><span><i style="background:#38bdf8;"></i>میانگین دانش‌پژوه هر دوره</span><span><i style="background:#818cf8;"></i>تعداد دوره‌ها</span></div>
           </div>
         </div>
 
@@ -376,12 +382,16 @@
       renderEducationLens(vp);
     });
     const searchEl = document.getElementById('eduSearchInp');
+    let _eduSearchTmr = null;
     searchEl.addEventListener('input', e => {
       state.eduSearch = e.target.value;
       const pos = searchEl.selectionStart;
-      renderEducationLens(vp);
-      const reEl = document.getElementById('eduSearchInp');
-      if (reEl) { reEl.focus(); reEl.setSelectionRange(pos, pos); }
+      clearTimeout(_eduSearchTmr);
+      _eduSearchTmr = setTimeout(() => {
+        renderEducationLens(vp);
+        const reEl = document.getElementById('eduSearchInp');
+        if (reEl) { reEl.focus(); try { reEl.setSelectionRange(pos, pos); } catch (_) {} }
+      }, 150);
     });
     vp.querySelectorAll('[data-slice]').forEach(el => {
       el.addEventListener('click', () => {
@@ -392,8 +402,8 @@
     });
     document.getElementById('eduAskAiBtn').addEventListener('click', () => {
       const q = state.eduWorkgroup === 'ALL'
-        ? 'تحلیل مدیریتی جامع از عملکرد کل کارگروه‌های آموزشی مؤسسه، دوره‌های پرمخاطب و پیشنهادهای اجرایی ارائه کن.'
-        : `تحلیل کامل آماری و مدیریتی از «${state.eduWorkgroup}» شامل تعداد دوره‌ها، مجموع و میانگین مخاطبان، اساتید شاخص و پیشنهادهای بهبود ارائه کن.`;
+        ? 'تحلیل مدیریتی جامع از عملکرد کل کارگروه‌های آموزشی مؤسسه، دوره‌های پراستقبال و پیشنهادهای اجرایی ارائه کن.'
+        : `تحلیل کامل آماری و مدیریتی از «${state.eduWorkgroup}» شامل تعداد دوره‌ها، مجموع و میانگین دانش‌پژوهان، اساتید شاخص و پیشنهادهای بهبود ارائه کن.`;
       window.switchPageById && window.switchPageById('chat');
       window.sendQuickPrompt && window.sendQuickPrompt(q);
     });
@@ -420,11 +430,11 @@
 
   function getFilteredFin() {
     const fin = (state.data && state.data.finance) || { records: [] };
-    const q = (state.finSearch || '').trim().toLowerCase();
+    const q = normBiSearch(state.finSearch);
     return (fin.records || []).filter(r => {
       if (state.finCategory !== 'ALL' && r.category !== state.finCategory) return false;
       if (state.finFile !== 'ALL' && r.file_name !== state.finFile) return false;
-      if (q && !(r.item.toLowerCase().includes(q) || r.vendor.toLowerCase().includes(q) || r.category.toLowerCase().includes(q) || r.invoice_no.toLowerCase().includes(q))) {
+      if (q && !normBiSearch(`${r.item} ${r.vendor} ${r.category} ${r.invoice_no} ${r.file_name} ${r.date || ''}`).includes(q)) {
         return false;
       }
       return true;
@@ -769,12 +779,16 @@
     document.getElementById('finCatSel').addEventListener('change', e => { state.finCategory = e.target.value; renderFinanceLens(vp); });
     document.getElementById('finFileSel').addEventListener('change', e => { state.finFile = e.target.value; renderFinanceLens(vp); });
     const fSearch = document.getElementById('finSearchInp');
+    let _finSearchTmr = null;
     fSearch.addEventListener('input', e => {
       state.finSearch = e.target.value;
       const pos = fSearch.selectionStart;
-      renderFinanceLens(vp);
-      const reEl = document.getElementById('finSearchInp');
-      if (reEl) { reEl.focus(); reEl.setSelectionRange(pos, pos); }
+      clearTimeout(_finSearchTmr);
+      _finSearchTmr = setTimeout(() => {
+        renderFinanceLens(vp);
+        const reEl = document.getElementById('finSearchInp');
+        if (reEl) { reEl.focus(); try { reEl.setSelectionRange(pos, pos); } catch (_) {} }
+      }, 150);
     });
     vp.querySelectorAll('[data-slice]').forEach(el => {
       el.addEventListener('click', () => {
@@ -870,7 +884,7 @@
 
     const skipAxisRx = /^(ردیف|شماره|کد|کد\s*ملی|موبایل|همراه|تلفن|id|no|index|ستون_\d+)$/i;
     const skipMetricRx = /(ردیف|سال|کد\s*ملی|موبایل|تلفن|همراه|شماره|تاریخ|مانده|id)/i;
-    const realMetricRx = /(مبلغ|بدهکار|بستانکار|برداشت|واریز|هزینه|قیمت|جمع|شرکت|مخاطب|تعداد|ساعت|نفر)/i;
+    const realMetricRx = /(مبلغ|بدهکار|بستانکار|برداشت|واریز|هزینه|قیمت|جمع|شرکت|دانش|مخاطب|تعداد|ساعت|نفر)/i;
 
     const smartNumCols = numCols.filter(c => !skipMetricRx.test(String(c || '').trim()));
     if (!cols.includes(state.uniGroupCol)) {
@@ -887,15 +901,34 @@
     const gIdx = cols.indexOf(state.uniGroupCol);
     const mIdx = state.uniMetricCol === '__COUNT__' ? -1 : cols.indexOf(state.uniMetricCol);
 
+    const cleanUniLabel = (raw) => {
+      let s = String(raw || '').trim();
+      s = s.replace(/^(?:تایید\s*شده|تأیید\s*شده)\s+/g, '');
+      s = s.replace(/^سطح\s*[۰-۹0-9]+\s+/g, '');
+      s = s.replace(/^[A-Za-z0-9]{2,6}\s+(?=[\u0600-\u06FF])/, '');
+      return s.replace(/\s+/g, ' ').trim() || 'ثبت‌نشده';
+    };
+
+    const isSessionRosterView = (
+      mIdx >= 0 &&
+      /(جلسه|جلسات|حضور|session)/i.test(String(state.uniMetricCol || '')) &&
+      /(نام|شرکت|دانش|مخاطب|name)/i.test(String(state.uniGroupCol || ''))
+    );
+    const effectiveChartMode = (state.uniChartMode === 'auto')
+      ? (isSessionRosterView ? 'dist' : 'rank')
+      : state.uniChartMode;
+
     const groups = {};
+    const freqMap = {};
     let totalMetric = 0;
     let validRows = 0;
     const sumRowRx = /^(جمع\s*کل|مجموع(\s*کل)?|جمع|کل|میانگین|مانده\s*از\s*قبل|total|grand\s*total|subtotal)$/i;
     allRows.forEach(r => {
       const firstNonEmpty = r.find(v => String(v || '').trim() !== '') || '';
       if (sumRowRx.test(String(firstNonEmpty).trim())) return;
-      const k = (gIdx >= 0 ? String(r[gIdx] || '').trim() : '') || 'ثبت‌نشده';
-      if (sumRowRx.test(k)) return;
+      const rawK = (gIdx >= 0 ? String(r[gIdx] || '').trim() : '') || 'ثبت‌نشده';
+      if (sumRowRx.test(rawK)) return;
+      const k = cleanUniLabel(rawK);
       if (!groups[k]) groups[k] = { name: k, sum: 0, count: 0 };
       if (mIdx >= 0) {
         const v = parseClientNum(r[mIdx]);
@@ -904,6 +937,8 @@
           groups[k].count += 1;
           totalMetric += v;
           validRows += 1;
+          const bKey = Math.round(v);
+          freqMap[bKey] = (freqMap[bKey] || 0) + 1;
         }
       } else {
         groups[k].sum += 1;
@@ -914,24 +949,61 @@
     });
 
     const uniqueGroupsCount = Object.keys(groups).length;
-    const chartItems = Object.values(groups).map(g => ({
-      name: g.name,
-      value: (state.uniAgg === 'avg' && g.count > 0) ? (g.sum / g.count) : g.sum,
-      count: g.count,
-    })).filter(x => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 12);
+    let chartItems = [];
+    let chartTitle = '';
+    let chartSub = '';
+    let chartPill = '';
+
+    if (effectiveChartMode === 'dist' && mIdx >= 0 && Object.keys(freqMap).length > 0) {
+      const sortedBuckets = Object.entries(freqMap)
+        .map(([kNum, cnt]) => ({ sess: Number(kNum), cnt: Number(cnt) }))
+        .sort((a, b) => b.sess - a.sess);
+      const maxSessVal = sortedBuckets.length ? sortedBuckets[0].sess : 0;
+      chartItems = sortedBuckets.map(b => {
+        const pct = validRows > 0 ? Math.round((b.cnt / validRows) * 100) : 0;
+        const tag = b.sess === 0 ? ' (غایب کامل)' : (b.sess === maxSessVal && maxSessVal > 1 ? ' (حضور کامل)' : '');
+        return {
+          name: `${faNum(b.sess)} جلسه${tag}`,
+          value: b.cnt,
+          pct,
+          unitLbl: 'نفر',
+        };
+      });
+      chartTitle = `توزیع فراوانی حضور بر اساس «${esc(state.uniMetricCol)}»`;
+      chartSub = `تفکیک ${faNum(validRows)} نفر بر حسب تعداد جلسات حضور (میانگین: ${faDec(validRows > 0 ? totalMetric / validRows : 0)} جلسه)`;
+      chartPill = `کل نفرات: ${faNum(validRows)}`;
+    } else {
+      chartItems = Object.values(groups).map(g => ({
+        name: g.name,
+        value: (state.uniAgg === 'avg' && g.count > 0) ? (g.sum / g.count) : g.sum,
+        count: g.count,
+        pct: null,
+        unitLbl: '',
+      })).filter(x => x.value > 0).sort((a, b) => b.value - a.value).slice(0, 12);
+      chartTitle = `تحلیل «${esc(state.uniMetricCol === '__COUNT__' ? 'تعداد رکورد' : state.uniMetricCol)}» به تفکیک «${esc(state.uniGroupCol)}»`;
+      chartSub = 'مقایسه رتبه‌بندی مقادیر جدول بر اساس محور و شاخص انتخاب‌شده';
+      chartPill = `مجموع: ${faDec(totalMetric)}`;
+    }
 
     const maxVal = Math.max(...chartItems.map(x => x.value), 1);
     const domainTag = d => d === 'finance' ? 'مالی' : (d === 'education' ? 'آموزشی' : 'عمومی');
     const metricLabel = state.uniMetricCol === '__COUNT__' ? 'تعداد رکورد' : state.uniMetricCol;
+    const helpBtnHtml = window.eHadiHelp?.btn ? window.eHadiHelp.btn('bi_universal') : '';
 
-    const q = (state.uniSearch || '').trim().toLowerCase();
+    const q = normBiSearch(state.uniSearch);
     const previewRows = q
-      ? allRows.filter(r => r.some(cell => String(cell || '').toLowerCase().includes(q)))
+      ? allRows.filter(r => r.some(cell => normBiSearch(cell).includes(q)))
       : allRows;
 
     const bannerHtml = tblData.banner_title
       ? `<div class="eh-uni-banner-pill"><span>عنوان ثبت‌شده فایل:</span><strong>${esc(tblData.banner_title)}</strong></div>`
       : '';
+
+    const modeSwitchHtml = mIdx >= 0 ? `
+      <div class="eh-aff-mode-seg" id="uniChartModeSeg">
+        <button type="button" class="eh-aff-mode-btn ${effectiveChartMode === 'dist' ? 'active' : ''}" data-uni-cmode="dist" title="نمایش تعداد نفرات در هر سطح عددی">توزیع فراوانی</button>
+        <button type="button" class="eh-aff-mode-btn ${effectiveChartMode === 'rank' ? 'active' : ''}" data-uni-cmode="rank" title="رتبه‌بندی مقادیر به تفکیک محور">رتبه‌بندی</button>
+      </div>` : '';
 
     vp.innerHTML = `
       <div class="glass-card bi-toolbar eh-uni-toolbar">
@@ -946,7 +1018,7 @@
             <option value="__COUNT__" ${state.uniMetricCol === '__COUNT__' ? 'selected' : ''}>شاخص: تعداد رکورد</option>
             ${numCols.map(c => `<option value="${esc(c)}" ${c === state.uniMetricCol ? 'selected' : ''}>شاخص: ${esc(c)}</option>`).join('')}
           </select>
-          ${state.uniMetricCol !== '__COUNT__' ? `
+          ${state.uniMetricCol !== '__COUNT__' && effectiveChartMode === 'rank' ? `
             <select id="uniAggSel" class="glass-select bi-select">
               <option value="sum" ${state.uniAgg === 'sum' ? 'selected' : ''}>مجموع (Sum)</option>
               <option value="avg" ${state.uniAgg === 'avg' ? 'selected' : ''}>میانگین (Avg)</option>
@@ -964,23 +1036,37 @@
       <div class="bi-kpi-row eh-uni-kpi-row">
         <div class="glass-card bi-kpi"><div class="bi-kpi-label">تعداد ردیف‌ها</div><div class="bi-kpi-val">${faNum(tblData.total_rows)}</div><div class="bi-kpi-sub">${faNum(cols.length)} ستون شناسایی‌شده</div></div>
         <div class="glass-card bi-kpi"><div class="bi-kpi-label">مقادیر یکتای محور</div><div class="bi-kpi-val">${faNum(uniqueGroupsCount)}</div><div class="bi-kpi-sub">ستون «${esc(state.uniGroupCol)}»</div></div>
-        <div class="glass-card bi-kpi"><div class="bi-kpi-label">${state.uniAgg === 'avg' && mIdx >= 0 ? 'میانگین شاخص' : 'مجموع کل شاخص'}</div><div class="bi-kpi-val">${faDec(state.uniAgg === 'avg' && validRows > 0 ? (totalMetric / validRows) : totalMetric)}</div><div class="bi-kpi-sub">${esc(metricLabel)}</div></div>
-        <div class="glass-card bi-kpi"><div class="bi-kpi-label">بیشترین مقدار در نمودار</div><div class="bi-kpi-val">${chartItems.length ? faDec(chartItems[0].value) : '۰'}</div><div class="bi-kpi-sub">${chartItems.length ? esc(chartItems[0].name) : 'بدون داده'}</div></div>
+        <div class="glass-card bi-kpi"><div class="bi-kpi-label">میانگین شاخص</div><div class="bi-kpi-val">${faDec(validRows > 0 ? (totalMetric / validRows) : totalMetric)}</div><div class="bi-kpi-sub">${esc(metricLabel)} (مجموع: ${faDec(totalMetric)})</div></div>
+        <div class="glass-card bi-kpi"><div class="bi-kpi-label">بیشترین فراوانی / مقدار</div><div class="bi-kpi-val">${chartItems.length ? `${faDec(chartItems[0].value)}${chartItems[0].unitLbl ? ' ' + chartItems[0].unitLbl : ''}` : '۰'}</div><div class="bi-kpi-sub">${chartItems.length ? esc(chartItems[0].name) : 'بدون داده'}</div></div>
       </div>
 
       <div class="bi-grid eh-uni-grid">
-        <div class="glass-card bi-card eh-uni-chart-card">
-          <div class="card-title">
-            <span>تحلیل «${esc(metricLabel)}» به تفکیک «${esc(state.uniGroupCol)}»</span>
-            <span class="stat-pill">مجموع: ${faDec(totalMetric)}</span>
+        <div class="glass-card bi-card eh-uni-chart-card eh-flush-card">
+          <div class="eh-sec-hdr">
+            <div class="eh-card-title-wrap">
+              <span class="eh-card-ico eh-ico-sky" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+              </span>
+              <div class="eh-card-title-txt">
+                <div class="eh-card-title-row">
+                  <strong>${chartTitle}</strong>
+                  ${helpBtnHtml}
+                </div>
+                <span class="eh-card-sub">${chartSub}</span>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:7px; flex-wrap:wrap;">
+              ${modeSwitchHtml}
+              <span class="stat-pill">${chartPill}</span>
+            </div>
           </div>
-          <div class="bi-bars">
+          <div class="bi-bars eh-uni-bars-body">
             ${chartItems.length ? chartItems.map((it, idx) => `
               <div class="bi-bar-row" title="${esc(it.name)} — ${faDec(it.value)}">
                 <div class="bi-bar-head">
                   <span class="bi-bar-rank">${faNum(idx + 1)}</span>
                   <span class="bi-bar-name">${esc(it.name)}</span>
-                  <span class="bi-bar-num">${faDec(it.value)}</span>
+                  <span class="bi-bar-num">${faDec(it.value)}${it.unitLbl ? ` ${it.unitLbl}` : ''}${it.pct !== null ? ` (${faNum(it.pct)}٪)` : ''}</span>
                 </div>
                 <div class="bi-bar-track"><div class="bi-bar-fill" style="width:${Math.max(4, Math.round(it.value / maxVal * 100))}%; background:linear-gradient(90deg, ${COLORS[idx % COLORS.length]}cc, ${COLORS[idx % COLORS.length]});"></div></div>
               </div>
@@ -988,9 +1074,19 @@
           </div>
         </div>
 
-        <div class="glass-card bi-card eh-uni-table-card">
-          <div class="card-title" style="gap:10px; flex-wrap:wrap;">
-            <span>پیش‌نمایش زنده داده‌های جدول</span>
+        <div class="glass-card bi-card eh-uni-table-card eh-flush-card">
+          <div class="eh-sec-hdr">
+            <div class="eh-card-title-wrap">
+              <span class="eh-card-ico eh-ico-emerald" aria-hidden="true">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="9" x2="9" y2="21"/></svg>
+              </span>
+              <div class="eh-card-title-txt">
+                <div class="eh-card-title-row">
+                  <strong>پیش‌نمایش زنده داده‌های جدول</strong>
+                </div>
+                <span class="eh-card-sub">جست‌وجو و بررسی مستقیم ردیف‌های شیت انتخاب‌شده</span>
+              </div>
+            </div>
             <div style="display:flex; align-items:center; gap:8px;">
               <input id="uniSearchInp" class="glass-input eh-uni-search" type="text" placeholder="جست‌وجو در جدول..." value="${esc(state.uniSearch)}" />
               <span class="stat-pill">${faNum(previewRows.length)} / ${faNum(tblData.total_rows)} ردیف</span>
@@ -1026,11 +1122,18 @@
       state.uniTable = e.target.value;
       state.uniGroupCol = '';
       state.uniMetricCol = '';
+      state.uniChartMode = 'auto';
       state.uniSearch = '';
       renderUniversalLens(vp);
     });
     document.getElementById('uniGrpSel').addEventListener('change', e => { state.uniGroupCol = e.target.value; renderUniversalLens(vp); });
     document.getElementById('uniMetSel').addEventListener('change', e => { state.uniMetricCol = e.target.value; renderUniversalLens(vp); });
+    vp.querySelectorAll('#uniChartModeSeg [data-uni-cmode]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.uniChartMode = btn.dataset.uniCmode || 'auto';
+        renderUniversalLens(vp);
+      });
+    });
     const aggEl = document.getElementById('uniAggSel');
     if (aggEl) aggEl.addEventListener('change', e => { state.uniAgg = e.target.value; renderUniversalLens(vp); });
 
@@ -1117,8 +1220,10 @@
   const origScan = window.scanDocs;
   if (typeof origScan === 'function') {
     window.scanDocs = async function (...args) {
+      window.__ehInvalidateAnalyticsCache?.();
       const out = await origScan.apply(this, args);
-      setTimeout(loadBiData, 250);
+      window.__ehInvalidateAnalyticsCache?.();
+      setTimeout(() => loadBiData(true), 250);
       return out;
     };
   }

@@ -83,7 +83,7 @@ window.eHadiCharts = (() => {
         p = next;
       }
       let words = p.split(/\s+/).filter(w => w && !JUNK_ONLY.has(w));
-      for (let step = 0; step < 3 && words.length >= 2; step++) {
+      for (let step = 0; step < 3 && words.length >= 3; step++) {
         const w0 = words[0];
         if (FIRST_NAMES.has(w0)) { words.shift(); continue; }
         if ((w0.startsWith('\u0633\u06cc\u062f\u0647') || w0.startsWith('\u0633\u06cc\u062f')) && w0.length > 4) {
@@ -216,7 +216,7 @@ window.eHadiCharts = (() => {
         rows += `<text x="${valAnchorX}" y="${y + 14.5}" direction="rtl" unicode-bidi="embed" text-anchor="start" font-size="11.8" font-weight="800" fill="${tc.text}"><title>\u062d\u0636\u0648\u0631 \u06a9\u0644: ${fmtNum(v1)}</title>${fmtVal(v1)}</text>`;
         const uCol = v2 > 0 ? (opts.c2 || tc.secondary) : tc.muted;
         const uTxt = v2 > 0 ? `\u06cc\u06a9\u062a\u0627: ${fmtVal(v2)}` : '\u06cc\u06a9\u062a\u0627: \u06f0';
-        rows += `<text x="${valAnchorX}" y="${y + 27.5}" direction="rtl" unicode-bidi="embed" text-anchor="start" font-size="10.5" font-weight="700" fill="${uCol}"><title>\u0645\u062e\u0627\u0637\u0628 \u06cc\u06a9\u062a\u0627: ${fmtNum(v2)}</title>${uTxt}</text>`;
+        rows += `<text x="${valAnchorX}" y="${y + 27.5}" direction="rtl" unicode-bidi="embed" text-anchor="start" font-size="10.5" font-weight="700" fill="${uCol}"><title>دانش‌پژوه یکتا: ${fmtNum(v2)}</title>${uTxt}</text>`;
       } else {
         rows += `<text x="${labelStartX}" y="${y + 19}" direction="rtl" unicode-bidi="plaintext" text-anchor="start" font-size="12.5" font-weight="700" fill="${tc.text}"${teacherAttr}><title>${fullTip}</title>${lbl}</text>`;
         rows += `<rect x="${barLeftEdge}" y="${y + 6.5}" width="${barAreaW}" height="16" rx="6" fill="${tc.track}"/>`;
@@ -293,7 +293,7 @@ window.eHadiCharts = (() => {
     const total = (items || []).reduce((a, b) => a + Number(b.value || 0), 0);
     const circ = 2 * Math.PI * r;
     let offset = 0, segs = '', legend = '';
-    const list = (items || []).slice(0, 6);
+    const list = (items || []).slice(0, 8);
     const rowGap = list.length > 4 ? 30 : 38;
     const startY = Math.max(32, cy - ((list.length - 1) * rowGap) / 2 + 4);
 
@@ -332,7 +332,7 @@ window.eHadiCharts = (() => {
       container.innerHTML = '<div class="eh-empty-chart">\u0628\u0631\u0627\u06cc \u0646\u0645\u0648\u062f\u0627\u0631 \u0631\u0627\u062f\u0627\u0631\u06cc \u062d\u062f\u0627\u0642\u0644 \u06f3 \u06a9\u0627\u0631\u06af\u0631\u0648\u0647 \u0646\u06cc\u0627\u0632 \u0627\u0633\u062a.</div>';
       return;
     }
-    const W = 560, H = 264, cx = 280, cy = 132, R = 78;
+    const W = 580, H = 276, cx = 290, cy = 138, R = 78;
     const maxV = Math.max(1, ...list.map(x => Number(x.value || 0)));
     const step = (2 * Math.PI) / list.length;
 
@@ -383,7 +383,7 @@ window.eHadiCharts = (() => {
       const fill = ratio === 0 ? tc.track : `rgba(${rgb}, ${(0.28 + ratio * 0.72).toFixed(2)})`;
       const txtCol = ratio > 0.45 ? '#ffffff' : tc.text;
       return `<g>
-        <rect x="${x}" y="14" width="${cw}" height="${ch}" rx="8.5" fill="${fill}"><title>${escXml(m.month)}: ${fmtNum(m.courses)} \u062f\u0648\u0631\u0647 (${fmtNum(m.attendance)} \u0645\u062e\u0627\u0637\u0628)</title></rect>
+        <rect x="${x}" y="14" width="${cw}" height="${ch}" rx="8.5" fill="${fill}"><title>${escXml(m.month)}: ${fmtNum(m.courses)} \u062f\u0648\u0631\u0647 (${fmtNum(m.attendance)} دانش‌پژوه)</title></rect>
         <text x="${x + cw / 2}" y="47" text-anchor="middle" font-size="13.8" font-weight="800" fill="${txtCol}">${fmtNum(m.courses)}</text>
         <text x="${x + cw / 2}" y="90" text-anchor="middle" font-size="10.8" font-weight="600" fill="${tc.muted}">${escXml(m.month)}</text>
       </g>`;
@@ -443,11 +443,18 @@ window.eHadiCharts = (() => {
     const svg = container?.querySelector('svg');
     if (!svg) return;
     if (kind === 'svg') {
-      const xml = new XMLSerializer().serializeToString(svg);
+      const clone = svg.cloneNode(true);
+      clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+      const xml = new XMLSerializer().serializeToString(clone);
+      const blobUrl = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }));
       const a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }));
+      a.href = blobUrl;
       a.download = `${fileBase}.svg`;
+      document.body.appendChild(a);
       a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 1500);
+      window.showToast?.('فایل برداری نمودار (SVG) ذخیره شد.');
       return;
     }
     const uri = await svgToPngDataUri(svg, 2.5, false);
@@ -455,7 +462,10 @@ window.eHadiCharts = (() => {
     const a = document.createElement('a');
     a.href = uri;
     a.download = `${fileBase}.png`;
+    document.body.appendChild(a);
     a.click();
+    a.remove();
+    window.showToast?.('تصویر باکیفیت نمودار (PNG) ذخیره شد.');
   }
 
   return { toFa, fmtNum, fmtCompact, formatTeacherShort, renderSplineArea, renderDonut, renderHBar, renderRadar, renderHeatmap, svgToPngDataUri, copyChartToClipboard, downloadChart };

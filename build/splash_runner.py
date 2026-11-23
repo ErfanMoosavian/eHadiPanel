@@ -1,5 +1,5 @@
 """
-اسپلش اسکرین رسمی و شیشه‌ای eHadiPanel v0.3.0-beta
+اسپلش اسکرین رسمی و شیشه‌ای eHadiPanel
 مؤسسه علمی فرهنگی امام هادی علیه‌السلام
 - طراحی کاملاً هم‌زبان با رابط کاربری برنامه (Obsidian Liquid Glass + Micro-Grid + Ambient Orbs)
 - مونوگرام معماری و شیشه‌ای eHP در مرکز گرافیک به‌همراه کارت‌های مینی‌تحلیلی شیشه‌ای (Spline & Telemetry)
@@ -19,16 +19,15 @@ import tempfile
 import time
 from pathlib import Path
 
-DESIGN_REV = "v030_beta_ehp_glass_v8_pure_light"
+DESIGN_REV = "ehp_glass_v9_evergreen_noversion"
 LOGICAL_W = 760
 LOGICAL_H = 450
 
 BRAND_WORDMARK = "eHadiPanel"
-VERSION_BADGE = "BETA 0.3"
 INST_TITLE = "مؤسسه علمی فرهنگی امام هادی علیه‌السلام"
 INST_SUBTITLE = "سامانه هوشمند مدیریت، تحلیل آماری و دستیار پژوهشی"
-FOOTER_META_RIGHT = "نسخه آزمایشی سوم  •  پلتفرم آفلاین و امن"
-FOOTER_META_LEFT = "eHadiPanel  •  v0.3.0-beta"
+FOOTER_META_RIGHT = "سامانه هوشمند مدیریت و تحلیل  •  پلتفرم آفلاین و امن"
+FOOTER_META_LEFT = "eHadiPanel"
 
 CAPABILITY_CHIPS = [
     ("هوش تجاری", 632, 718),
@@ -327,7 +326,7 @@ def _render_artwork_uncached(W: int, H: int, palette: str, logo_file: Path | Non
     - Left Hero: Architectural layered liquid-glass monolith housing the bold `eHP` monogram,
       flanked by two ultra-clean frosted BI micro-cards (spline wave & vertical telemetry bars)
       and two precision orbital rings for the live 60 FPS animated beads.
-    - Right Editorial Zone: Clean institute badge, BETA 0.2 pill, eHadiPanel wordmark,
+    - Right Editorial Zone: Clean institute crest, eHadiPanel wordmark,
       accent gradient bar, capability chips, and frosted glass bottom loading dock.
     """
     import numpy as np
@@ -582,15 +581,7 @@ def _render_artwork_uncached(W: int, H: int, palette: str, logo_file: Path | Non
         d.line([(scx - w_l, scy + px(7)), (scx, scy + h_l + px(7)), (scx + w_l, scy + px(7))],
                fill=acc2 + (205,), width=lw2)
 
-    # Sleek "BETA 0.2" pill cleanly balanced to the left of the calligraphy crest
     d = ImageDraw.Draw(hero)
-    d.rounded_rectangle(
-        [px(494), py(54), px(582), py(80)],
-        radius=px(13),
-        fill=acc1 + (30,),
-        outline=acc1 + (116,),
-        width=max(2, px(1.1)),
-    )
 
     # Editorial gradient rule under eHadiPanel wordmark (--lg-accent -> --lg-accent-2)
     rx1, rx2, ry1, ry2 = px(652), px(718), py(184), py(187)
@@ -789,7 +780,6 @@ def main() -> None:
     latin_font = _pick_latin_display_font(tkfont)
 
     # Exact pixel-locked font sizes (100% immune to DPI drift)
-    f_badge = (latin_font, -max(10, int(round(11 * scale))), "bold")
     f_brand = (latin_font, -max(24, int(round(34 * scale))), "bold")
     f_title = (ui_font, -max(14, int(round(17.5 * scale))), "bold")
     f_sub = (ui_font, -max(10, int(round(12.2 * scale))))
@@ -820,7 +810,6 @@ def main() -> None:
     canvas.create_text(start_x + w_e, mon_cy, text="HP", fill="#f8fafc", font=ehp_font_obj, anchor="w")
 
     # Right Editorial Typography
-    canvas.create_text(dx(538), dy(67), text=VERSION_BADGE, fill=pill_hex, font=f_badge, anchor="center")
     canvas.create_text(dx(718), dy(150), text=BRAND_WORDMARK, fill="#f8fafc", font=f_brand, anchor="e")
     canvas.create_text(dx(718), dy(216), text=INST_TITLE, fill="#f8fafc", font=f_title, anchor="e")
     canvas.create_text(dx(718), dy(248), text=INST_SUBTITLE, fill="#94a3b8", font=f_sub, anchor="e")

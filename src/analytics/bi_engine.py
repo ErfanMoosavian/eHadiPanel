@@ -1,6 +1,7 @@
 import json
 import re
 from collections import defaultdict
+from pathlib import Path
 from typing import Any
 
 import duckdb
@@ -10,11 +11,14 @@ from src.core.config import Config
 from src.core.db_manager import (
     classify_non_expense_row,
     clean_excel_cell_value,
+    canonical_teacher_core,
+    clean_participant_name,
     detect_workgroup_unified,
     get_db_lock,
     is_banner_header_col,
     is_blank_numbered_row,
     is_summary_row_smart,
+    match_roster_to_summary_courses,
     parse_jalali_date,
     parse_number_strict,
     promote_banner_headers,
@@ -124,6 +128,93 @@ def norm_text(val: Any) -> str:
         .replace("\u200c", " ")
     )
     return re.sub(r"\s+", " ", s).strip()
+
+
+_SHORT_TOKEN_RX_CACHE: dict[str, re.Pattern] = {}
+
+
+def _has_fin_token(text: str, tok: str) -> bool:
+    """Matches short/ambiguous tokens like 'فی', 'بها', 'برداشت' on word boundaries so 'الکافی' NEVER matches 'فی'."""
+    if not text or not tok:
+        return False
+    if len(tok) <= 3 or tok in ("بها", "نرخ", "خرج", "جمع", "برداشت", "واریز"):
+        rx = _SHORT_TOKEN_RX_CACHE.get(tok)
+        if rx is None:
+            rx = re.compile(rf"(?:^|[\s\-_/()،,.:;])({re.escape(tok)})(?:$|[\s\-_/()،,.:;])")
+            _SHORT_TOKEN_RX_CACHE[tok] = rx
+        return bool(rx.search(text))
+    return tok in text
+
+
+def _is_person_roster_columns(norm_cols: list[str]) -> bool:
+    has_person = any(
+        any(k in cn for k in ("نام و نام خانوادگی", "نام خانوادگی", "نام شرکت کننده", "شرکت کننده", "نام دانش پژوه", "دانش پژوه", "نام و فامیل", "طلبه", "فراگیر"))
+        for cn in norm_cols
+    )
+    has_id_or_phone = any(
+        any(k in cn for k in ("موبایل", "همراه", "تلفن", "شماره تماس", "کد ملی", "کدملی", "گذرنامه", "پاسپورت", "کد فراگیر", "فیدا", "آمایش", "phone", "mobile", "passport", "fida", "cnic"))
+        for cn in norm_cols
+    )
+    return has_person and has_id_or_phone
+
+
+def _is_edu_dashboard_summary(norm_cols: list[str], source_sheet: str = "") -> bool:
+    sh_n = norm_text(source_sheet)
+    if any(k in sh_n for k in ("داشبورد آماری", "کارنامه جامع", "خلاصه کارگروه")):
+        return True
+    has_wg = any("نام کارگروه" in cn or cn == "کارگروه" for cn in norm_cols)
+    has_edu_metrics = sum(
+        1 for k in ("تعداد دوره", "مجموع ثبت نام", "افراد یکتا", "مجموع جلسات", "میانگین جلسات", "تعداد کارگروه", "تعداد کل دوره")
+        if any(k in cn for cn in norm_cols)
+    ) >= 2
+    return has_wg and has_edu_metrics
+
+
+def _is_wg_course_matrix(norm_cols: list[str]) -> bool:
+    return (
+        _is_person_roster_columns(norm_cols)
+        and any(any(k in cn for k in ("شرح دوره", "جزئیات کل دوره", "کارگروه های فعال")) for cn in norm_cols)
+        and len(norm_cols) >= 7
+    )
+
+
+def _clean_course_sheet_title(sheet_name: str) -> tuple[str, str]:
+    raw = norm_text(sheet_name)
+    m = re.match(r"^(\d+)\s*[\-–—ـ.]\s*(.+)$", raw)
+    num, title = (m.group(1).strip(), m.group(2).strip()) if m else ("", raw)
+    stripped = re.sub(
+        r"^(?:لیست\s+(?:حضور\s+و\s+غیاب\s+(?:نهایی\s+)?|حضوری\s+و\s+مجازی\s+)?(?:دوره\s+)?|فهرست\s+(?:حضور\s+و\s+غیاب\s+)?(?:دوره\s+)?)",
+        "",
+        title,
+    ).strip()
+    return num, (stripped if len(stripped) >= 3 else title)
+
+
+def _canon_bi_wg_name(raw_wg: str) -> str:
+    g = norm_text(raw_wg)
+    g = re.sub(r"^(?:کارگروه\s+)+", "کارگروه ", g).strip()
+    ck = re.sub(r"[\s\u200c()\-_.:،,؛;]+", "", g.replace("آ", "ا"))
+    mapping = {
+        "فقه": "کارگروه فقه",
+        "کارگروهفقه": "کارگروه فقه",
+        "دینشناسی": "کارگروه دین شناسی",
+        "کارگروهدینشناسی": "کارگروه دین شناسی",
+        "تاریخ": "کارگروه تاریخ",
+        "کارگروهتاریخ": "کارگروه تاریخ",
+        "قران": "کارگروه قرآن",
+        "کارگروهقران": "کارگروه قرآن",
+        "حدیث": "کارگروه حدیث",
+        "کارگروهحدیث": "کارگروه حدیث",
+        "کارگروهکارگروهحدیث": "کارگروه حدیث",
+        "تربیتمبلغ": "تربیت سخنران و مبلغ",
+        "تربیتسخنران": "تربیت سخنران و مبلغ",
+        "تربیتسخنرانومبلغ": "تربیت سخنران و مبلغ",
+        "کارگروهتربیتسخنرانومبلغ": "تربیت سخنران و مبلغ",
+        "انسباالکافی": "حدیث‌خوانی (انس با الکافی)",
+        "کارگروهانسباالکافی": "حدیث‌خوانی (انس با الکافی)",
+        "حدیثخوانیانسباالکافی": "حدیث‌خوانی (انس با الکافی)",
+    }
+    return mapping.get(ck, g or "دوره‌های عمومی")
 
 
 def parse_number(val: Any) -> float | None:
@@ -307,6 +398,22 @@ class BIDashboardEngine:
         sample_rows: list[tuple] | None = None,
     ) -> dict[str, str | None] | None:
         norm_cols = [(c, norm_text(c)) for c in columns]
+        only_norm = [cn for _, cn in norm_cols]
+
+        if _is_edu_dashboard_summary(only_norm, source_sheet) or _is_wg_course_matrix(only_norm):
+            return None
+
+        is_roster = _is_person_roster_columns(only_norm)
+        if is_roster:
+            is_edu_roster = any(any(k in cn for k in ("جلسه", "جلسات", "دوره", "کارگروه", "شهریه", "سطح", "پایه", "حضور")) for cn in only_norm)
+            if is_edu_roster:
+                return None
+            explicit_expense = any(
+                any(k in cn for k in ("مبلغ فاکتور", "مبلغ هزینه", "بدهکار", "بستانکار", "فاکتور", "شماره فاکتور"))
+                for cn in only_norm
+            )
+            if not explicit_expense:
+                return None
 
         amount_col = None
         unit_price_col = None
@@ -317,46 +424,47 @@ class BIDashboardEngine:
         date_col = None
         inv_no_col = None
 
-        # ابتدا ستون مبلغ کل را با اولویت بالا پیدا کن (و ستون مانده/شماره را اشتباه نگیر)
         for hint in FIN_AMOUNT_HINTS:
             for orig, cn in norm_cols:
-                if hint in cn and not any(u in cn for u in ("واحد", "فی", "مانده", "شماره", "کد", "موبایل", "تلفن")):
+                if any(u in cn for u in ("واحد", "فی", "مانده", "شماره", "کد", "موبایل", "تلفن", "گذرنامه", "پاسپورت", "فراگیر", "فیدا", "آمایش", "جلسه", "جلسات", "دوره", "شرح", "نوع", "عنوان", "بابت", "سرفصل", "دسته", "گروه")):
+                    continue
+                if hint in ("برداشت", "واریز", "جمع", "بها") and len(cn.split()) >= 3:
+                    continue
+                if _has_fin_token(cn, hint):
                     amount_col = orig
                     break
             if amount_col:
                 break
 
         for orig, cn in norm_cols:
-            if not unit_price_col and any(h in cn for h in FIN_UNIT_PRICE_HINTS):
+            if not unit_price_col and any(_has_fin_token(cn, h) for h in FIN_UNIT_PRICE_HINTS) and len(cn.split()) <= 3:
                 unit_price_col = orig
-            elif not qty_col and any(h in cn for h in FIN_QTY_HINTS):
+            elif not qty_col and any(_has_fin_token(cn, h) for h in FIN_QTY_HINTS):
                 qty_col = orig
             elif not inv_no_col and any(h in cn for h in FIN_INV_NO_HINTS):
                 inv_no_col = orig
-            elif not date_col and any(h in cn for h in FIN_DATE_HINTS):
+            elif not date_col and any(_has_fin_token(cn, h) for h in FIN_DATE_HINTS) and len(cn.split()) <= 3:
                 date_col = orig
-            elif not vendor_col and any(h in cn for h in FIN_VENDOR_HINTS):
+            elif not vendor_col and any(_has_fin_token(cn, h) for h in FIN_VENDOR_HINTS) and len(cn.split()) <= 3:
                 vendor_col = orig
-            elif not cat_col and any(h in cn for h in FIN_CAT_HINTS):
+            elif not cat_col and any(_has_fin_token(cn, h) for h in FIN_CAT_HINTS) and len(cn.split()) <= 3:
                 cat_col = orig
             elif not item_col and any(h in cn for h in FIN_ITEM_HINTS):
                 item_col = orig
 
-        ctx = norm_text(f"{file_name} {source_sheet} {banner_ctx} {' '.join(columns)}")
-        has_strong_fin_signal = any(
-            k in ctx for k in (
-                "مبلغ", "قیمت", "هزینه", "فاکتور", "فی", "تومان", "ریال", "خرید",
-                "صورتحساب", "صورت حساب", "بودجه", "پرداخت", "مالی", "بدهکار", "بستانکار",
-                "برداشت", "واریز", "تنخواه", "خرج", "حسابداری", "تراکنش", "price", "cost", "amount", "invoice"
-            )
+        ctx = norm_text(f"{file_name} {source_sheet} {banner_ctx} {' '.join(c for c in columns if len(norm_text(c).split()) <= 3)}")
+        strong_fin_tokens = (
+            "مبلغ", "قیمت", "هزینه", "فاکتور", "فی", "تومان", "ریال", "خرید",
+            "صورتحساب", "صورت حساب", "بودجه", "پرداخت", "مالی", "بدهکار", "بستانکار",
+            "برداشت", "واریز", "تنخواه", "خرج", "حسابداری", "تراکنش", "price", "cost", "amount", "invoice"
         )
+        has_strong_fin_signal = any(_has_fin_token(ctx, k) for k in strong_fin_tokens)
 
-        # Fallback هوشمند برای فایل‌های مشخصاً مالی (مثل مالی آبان.xlsx) که نام ستون مبلغ استاندارد ندارند
-        if not amount_col and not unit_price_col and has_strong_fin_signal and sample_rows:
+        if not amount_col and not unit_price_col and has_strong_fin_signal and sample_rows and not is_roster:
             best_col = None
             best_score = -1.0
             for ci, (orig, cn) in enumerate(norm_cols):
-                if any(bad in cn for bad in ("ردیف", "شماره", "کد", "تاریخ", "مانده", "موبایل", "تلفن", "سال")):
+                if any(bad in cn for bad in ("ردیف", "شماره", "کد", "تاریخ", "مانده", "موبایل", "تلفن", "سال", "گذرنامه", "پاسپورت", "فراگیر")):
                     continue
                 nums = []
                 for r in sample_rows[:60]:
@@ -365,7 +473,6 @@ class BIDashboardEngine:
                         if v is not None and v > 0:
                             nums.append(v)
                 if len(nums) >= 2:
-                    # Prefer monetary-scale columns (>= 1000) over small row indices/quantities
                     big_cnt = sum(1 for x in nums if x >= 1000)
                     sc = big_cnt * 3.0 + len(nums)
                     if big_cnt >= 1 and sc > best_score:
@@ -400,7 +507,7 @@ class BIDashboardEngine:
     def _detect_education_columns(columns: list[str]) -> tuple[str | None, str | None, str | None]:
         norm_set = [norm_text(c) for c in columns]
         # Attendance roster (نام + نام خانوادگی + موبایل) is person-level, not a summary courses table
-        if any("نام خانوادگی" in x for x in norm_set) and any(any(k in x for k in ("موبایل", "همراه", "تلفن", "کد ملی")) for x in norm_set):
+        if _is_person_roster_columns(norm_set) or _is_edu_dashboard_summary(norm_set):
             return None, None, None
         course_col = None
         teacher_col = None
@@ -413,7 +520,7 @@ class BIDashboardEngine:
                 course_col = c
             elif not teacher_col and any(k in cn for k in ("استاد", "مدرس", "سخنران", "مجری")):
                 teacher_col = c
-            elif not count_col and any(k in cn for k in ("شرکت", "تعداد", "مخاطب", "نفر", "آمار")):
+            elif not count_col and any(k in cn for k in ("شرکت", "تعداد", "دانش پژوه", "مخاطب", "نفر", "آمار")):
                 count_col = c
         return course_col, teacher_col, count_col
 
@@ -482,23 +589,47 @@ class BIDashboardEngine:
         toman_votes = 0
 
         try:
+            preloaded_tables: list[tuple[str, str, str, list[str], list[tuple], str]] = []
+            course_wg_map: dict[str, str] = {}
+            roster_clean_counts: dict[str, int] = defaultdict(int)
+            has_raw_course_rosters = False
+
             for tbl_name, file_name, source_sheet, rows_count, cols_json in tables_meta:
                 raw_cols = json.loads(cols_json or "[]")
                 rc = int(rows_count or 0)
                 if not raw_cols or rc <= 0:
                     continue
-
                 try:
                     raw_rows = con.execute(f'SELECT * FROM "{tbl_name}"').fetchall()
                 except Exception:
                     continue
                 if not raw_rows:
                     continue
-
                 cols, clean_rows, banner_ctx = promote_banner_headers(raw_cols, raw_rows)
                 if not cols or not clean_rows:
                     continue
+                preloaded_tables.append((tbl_name, file_name, str(source_sheet or ""), cols, clean_rows, banner_ctx))
+
+                only_n = [norm_text(c) for c in cols]
+                if _is_wg_course_matrix(only_n):
+                    wg_lbl = _canon_bi_wg_name(str(source_sheet or ""))
+                    for ci_m, cn_m in enumerate(only_n):
+                        if ci_m < 6:
+                            continue
+                        if any(skip in cn_m for skip in ("ردیف", "نام", "موبایل", "تعداد", "مجموع", "شرح", "جزئیات", "کارگروه")):
+                            continue
+                        c_key = re.sub(r"\s+", "", norm_text(cols[ci_m]).replace("آ", "ا"))
+                        if c_key:
+                            course_wg_map[c_key] = wg_lbl
+                elif _is_person_roster_columns(only_n) and not _is_edu_dashboard_summary(only_n, str(source_sheet or "")):
+                    has_raw_course_rosters = True
+                    _, c_clean = _clean_course_sheet_title(str(source_sheet or ""))
+                    if c_clean:
+                        roster_clean_counts[re.sub(r"\s+", "", c_clean.replace("آ", "ا"))] += 1
+
+            for tbl_name, file_name, source_sheet, cols, clean_rows, banner_ctx in preloaded_tables:
                 col_idx_map = {c: i for i, c in enumerate(cols)}
+                only_n = [norm_text(c) for c in cols]
 
                 domain = "general"
                 fin_map = self._detect_finance_columns(cols, file_name, source_sheet, banner_ctx=banner_ctx, sample_rows=clean_rows)
@@ -639,6 +770,9 @@ class BIDashboardEngine:
                             funding_total += float(amt)
                             funding_count += 1
                             continue
+                        if row_kind == "transfer_fee":
+                            transfer_fee_total += float(amt)
+                            continue
 
                         vendor_txt = re.sub(r"\s+", " ", str(get_v(row, "vendor") or "")).strip()
                         date_txt = re.sub(r"\s+", " ", str(get_v(row, "date") or "")).strip()
@@ -698,44 +832,122 @@ class BIDashboardEngine:
                             "source": str(source_sheet or ""),
                         })
                 else:
-                    course_col, teacher_col, count_col = self._detect_education_columns(cols)
-                    if course_col and count_col:
+                    if _is_edu_dashboard_summary(only_n, source_sheet):
                         domain = "education"
-                        base_loc = norm_text(str(source_sheet or "").split("(")[0])
-                        slide_txt = slide_texts.get((file_name, base_loc), "")
-                        if not slide_txt:
-                            for (fn, loc), txt in slide_texts.items():
-                                if fn == file_name and base_loc and base_loc in loc:
-                                    slide_txt = txt
-                                    break
+                    elif _is_wg_course_matrix(only_n):
+                        domain = "education"
+                        if not has_raw_course_rosters:
+                            wg_lbl = _canon_bi_wg_name(source_sheet)
+                            for ci_m in range(6, len(cols)):
+                                c_hdr = norm_text(cols[ci_m])
+                                if not c_hdr or any(sk in c_hdr for sk in ("شرح", "مجموع", "تعداد", "کارگروه")):
+                                    continue
+                                reg_cnt = 0
+                                for r in clean_rows:
+                                    if ci_m < len(r):
+                                        v_m = parse_number_strict(r[ci_m])
+                                        if v_m is not None:
+                                            reg_cnt += 1
+                                if reg_cnt > 0:
+                                    edu_records.append({
+                                        "course": c_hdr, "teacher": "ثبت‌نشده", "teachers": [],
+                                        "holding_mode": "گروهی", "teacher_key": "",
+                                        "is_collective": True, "is_joint": False,
+                                        "participants": reg_cnt, "workgroup": wg_lbl,
+                                        "file_name": file_name, "source": str(source_sheet or ""), "row_index": ci_m,
+                                    })
+                    elif _is_person_roster_columns(only_n):
+                        domain = "education"
+                        c_num, c_clean = _clean_course_sheet_title(source_sheet)
+                        if not c_clean or len(c_clean) < 3 or re.fullmatch(r"(?:sheet|برگه|شیت)\s*\d*", c_clean, re.IGNORECASE):
+                            _, c_clean = _clean_course_sheet_title(Path(file_name).stem)
+                        c_key = re.sub(r"\s+", "", c_clean.replace("آ", "ا"))
+                        display_title = f"{c_clean} (دوره {c_num})" if (c_num and roster_clean_counts.get(c_key, 0) > 1) else (c_clean or source_sheet or file_name)
+                        workgroup = course_wg_map.get(c_key) or _canon_bi_wg_name(self._detect_workgroup(file_name, source_sheet, "", c_clean, banner_ctx))
 
-                        ci_c = col_idx_map[course_col]
-                        ci_t = col_idx_map[teacher_col] if teacher_col in col_idx_map else -1
-                        ci_n = col_idx_map[count_col]
-                        sample_courses = " ".join(str(r[ci_c] or "") for r in clean_rows[:5] if ci_c < len(r))
-                        workgroup = self._detect_workgroup(file_name, source_sheet, slide_txt, sample_courses)
-
-                        for r_idx, r in enumerate(clean_rows, start=1):
-                            if is_summary_row_smart(list(r)):
+                        ci_ph = next((i for i, cn in enumerate(only_n) if any(k in cn for k in ("موبایل", "همراه", "تلفن", "phone", "mobile"))), -1)
+                        ci_id = next((i for i, cn in enumerate(only_n) if any(k in cn for k in ("کد ملی", "کدملی", "گذرنامه", "پاسپورت", "فراگیر", "فیدا", "آمایش", "passport"))), -1)
+                        ci_nm = next((i for i, cn in enumerate(only_n) if any(k in cn for k in ("نام شرکت کننده", "نام و نام خانوادگی", "شرکت کننده", "نام خانوادگی", "نام"))), -1)
+                        ci_ses = next((i for i, cn in enumerate(only_n) if any(k in cn for k in ("تعداد جلسات", "جلسات", "جلسه", "sessions"))), -1)
+                        seen_keys: set[str] = set()
+                        valid_cnt = 0
+                        active_cnt = 0
+                        for r in clean_rows:
+                            if is_blank_numbered_row(list(r)) or is_summary_row_smart(list(r)):
                                 continue
-                            course_name = re.sub(r"\s+", " ", str(r[ci_c] if ci_c < len(r) else "")).strip()
-                            if not course_name or course_name in ("-", "جمع", "مجموع", "کل", "جمع کل", "مجموع کل"):
+                            nm_v = clean_participant_name(r[ci_nm] if (ci_nm >= 0 and ci_nm < len(r)) else "")
+                            ph_v = re.sub(r"\D", "", norm_text(r[ci_ph] if (ci_ph >= 0 and ci_ph < len(r)) else ""))
+                            id_v = re.sub(r"[^A-Za-z0-9]", "", norm_text(r[ci_id] if (ci_id >= 0 and ci_id < len(r)) else "")).upper()
+                            if not nm_v and not ph_v and not id_v:
                                 continue
-                            teacher_raw = clean_teacher_name(str(r[ci_t] if (ci_t >= 0 and ci_t < len(r)) else ""))
-                            num = parse_number_strict(r[ci_n] if ci_n < len(r) else None)
-                            participants = int(round(num)) if num is not None else None
-                            mode, parts = split_joint_names(teacher_raw, "teacher", _bcfg)
-                            is_collective = (mode == "گروهی")
-                            resolved_teachers = [_t_alias.get(_clean_for_compare(pt, "teacher", _bcfg), pt) for pt in parts] if not is_collective else []
-                            primary_t = resolved_teachers[0] if len(resolved_teachers) == 1 else (" و ".join(resolved_teachers) if resolved_teachers else (teacher_raw or "ثبت‌نشده"))
+                            nm_ck = re.sub(r"\s+", "", nm_v.replace("آ", "ا"))
+                            rk = f"{nm_ck}|{ph_v or id_v}" if (ph_v or id_v) else nm_ck
+                            if rk in seen_keys:
+                                continue
+                            seen_keys.add(rk)
+                            valid_cnt += 1
+                            if ci_ses >= 0 and ci_ses < len(r):
+                                sv = parse_number_strict(r[ci_ses])
+                                if sv is not None and sv > 0:
+                                    active_cnt += 1
+                        if valid_cnt > 0:
                             edu_records.append({
-                                "course": course_name, "teacher": primary_t, "teachers": resolved_teachers,
-                                "holding_mode": mode, "teacher_key": _clean_for_compare(resolved_teachers[0], "teacher", _bcfg) if len(resolved_teachers) == 1 else "",
-                                "is_collective": is_collective, "is_joint": (mode == "مشترک"),
-                                "participants": participants, "workgroup": workgroup,
-                                "file_name": file_name, "source": str(source_sheet or ""), "row_index": r_idx,
+                                "course": display_title, "teacher": "ثبت‌نشده", "teachers": [],
+                                "holding_mode": "گروهی", "teacher_key": "",
+                                "is_collective": True, "is_joint": False,
+                                "participants": valid_cnt, "active_participants": active_cnt if ci_ses >= 0 else valid_cnt,
+                                "workgroup": workgroup,
+                                "file_name": file_name, "source": str(source_sheet or ""), "row_index": 1,
+                                "_from_roster": True,
                             })
+                    else:
+                        course_col, teacher_col, count_col = self._detect_education_columns(cols)
+                        if course_col and count_col:
+                            domain = "education"
+                            base_loc = norm_text(str(source_sheet or "").split("(")[0])
+                            slide_txt = slide_texts.get((file_name, base_loc), "")
+                            if not slide_txt:
+                                for (fn, loc), txt in slide_texts.items():
+                                    if fn == file_name and base_loc and base_loc in loc:
+                                        slide_txt = txt
+                                        break
 
+                            ci_c = col_idx_map[course_col]
+                            ci_t = col_idx_map[teacher_col] if teacher_col in col_idx_map else -1
+                            ci_n = col_idx_map[count_col]
+                            ci_g = next(
+                                (
+                                    i for i, cn in enumerate(only_n)
+                                    if i not in (ci_c, ci_t, ci_n)
+                                    and any(k in cn for k in ("کارگروه", "گروه موضوعی", "گروه علمی", "حوزه موضوعی", "بخش", "department", "group"))
+                                ),
+                                -1,
+                            )
+                            sample_courses = " ".join(str(r[ci_c] or "") for r in clean_rows[:5] if ci_c < len(r))
+                            workgroup = _canon_bi_wg_name(self._detect_workgroup(file_name, source_sheet, slide_txt, sample_courses))
+
+                            for r_idx, r in enumerate(clean_rows, start=1):
+                                if is_summary_row_smart(list(r)):
+                                    continue
+                                course_name = re.sub(r"\s+", " ", str(r[ci_c] if ci_c < len(r) else "")).strip()
+                                if not course_name or course_name in ("-", "جمع", "مجموع", "کل", "جمع کل", "مجموع کل"):
+                                    continue
+                                row_g_raw = norm_text(r[ci_g] if (ci_g >= 0 and ci_g < len(r)) else "")
+                                row_wg = _canon_bi_wg_name(row_g_raw) if (row_g_raw and row_g_raw not in ("-", "ندارد", "نامشخص")) else workgroup
+                                teacher_raw = clean_teacher_name(str(r[ci_t] if (ci_t >= 0 and ci_t < len(r)) else ""))
+                                num = parse_number_strict(r[ci_n] if ci_n < len(r) else None)
+                                participants = int(round(num)) if num is not None else None
+                                mode, parts = split_joint_names(teacher_raw, "teacher", _bcfg)
+                                is_collective = (mode == "گروهی")
+                                resolved_teachers = [_t_alias.get(_clean_for_compare(pt, "teacher", _bcfg), pt) for pt in parts] if not is_collective else []
+                                primary_t = resolved_teachers[0] if len(resolved_teachers) == 1 else (" و ".join(resolved_teachers) if resolved_teachers else (teacher_raw or "ثبت‌نشده"))
+                                edu_records.append({
+                                    "course": course_name, "teacher": primary_t, "teachers": resolved_teachers,
+                                    "holding_mode": mode, "teacher_key": _clean_for_compare(resolved_teachers[0], "teacher", _bcfg) if len(resolved_teachers) == 1 else "",
+                                    "is_collective": is_collective, "is_joint": (mode == "مشترک"),
+                                    "participants": participants, "workgroup": row_wg,
+                                    "file_name": file_name, "source": str(source_sheet or ""), "row_index": r_idx,
+                                })
                 universal_tables.append({
                     "table_name": tbl_name,
                     "file_name": file_name,
@@ -747,6 +959,52 @@ class BIDashboardEngine:
         finally:
             con.close()
             _lk.release()
+
+        # هم‌ترازی چندمنبعی دوره‌ها در داشبورد BI (جلوگیری از دوبارشماری هنگام وجود هم‌زمان پاورپوینت و اکسل فهرست افراد)
+        roster_bi = [(idx, r) for idx, r in enumerate(edu_records) if r.get("_from_roster")]
+        summary_bi = [(idx, r) for idx, r in enumerate(edu_records) if not r.get("_from_roster")]
+        if roster_bi and summary_bi:
+            r_in = [{"id": idx, "title": r["course"], "group": r["workgroup"], "attendance": r.get("participants")} for idx, r in roster_bi]
+            s_in = [{"id": idx, "title": r["course"], "group": r["workgroup"], "attendance": r.get("participants")} for idx, r in summary_bi]
+            bi_pairs = match_roster_to_summary_courses(r_in, s_in, min_score=0.62)
+            drop_r_idxs: set[int] = set()
+            for r_idx, (s_idx, _sc) in bi_pairs.items():
+                r_rec = edu_records[r_idx]
+                s_rec = edu_records[s_idx]
+                if s_rec.get("participants") is None and r_rec.get("participants") is not None:
+                    s_rec["participants"] = r_rec["participants"]
+                if r_rec.get("active_participants") is not None:
+                    s_rec["active_participants"] = r_rec["active_participants"]
+                drop_r_idxs.add(r_idx)
+            if drop_r_idxs:
+                edu_records = [r for idx, r in enumerate(edu_records) if idx not in drop_r_idxs]
+        for r in edu_records:
+            r.pop("_from_roster", None)
+
+        _bi_t_disp: dict[str, str] = {}
+        for r in edu_records:
+            for tn in (r.get("teachers") or []):
+                core = canonical_teacher_core(tn)
+                if not core:
+                    continue
+                prev = _bi_t_disp.get(core)
+                if not prev or (len(tn) > len(prev) and "ئ" not in tn) or ("ئ" in prev and "ئ" not in tn):
+                    _bi_t_disp[core] = tn
+        if _bi_t_disp:
+            for r in edu_records:
+                if r.get("teachers"):
+                    new_ts = []
+                    seen_c: set[str] = set()
+                    for tn in r["teachers"]:
+                        core = canonical_teacher_core(tn)
+                        if core and core not in seen_c:
+                            seen_c.add(core)
+                            new_ts.append(_bi_t_disp.get(core, tn))
+                    r["teachers"] = new_ts
+                    if len(new_ts) == 1:
+                        r["teacher"] = new_ts[0]
+                    elif len(new_ts) > 1:
+                        r["teacher"] = " و ".join(new_ts)
 
         # مرتب‌سازی کارگروه‌های آموزشی
         wg_totals: dict[str, int] = defaultdict(int)
@@ -833,7 +1091,7 @@ class BIDashboardEngine:
             cols, promoted_rows, banner_ctx = promote_banner_headers(raw_cols, raw_rows)
 
             # تشخیص هوشمند ستون‌های عددی تحلیلی (حذف ردیف متوالی، موبایل، کد ملی، شماره سند، سال و تاریخ)
-            non_metric_hdr_hints = ("ردیف", "شماره", "موبایل", "همراه", "تلفن", "کد ملی", "کدملی", "کد", "تاریخ", "سال", "id", "phone", "mobile")
+            non_metric_hdr_hints = ("ردیف", "شماره", "موبایل", "همراه", "تلفن", "کد ملی", "کدملی", "گذرنامه", "پاسپورت", "فراگیر", "فیدا", "آمایش", "کد", "تاریخ", "سال", "id", "phone", "mobile", "passport", "fida", "cnic")
             numeric_cols: list[str] = []
             text_cols: list[str] = []
             for c_idx, c_name in enumerate(cols):

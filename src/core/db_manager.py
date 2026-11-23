@@ -88,10 +88,50 @@ def normalize_persian(text: Any) -> str:
         return ""
     s = re.sub(r"[\u064b-\u065f\u0670\u0640]+", "", str(text))
     trans = str.maketrans(
-        FA_DIGITS + AR_DIGITS + "\u064a\u0643\u0623\u0625\u0629\u0624" + ZWNJ,
-        EN_DIGITS + EN_DIGITS + "\u06cc\u06a9\u0627\u0627\u0647\u0648 ",
+        FA_DIGITS + AR_DIGITS + "\u064a\u0649\u06d2\u0643\u0623\u0625\u0629\u06be\u06c1\u06c0\u0624" + ZWNJ,
+        EN_DIGITS + EN_DIGITS + "\u06cc\u06cc\u06cc\u06a9\u0627\u0627\u0647\u0647\u0647\u0647\u0648 ",
     )
     s = s.translate(trans)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def clean_participant_name(raw: Any) -> str:
+    """Cleans participant names from noisy Excel/Porsline exports (including Afghan/Pakistani/Indian Urdu/Arabic names)."""
+    s = normalize_persian(raw)
+    if not s:
+        return ""
+    # Strip random 2-6 char alphanumeric export prefixes like '69qY سید حسین طاهری'
+    s = re.sub(r"^[A-Za-z0-9]{2,6}\s+(?=[\u0600-\u06FF])", "", s)
+    # Strip status prefixes and trailing markers
+    s = re.sub(r"^(?:تایید\s*شده|تائید\s*شده|تاییدشده)\s*[:\-ـ]?\s*", "", s)
+    s = s.replace("*", "").replace("•", " ")
+    s = re.sub(r"\s+", " ", s).strip(" -–—،,؛;:.")
+    # Deduplicate accidental repeated trailing surname ('محمد امیری امیری' -> 'محمد امیری', 'نقی پور نقی پور' -> 'نقی پور')
+    toks = s.split()
+    if len(toks) >= 4 and toks[-2:] == toks[-4:-2]:
+        toks = toks[:-2]
+    elif len(toks) >= 3 and toks[-1] == toks[-2]:
+        toks = toks[:-1]
+    return " ".join(toks).strip()
+
+
+_TEACHER_HONORIFIC_STRIP_RX = re.compile(
+    r"^(?:حجج\s*الاسلام\s*(?:و\s*المسلمین)?|حجت\s*الاسلام\s*(?:و\s*المسلمین)?|"
+    r"آیت\s*الله(?:\s*العظمی)?|ایت\s*الله(?:\s*العظمی)?|"
+    r"دکتر|استاد|مهندس|جناب\s*آقای|جناب\s*اقای|آقای|اقای|خانم|سرکار\s*خانم)\s+"
+)
+
+
+def canonical_teacher_core(raw: Any) -> str:
+    """Strips clerical/academic honorifics and normalizes ئ/آ/spacing for exact teacher deduplication (zero false merges)."""
+    s = normalize_persian(raw).replace("ئ", "ی").replace("آ", "ا")
+    if not s:
+        return ""
+    for _ in range(4):
+        s2 = _TEACHER_HONORIFIC_STRIP_RX.sub("", s).strip(" :.-–—،,")
+        if s2 == s:
+            break
+        s = s2
     return re.sub(r"\s+", " ", s).strip()
 
 
@@ -217,10 +257,13 @@ def parse_jalali_date(raw: Any, fallback_text: str = "") -> dict[str, Any]:
                     "canonical": f"{jy}/{jm:02d}", "is_parsed": True,
                 }
 
-        yr_m = re.search(r"\b(13\d{2}|14\d{2})\b", s)
+        s_no_span = re.sub(r"\b(?:13|14)\d{2}\s*(?:[-–—_/]|تا|الی)\s*(?:13|14)\d{2}\b", " ", s)
+        yr_m = re.search(r"\b(13\d{2}|14\d{2})\b", s_no_span)
         yr_s = yr_m.group(1) if yr_m else ""
+        # Strict word-boundary matching so 'دی' NEVER matches inside 'دین'/'حدیث'/'احمدی'/'توحید'
+        # and 'مهر'/'آذر'/'آبان'/'تیر' NEVER match inside surnames or course titles!
         for idx, mname in enumerate(JALALI_MONTHS, start=1):
-            if mname in s:
+            if re.search(rf"(?:^|[\s\-_/()،,.:;0-9])({re.escape(mname)}(?:\s*ماه)?)(?:$|[\s\-_/()،,.:;0-9])", s):
                 return {
                     "year": yr_s, "month": idx, "day": 0,
                     "month_name": mname, "season": month_to_season(idx),
@@ -228,7 +271,7 @@ def parse_jalali_date(raw: Any, fallback_text: str = "") -> dict[str, Any]:
                 }
 
         for sname, months_t in JALALI_SEASONS.items():
-            if sname in s:
+            if re.search(rf"(?:^|[\s\-_/()،,.:;0-9])({re.escape(sname)})(?:$|[\s\-_/()،,.:;0-9])", s):
                 clean_s = "پاییز" if sname == "پائیز" else sname
                 return {
                     "year": yr_s, "month": months_t[0], "day": 0,
@@ -452,7 +495,7 @@ KNOWN_HEADER_TOKENS = (
     "بدهکار", "بستانکار", "برداشت", "واریز", "مانده", "هزینه", "پرداخت", "پرداختی", "تنخواه", "خروجی",
     "تاریخ", "سند", "شماره سند", "شماره فاکتور", "فاکتور", "فروشنده", "فروشگاه", "طرف حساب", "ذینفع",
     "کارگروه", "بخش", "گروه", "دسته", "سرفصل", "استاد", "مدرس", "سخنران", "ارائه دهنده",
-    "مخاطب", "شرکت کننده", "شرکت کنندگان", "حاضرین", "ساعت", "جلسه", "جلسات", "توضیحات", "توضیح",
+    "دانش پژوه", "مخاطب", "شرکت کننده", "شرکت کنندگان", "حاضرین", "ساعت", "جلسه", "جلسات", "توضیحات", "توضیح",
     "row", "id", "name", "phone", "mobile", "date", "amount", "total", "price", "cost", "qty", "description", "category",
 )
 
@@ -498,7 +541,7 @@ def is_valid_teacher_name(val: Any) -> bool:
     s = normalize_persian(val)
     if is_non_entity_value(s):
         return False
-    if len(s) < 3 or len(s) > 75:
+    if len(s) < 3 or len(s) > 165:
         return False
     low = s.lower()
     if low in ("ردیف", "نام", "نام خانوادگی", "شماره", "موبایل", "تلفن", "شماره موبایل", "شرح", "مبلغ", "تاریخ", "توضیحات", "نامشخص", "ناشناس", "ندارد"):
@@ -636,14 +679,32 @@ def extract_roster_banner_meta(banner_ctx: str, file_name: str = "", source_shee
             if is_valid_teacher_name(cand_t):
                 teacher_name = cand_t
 
-    # Extract course inside guillemets «...» or after لیست حضور و غیاب
+    # Extract course inside guillemets «...», else prefer descriptive source_sheet over file_name.stem
     m_c = re.search(r"«([^»]{3,90})»", combined)
     if m_c:
         course_title = m_c.group(1).strip()
-    elif file_name:
-        stem = normalize_persian(Path(file_name).stem)
-        stem = re.sub(r"^\d+\s*[\-–—.]\s*", "", stem).strip()
-        course_title = stem
+    else:
+        sh_clean = normalize_persian(source_sheet or "")
+        sh_clean = re.sub(r"^\d+\s*[\-–—ـ.]\s*", "", sh_clean).strip()
+        sh_stripped = re.sub(
+            r"^(?:لیست\s+(?:حضور\s+و\s+غیاب\s+(?:نهایی\s+)?|حضوری\s+و\s+مجازی\s+)?(?:دوره\s+)?|فهرست\s+(?:حضور\s+و\s+غیاب\s+)?(?:دوره\s+)?)",
+            "",
+            sh_clean,
+        ).strip()
+        if len(sh_stripped) >= 3:
+            sh_clean = sh_stripped
+        is_generic_sh = (
+            not sh_clean
+            or len(sh_clean) < 3
+            or bool(re.fullmatch(r"(?:sheet|برگه|شیت|جدول|table|page|صفحه)\s*\d*", sh_clean, re.IGNORECASE))
+            or sh_clean.startswith("اسلاید ")
+        )
+        if not is_generic_sh:
+            course_title = sh_clean
+        elif file_name:
+            stem = normalize_persian(Path(file_name).stem)
+            stem = re.sub(r"^\d+\s*[\-–—ـ.]\s*", "", stem).strip()
+            course_title = stem
 
     return course_title, teacher_name
 
@@ -678,6 +739,8 @@ def classify_non_expense_row(item_text: Any) -> str:
         return "funding"
     if s.startswith(("شارژ تنخواه", "واریز تنخواه", "دریافت تنخواه", "دریافتی تنخواه", "تامین تنخواه", "افزایش تنخواه", "مانده تنخواه", "مانده از ماه", "مانده ماه قبل", "مانده دوره قبل")):
         return "funding" if "تنخواه" in s else "opening_balance"
+    if re.search(r"^(?:کارمزد|هزینه\s*کارمزد)\s*(?:انتقال|بانکی|پایا|ساتنا|کارت\s*به\s*کارت|شبا|حواله)?\b", s):
+        return "transfer_fee"
     return ""
 
 
@@ -721,9 +784,11 @@ def detect_workgroup_unified(
 ) -> str:
     """Unified workgroup detector shared across BI Dashboard, Executive Analytics & Boardroom."""
     t_norm = normalize_persian(f"{slide_text} {banner_ctx}")
+    t_norm = re.sub(r"(?:کارگروه\s+){2,}", "کارگروه ", t_norm)
     m = re.search(r"کارگروه\s+(دین\s*شناسی|فقه|تاریخ|قرآن|حدیث|[آ-یa-zA-Z0-9\s]{2,22})", t_norm)
     if m:
         wg = re.sub(r"\s+", " ", m.group(1)).strip()
+        wg = re.sub(r"^کارگروه\s+", "", wg).strip()
         for stop in ("تربیت", "حدیث خوانی", "دوره", "سطح", "ردیف", "مخاطبین"):
             idx = wg.find(stop)
             if idx > 1:
@@ -732,24 +797,246 @@ def detect_workgroup_unified(
             return f"کارگروه {wg}"
 
     courses_norm = normalize_persian(f"{sample_courses} {banner_ctx} {source_sheet} {file_name}")
+    courses_norm = re.sub(r"(?:کارگروه\s+){2,}", "کارگروه ", courses_norm)
     if "انس با الکافی" in t_norm or "انس با الکافی" in courses_norm or "انس با کافی" in courses_norm or "کتاب التوحید" in courses_norm:
         return "حدیث‌خوانی (انس با الکافی)"
-    if t_norm.count("تربیت سخنران و مبلغ") >= 2 or "تربیت سخنران" in courses_norm or "تربیت مبلغ" in courses_norm or any(k in courses_norm for k in ("پرچم", "منبر", "خطابه", "آگاهی بخشی")):
+    if (
+        t_norm.count("تربیت سخنران و مبلغ") >= 2
+        or "تربیت سخنران" in courses_norm
+        or "تربیت مبلغ" in courses_norm
+        or any(k in courses_norm for k in ("پرچم", "منبر", "خطابه", "آگاهی بخشی", "محرم", "فاطمیه"))
+    ):
         return "تربیت سخنران و مبلغ"
 
     topic_map = (
-        (("قرآن", "تفسیر", "تدبر", "استنادهای قرآنی", "استناد های قرآنی"), "کارگروه قرآن"),
-        (("حدیث", "بحار", "الکافی", "کافی", "نهج البلاغه", "صحیفه", "روایت", "روایی"), "کارگروه حدیث"),
-        (("فقه", "اصول", "احکام", "اجتهاد", "استنباط"), "کارگروه فقه"),
-        (("تاریخ", "سیره", "در آستان", "بر آستان", "برآستان", "تشیع", "ائمه"), "کارگروه تاریخ"),
-        (("دین شناسی", "کلام", "عقاید", "اخلاق", "معارف", "فلسفه", "امامت"), "کارگروه دین‌شناسی"),
+        (("قرآن", "قران", "تفسیر", "تدبر", "قرائات", "مصحف", "بینامتنیت", "استنادهای قرآنی", "استناد های قرآنی", "تعدد"), "کارگروه قرآن"),
+        (("حدیث", "بحار", "الکافی", "نهج البلاغه", "صحیفه", "نقل معنا", "نسخه پژوهی", "روایت", "روایی"), "کارگروه حدیث"),
+        (("فقه", "اصول", "احکام", "اجتهاد", "تقلی", "استنباط", "رمز ارز", "رمزارز", "بورس", "ارتداد", "نوآوران"), "کارگروه فقه"),
+        (("تاریخ", "سیره", "در آستان", "بر آستان", "برآستان", "تشیع", "ائمه", "سقیفه", "صحابه", "امامان شیعی", "کارگزاران", "جنگ ها", "پیامبر", "میراث تاریخی", "کتب تاریخی", "منبع شناسی"), "کارگروه تاریخ"),
+        (("دین شناسی", "کلام", "عقاید", "اعتقادی", "اخلاق", "معارف", "فلسفه", "امامت", "هرمنوتیک", "کثرت", "تکثر", "شر و خداباوری", "تجربه دینی", "برداشت های", "مدرنیته", "استضعاف", "الهیات", "افعال خدا", "معرفت خدا"), "کارگروه دین شناسی"),
     )
+    best_lbl = ""
+    best_hits = 0
     for kws, label in topic_map:
-        if any(kw in courses_norm for kw in kws):
-            return label
+        hits = sum(1 for kw in kws if kw in courses_norm)
+        if hits > best_hits:
+            best_hits = hits
+            best_lbl = label
+    if best_lbl:
+        return best_lbl
 
     clean_sheet = re.sub(r"\s*\(جدول\s*\d+\)", "", str(source_sheet or "")).strip()
     if clean_sheet and not is_non_entity_value(clean_sheet) and clean_sheet.lower() not in ("sheet1", "sheet2", "نهایی", "جدول", "اسلاید"):
         if not any(tok in clean_sheet for tok in ("اسلاید", "جدول", "صفحه")):
             return clean_sheet
     return "دوره‌های عمومی"
+
+
+# ==============================================================================
+# Cross-Source Course Reconciliation Engine (Shared by BI & Executive Analytics)
+# ==============================================================================
+import difflib as _difflib
+
+_COURSE_STOP_WORDS = frozenset({
+    "در", "از", "به", "با", "و", "بر", "های", "ها", "قسمت", "مساله", "مسأله",
+    "بازخوانی", "نگاهی", "دوره", "نشست", "کتاب", "دریچه", "موضوع", "شناسی",
+    "ماهیت", "تخصصی", "کوتاه", "مدت", "نهایی", "کامل", "علیه", "علیهم", "السلام",
+    "صلی", "الله", "اله", "سلم", "امام", "استان",
+})
+_PERSIAN_ORDINAL_PAIRS = (
+    ("سیزدهم", "13"), ("دوازدهم", "12"), ("یازدهم", "11"), ("دهم", "10"),
+    ("نهم", "9"), ("هشتم", "8"), ("هفتم", "7"), ("ششم", "6"),
+    ("پنجم", "5"), ("چهارم", "4"), ("سوم", "3"), ("دوم", "2"), ("اول", "1"),
+)
+# Mutually exclusive named entities/books that MUST NEVER cross-match even if surrounding words match!
+_DISTINCT_SUBJECT_MARKERS = (
+    "هادی", "حسن عسکری", "سید افرینش", "امیر مومنان", "امیرمومنان", "فاطمیه", "محرم",
+    "الکافی", "بحارالانوار", "بحار الانوار", "نهج البلاغه", "صحیفه",
+    "التوحید", "العقل", "الایمان",
+)
+
+
+def _stem_course_tok(w: str) -> str:
+    return re.sub(r"(?:های|ها|یی|ی)$", "", w) if len(w) > 4 else w
+
+
+def _norm_course_for_match(title: Any) -> str:
+    s = normalize_persian(title).replace("آ", "ا")
+    if not s:
+        return ""
+    s = re.sub(r"\(دوره\s*\d+\)\s*$", "", s).strip()
+    s = s.replace("پرچم داران", "پرچمداران").replace("ان سوی", "انسوی").replace("میراث تاریخی", "تاریخی").replace("بحار الانوار", "بحارالانوار")
+    s = re.sub(
+        r"^(?:لیست\s+(?:حضور\s+و\s+غیاب\s+(?:نهایی\s+)?|حضوری\s+و\s+مجازی\s+)?(?:دوره\s+)?|نشست\s+تخصصی\s+|نشست\s+|دوره\s+)",
+        "",
+        s,
+    )
+    s = re.sub(r"\s+(?:نهایی|کامل)$", "", s)
+    # Strip punctuation/parentheses FIRST so '(قسمت یازدهم)' cleanly converts 'یازدهم' -> '11'!
+    s = re.sub(r"[^\w\u0600-\u06FF]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    if not any(k in s for k in ("پرچمداران", "قسمت", "محرم", "الکافی", "التوحید")):
+        s = re.sub(r"([^\s\d])\d+$", r"\1", s)
+    for w_ord, d_ord in _PERSIAN_ORDINAL_PAIRS:
+        s = re.sub(rf"(?:^|\s){w_ord}(?:$|\s)", f" {d_ord} ", s)
+    return re.sub(r"\s+", " ", s).strip()
+
+
+def _canon_wg_key(wg: Any) -> str:
+    g = normalize_persian(wg).replace("آ", "ا")
+    g = re.sub(r"^(?:کارگروه\s+)+", "", g).strip()
+    ck = re.sub(r"\s+", "", g)
+    if "انسباالکافی" in ck or "حدیثخوانی" in ck:
+        return "انسباالکافی"
+    if "سخنران" in ck or "مبلغ" in ck:
+        return "سخنرانومبلغ"
+    return ck
+
+
+def _extract_subject_markers(norm_title: str) -> set[str]:
+    found = set()
+    for mk in _DISTINCT_SUBJECT_MARKERS:
+        if mk in norm_title:
+            found.add(mk)
+    return found
+
+
+def score_course_title_pair(
+    roster_title: str,
+    summary_title: str,
+    roster_group: str = "",
+    summary_group: str = "",
+    roster_att: int | None = None,
+    summary_att: int | None = None,
+) -> float:
+    """Computes [0..1] similarity between a roster course title and a summary course title."""
+    na = _norm_course_for_match(roster_title)
+    nb = _norm_course_for_match(summary_title)
+    ca, cb = na.replace(" ", ""), nb.replace(" ", "")
+    if not ca or not cb:
+        return 0.0
+
+    # Guard 1: Distinct named Imam/book/occasion markers MUST NOT cross-match (e.g. امام هادی != امام حسن عسکری)
+    ma, mb = _extract_subject_markers(na), _extract_subject_markers(nb)
+    if ma and mb and not (ma & mb):
+        return 0.0
+
+    # Guard 2: Distinct series numbers MUST NOT cross-match (e.g. قسمت 1 != قسمت 2)
+    da, db = re.findall(r"\d+", na), re.findall(r"\d+", nb)
+    if da and db and da != db:
+        return 0.0
+    series_pen = -0.18 if ((da and not db and da != ["1"]) or (db and not da and db != ["1"])) else 0.0
+
+    wga, wgb = _canon_wg_key(roster_group), _canon_wg_key(summary_group)
+    both_wg_known = bool(wga and wgb and "عمومی" not in wga and "عمومی" not in wgb)
+    same_wg = (wga == wgb) if both_wg_known else True
+
+    if ca == cb:
+        base = 1.0
+    elif len(ca) >= 6 and (cb.startswith(ca) or ca.startswith(cb)):
+        base = 0.94
+    else:
+        ta = {_stem_course_tok(w) for w in na.split() if len(w) >= 2 and w not in _COURSE_STOP_WORDS}
+        tb = {_stem_course_tok(w) for w in nb.split() if len(w) >= 2 and w not in _COURSE_STOP_WORDS}
+        if not ta or not tb:
+            return 0.0
+        matched_a = 0
+        for wa in ta:
+            if wa in tb or any((wb.startswith(wa) or wa.startswith(wb)) for wb in tb if min(len(wa), len(wb)) >= 4):
+                matched_a += 1
+        if matched_a == 0:
+            return 0.0
+        cont = matched_a / max(1, min(len(ta), len(tb)))
+        jacc = matched_a / max(1, len(ta) + len(tb) - matched_a)
+        seq = _difflib.SequenceMatcher(None, ca, cb).ratio()
+        base = max(seq, cont * 0.68 + jacc * 0.32)
+
+    att_bonus = 0.0
+    if roster_att and summary_att and roster_att > 0 and summary_att > 0:
+        ratio = min(float(roster_att), float(summary_att)) / max(float(roster_att), float(summary_att))
+        if ratio >= 0.80:
+            att_bonus = 0.07
+        elif ratio <= 0.45:
+            att_bonus = -0.05
+
+    wg_adj = (0.06 if (both_wg_known and same_wg) else (-0.18 if (both_wg_known and not same_wg) else 0.0))
+    return round(max(0.0, min(0.999, base + wg_adj + series_pen + att_bonus)), 3)
+
+
+def match_roster_to_summary_courses(
+    roster_items: list[dict[str, Any]],
+    summary_items: list[dict[str, Any]],
+    min_score: float = 0.62,
+) -> dict[Any, tuple[Any, float]]:
+    """
+    1-to-1 optimal matcher linking person-level roster courses to summary courses (PPTX / Excel summary).
+    Each item dict needs: {'id', 'title', 'group', 'attendance'}.
+    Returns {roster_id: (summary_id, confidence_score)}.
+    """
+    if not roster_items or not summary_items:
+        return {}
+
+    matched: dict[Any, tuple[Any, float]] = {}
+    used_r: set[Any] = set()
+    used_s: set[Any] = set()
+
+    # Step 1: Ordered pairing for multi-part truncated Excel tab collisions like 'انس با الکافی؛کتاب التوحید (دوره 71)'
+    series_buckets: dict[tuple[str, str], list[tuple[int, dict[str, Any]]]] = {}
+    for ri in roster_items:
+        t_raw = normalize_persian(ri.get("title") or "")
+        m_num = re.search(r"\(دوره\s*(\d+)\)\s*$", t_raw)
+        if m_num:
+            base_t = t_raw[:m_num.start()].strip()
+            sub_topic = re.split(r"[؛;:]", base_t)[-1].strip() if any(ch in base_t for ch in "؛;:") else base_t
+            sub_key = re.sub(r"\s+", "", sub_topic.replace("آ", "ا"))
+            if len(sub_key) >= 4:
+                series_buckets.setdefault((sub_key, _canon_wg_key(ri.get("group") or "")), []).append((int(m_num.group(1)), ri))
+
+    for (sub_key, wg_k), r_group_list in series_buckets.items():
+        if len(r_group_list) < 2:
+            continue
+        r_group_list.sort(key=lambda x: x[0])
+        s_cands = []
+        for si in summary_items:
+            if si["id"] in used_s:
+                continue
+            s_wg_k = _canon_wg_key(si.get("group") or "")
+            if wg_k and s_wg_k and "عمومی" not in wg_k and "عمومی" not in s_wg_k and wg_k != s_wg_k:
+                continue
+            s_ck = re.sub(r"\s+", "", normalize_persian(si.get("title") or "").replace("آ", "ا"))
+            if sub_key in s_ck:
+                s_cands.append(si)
+        if len(s_cands) >= 2:
+            for (_, ri), si in zip(r_group_list, s_cands):
+                matched[ri["id"]] = (si["id"], 0.99)
+                used_r.add(ri["id"])
+                used_s.add(si["id"])
+
+    # Step 2: Best-first greedy matching for all remaining courses
+    cands: list[tuple[float, Any, Any]] = []
+    for ri in roster_items:
+        if ri["id"] in used_r:
+            continue
+        for si in summary_items:
+            if si["id"] in used_s:
+                continue
+            sc = score_course_title_pair(
+                ri.get("title") or "",
+                si.get("title") or "",
+                ri.get("group") or "",
+                si.get("group") or "",
+                ri.get("attendance"),
+                si.get("attendance"),
+            )
+            if sc >= min_score:
+                cands.append((sc, ri["id"], si["id"]))
+
+    cands.sort(key=lambda x: -x[0])
+    for sc, rid, sid in cands:
+        if rid in used_r or sid in used_s:
+            continue
+        matched[rid] = (sid, sc)
+        used_r.add(rid)
+        used_s.add(sid)
+
+    return matched

@@ -19,12 +19,15 @@ from src.core.db_manager import (
     parse_number_strict,
     classify_non_expense_row,
     clean_excel_cell_value,
+    canonical_teacher_core,
+    clean_participant_name,
     detect_workgroup_unified,
     extract_roster_banner_meta,
     is_blank_numbered_row,
     is_banner_header_col,
     is_non_entity_value,
     is_valid_teacher_name,
+    match_roster_to_summary_courses,
     promote_banner_headers,
     resolve_default_duckdb_path,
 )
@@ -50,42 +53,100 @@ def canon_key(text: Any) -> str:
     return s.lower()
 
 
+_JUNK_EXACT_OR_STRUCT_RX = re.compile(
+    r"^(?:"
+    r"(?:اسلاید|slide|جدول|table|صفحه|page|شیت|sheet|ردیف|برگه)\s*(?:\d+(?:\s*\([^)]*\))?)?|"
+    r"(?:جمع|مجموع)(?:\s*(?:کل|نهایی|جزئی|فرعی))?|"
+    r"میانگین|معدل|total|subtotal|grand\s*total|"
+    r"مانده(?:\s*از)?\s*(?:قبل|قبلی|ماه\s*قبل|دوره\s*قبل)"
+    r")$"
+)
+
+
 def is_junk_label(label: str) -> bool:
-    low = normalize_fa(label).lower()
+    low = normalize_fa(label).lower().strip(" :.-–—()[]")
     if not low or len(low) < 2:
         return True
     if is_non_entity_value(low):
         return True
-    junk_tokens = (
-        "اسلاید", "slide", "جدول", "table", "صفحه", "page", "شیت", "sheet",
-        "جمع کل", "مجموع کل", "جمع", "مجموع", "میانگین", "total", "subtotal", "grand total",
-        "ردیف", "مانده از قبل", "مانده قبلی",
-    )
-    if any(tok in low for tok in junk_tokens) and ("کارگروه" not in low):
+    if "کارگروه" in low:
+        return False
+    if _JUNK_EXACT_OR_STRUCT_RX.match(low):
+        return True
+    if low.startswith(("جمع کل", "مجموع کل", "جمع نهایی", "مانده از قبل", "مانده قبلی", "grand total", "subtotal")):
         return True
     return False
 
 
 def normalize_phone(text: Any) -> str:
-    s = re.sub(r"\.0+$", "", str(text or "").strip()).translate(LATIN_DIGITS)
-    digits = re.sub(r"\D", "", s)
-    if len(digits) >= 10:
-        if digits.startswith("0098") and len(digits) >= 14:
-            digits = "0" + digits[4:14]
-        elif digits.startswith("98") and len(digits) >= 12:
-            digits = "0" + digits[2:12]
-        elif digits.startswith("9") and len(digits) == 10:
-            digits = "0" + digits
-        elif len(digits) > 11:
-            digits = "0" + digits[-10:]
-        return digits
+    """Normalizes Iranian mobile numbers (09xxxxxxxxx) and preserves international numbers (+92/+93/+964...) cleanly."""
+    raw = re.sub(r"\.0+$", "", str(text or "").strip()).translate(LATIN_DIGITS)
+    if not raw:
+        return ""
+    # If cell contains multiple numbers separated by / or ، or , or - (space-padded), inspect each candidate first
+    parts = [p.strip() for p in re.split(r"[/،,;\n]+|\s+-\s+", raw) if p.strip()]
+    for part in parts:
+        has_plus = part.lstrip().startswith("+")
+        digits = re.sub(r"\D", "", part)
+        if not digits:
+            continue
+        # Iranian mobile: 00989xxxxxxxxx (14), 989xxxxxxxxx (12), 09xxxxxxxxx (11), 9xxxxxxxxx (10)
+        if digits.startswith("00989") and len(digits) == 14:
+            return "0" + digits[4:]
+        if digits.startswith("989") and len(digits) == 12:
+            return "0" + digits[2:]
+        if digits.startswith("09") and len(digits) == 11:
+            return digits
+        if digits.startswith("9") and len(digits) == 10:
+            return "0" + digits
+        # International mobile/WhatsApp (e.g. +93 Afghanistan, +92 Pakistan, +91 India, +964 Iraq, +961 Lebanon)
+        if (has_plus or digits.startswith("00")) and 10 <= len(digits) <= 15:
+            clean_intl = digits[2:] if digits.startswith("00") else digits
+            if clean_intl.startswith("989") and len(clean_intl) == 12:
+                return "0" + clean_intl[2:]
+            return "+" + clean_intl
+        # Iranian landline (025..., 021...)
+        if digits.startswith("0") and len(digits) == 11:
+            return digits
+    # Fallback: search for embedded Iranian mobile pattern inside noisy text
+    m_ir = re.search(r"(?:0098|98|0)?(9\d{9})", re.sub(r"[\s\-()]", "", raw))
+    if m_ir:
+        return "0" + m_ir.group(1)
     return ""
 
 
+def classify_identity_doc(text: Any) -> tuple[str, str]:
+    """
+    Normalizes and classifies Iranian National IDs AND foreign national identity documents:
+      - Iranian National ID (کد ملی): 8-10 digits -> ('nid', 10-digit zero-padded)
+      - Foreign FIDA / Faragir / Amayesh / Pakistani CNIC (کد فراگیر اتباع / فیدا / آمایش): 11-14 digits -> ('fida', digits)
+      - International Passport (گذرنامه / پاسپورت اتباع افغان، پاکستانی، هندی، عراقی...):
+        alphanumeric containing Latin letters + digits (6-14 chars, e.g. P01234567, OA1234567, AB1234567) -> ('passport', UPPER_ALNUM)
+    """
+    raw = re.sub(r"\.0+$", "", str(text or "").strip()).translate(LATIN_DIGITS)
+    if not raw or raw in ("-", "—", "–", "ندارد", "ثبت نشده", "ثبت‌نشده", "نامشخص", "null", "none", "nan"):
+        return "", ""
+    alnum = re.sub(r"[^A-Za-z0-9]", "", raw).upper()
+    if not alnum:
+        return "", ""
+    letters = re.findall(r"[A-Z]", alnum)
+    digits = re.sub(r"\D", "", alnum)
+    if 1 <= len(letters) <= 4 and len(digits) >= 5 and 6 <= len(alnum) <= 14:
+        return "passport", alnum
+    if alnum.isdigit():
+        if 8 <= len(digits) <= 10:
+            return "nid", digits.zfill(10)
+        if 11 <= len(digits) <= 14:
+            if len(digits) == 11 and digits.startswith("09"):
+                return "", ""
+            return "fida", digits
+    return "", ""
+
+
 def normalize_nid(text: Any) -> str:
-    s = re.sub(r"\.0+$", "", str(text or "").strip()).translate(LATIN_DIGITS)
-    digits = re.sub(r"\D", "", s)
-    return digits.zfill(10) if 8 <= len(digits) <= 10 else ""
+    """Returns normalized National ID, FIDA/Faragir code, or Foreign Passport number."""
+    _, val = classify_identity_doc(text)
+    return val
 
 
 def _detect_session_columns(cols: list[str], reserved_idxs: set[int]) -> list[tuple[int, str]]:
@@ -239,6 +300,41 @@ class ExecutiveAnalyticsEngine:
                     for tn, fn, sh in con.execute("SELECT table_name, file_name, source_sheet FROM tabular_catalog").fetchall():
                         cat_map[str(tn)] = (str(fn or tn), str(sh or ""))
 
+                _ID_DOC_KWS = (
+                    "کد ملی", "کدملی", "شماره ملی", "گذرنامه", "پاسپورت", "شماره گذرنامه", "شماره پاسپورت",
+                    "کد فراگیر", "کد یکتا", "کد اتباع", "فیدا", "آمایش", "شناسه هویتی", "شماره مدرک",
+                    "national", "passport", "fida", "cnic",
+                )
+                _PERSON_KWS = (
+                    "نام و نام خانوادگی", "نام خانوادگی", "نام شرکت کننده", "شرکت کننده", "شرکت‌کننده",
+                    "دانش پژوه", "دانش‌پژوه", "طلبه", "فراگیر", "ثبت نام کننده", "پاسخ دهنده", "full_name", "participant",
+                )
+                _PHONE_KWS = ("موبایل", "همراه", "تلفن", "شماره تماس", "phone", "mobile")
+
+                preloaded_db: list[tuple[str, str, str, list[str], list[tuple], str, list[str]]] = []
+                course_wg_map: dict[str, str] = {}
+                roster_clean_counts: Counter = Counter()
+                has_raw_rosters = False
+
+                def _is_summary_tbl(nc_list: list[str], sh_name: str) -> bool:
+                    sh_n = normalize_fa(sh_name)
+                    if any(k in sh_n for k in ("داشبورد آماری", "کارنامه جامع", "خلاصه کارگروه")):
+                        return True
+                    has_wg = any("نام کارگروه" in nc or nc == "کارگروه" for nc in nc_list)
+                    m_cnt = sum(1 for k in ("تعداد دوره", "مجموع ثبت نام", "افراد یکتا", "مجموع جلسات", "میانگین جلسات") if any(k in nc for nc in nc_list))
+                    return has_wg and m_cnt >= 2
+
+                def _is_matrix_tbl(nc_list: list[str]) -> bool:
+                    has_p = any(any(k in nc for k in _PERSON_KWS) for nc in nc_list)
+                    has_ph = any(any(k in nc for k in _PHONE_KWS + _ID_DOC_KWS) for nc in nc_list)
+                    has_desc = any(any(k in nc for k in ("شرح دوره", "جزئیات کل دوره", "کارگروه های فعال")) for nc in nc_list)
+                    return has_p and has_ph and has_desc and len(nc_list) >= 7
+
+                def _split_sheet_num(sh_name: str) -> tuple[str, str]:
+                    s_n = normalize_fa(sh_name)
+                    m = re.match(r"^(\d+)\s*[\-–—ـ.]\s*(.+)$", s_n)
+                    return (m.group(1).strip(), m.group(2).strip()) if m else ("", s_n)
+
                 for tname in tables:
                     if tname.startswith("_") or tname.lower() in INTERNAL_TABLES or tname.lower().startswith("view_"):
                         continue
@@ -250,12 +346,86 @@ class ExecutiveAnalyticsEngine:
                         continue
                     if not rows or not cols:
                         continue
-
                     fn, sh = cat_map.get(tname, (tname, ""))
                     cols, rows, banner_ctx = promote_banner_headers(cols, rows)
                     if not cols or not rows:
                         continue
                     norm_cols = [normalize_fa(c).lower() for c in cols]
+                    preloaded_db.append((tname, fn, sh, cols, rows, banner_ctx, norm_cols))
+
+                    if _is_matrix_tbl(norm_cols):
+                        wg_raw = re.sub(r"^(?:کارگروه\s+)+", "کارگروه ", normalize_fa(sh)).strip()
+                        for ci_m, nc_m in enumerate(norm_cols):
+                            if ci_m < 6:
+                                continue
+                            if any(sk in nc_m for sk in ("ردیف", "نام", "موبایل", "تعداد", "مجموع", "شرح", "جزئیات", "کارگروه")):
+                                continue
+                            c_ck = canon_key(cols[ci_m])
+                            if c_ck:
+                                course_wg_map[c_ck] = wg_raw
+                    elif not _is_summary_tbl(norm_cols, sh):
+                        has_p = any(any(k in nc for k in _PERSON_KWS) for nc in norm_cols) or (
+                            any(nc in ("نام", "first name", "name") for nc in norm_cols)
+                            and any("نام خانوادگی" in nc or "فامیل" in nc for nc in norm_cols)
+                        )
+                        has_id = any(any(k in nc for k in _PHONE_KWS + _ID_DOC_KWS) for nc in norm_cols)
+                        if has_p and has_id:
+                            has_raw_rosters = True
+                            _, sh_clean = _split_sheet_num(sh)
+                            if sh_clean:
+                                roster_clean_counts[canon_key(sh_clean)] += 1
+
+                for tname, fn, sh, cols, rows, banner_ctx, norm_cols in preloaded_db:
+                    if _is_summary_tbl(norm_cols, sh):
+                        continue
+
+                    if _is_matrix_tbl(norm_cols):
+                        if has_raw_rosters:
+                            continue
+                        wg_lbl = re.sub(r"^(?:کارگروه\s+)+", "کارگروه ", normalize_fa(sh)).strip()
+                        ci_nm_m = next((i for i, nc in enumerate(norm_cols) if any(k in nc for k in _PERSON_KWS)), 1)
+                        ci_ph_m = next((i for i, nc in enumerate(norm_cols) if any(k in nc for k in _PHONE_KWS)), 2)
+                        ci_id_m = next((i for i, nc in enumerate(norm_cols) if any(k in nc for k in _ID_DOC_KWS)), -1)
+                        course_col_idxs = [
+                            i for i in range(6, len(cols))
+                            if not any(sk in norm_cols[i] for sk in ("شرح", "مجموع", "تعداد", "کارگروه"))
+                        ]
+                        col_max_s = {}
+                        for ci_c in course_col_idxs:
+                            mv = 0
+                            for r in rows:
+                                if ci_c < len(r):
+                                    v = parse_number_strict(r[ci_c])
+                                    if v is not None and v > mv:
+                                        mv = int(round(v))
+                            col_max_s[ci_c] = mv
+                        for r_idx, r in enumerate(rows, start=1):
+                            if is_blank_numbered_row(list(r)) or is_summary_row_smart(list(r)):
+                                continue
+                            nm = clean_participant_name(r[ci_nm_m] if ci_nm_m < len(r) else "")
+                            if is_junk_label(nm) or len(nm) < 3:
+                                continue
+                            ph_v = normalize_phone(r[ci_ph_m] if ci_ph_m < len(r) else "")
+                            nid_v = normalize_nid(r[ci_id_m] if (ci_id_m != -1 and ci_id_m < len(r)) else "")
+                            for ci_c in course_col_idxs:
+                                if ci_c >= len(r):
+                                    continue
+                                v = parse_number_strict(r[ci_c])
+                                if v is None:
+                                    continue
+                                att_v = max(0, int(round(v)))
+                                tot_v = col_max_s.get(ci_c, 0)
+                                persons.append({
+                                    "name": nm, "phone": ph_v, "nid": nid_v, "level": "",
+                                    "course": normalize_fa(cols[ci_c]), "group": wg_lbl,
+                                    "teacher": "نامشخص", "date": "", "year": "نامشخص",
+                                    "month_idx": -1, "season": "", "source": tname,
+                                    "file_name": fn, "source_sheet": sh, "row_index": r_idx,
+                                    "sessions_total": tot_v, "sessions_attended": att_v,
+                                    "sessions_late": 0, "sessions_excused": 0,
+                                    "sessions_absent": max(0, tot_v - att_v), "session_marks": [],
+                                })
+                        continue
 
                     def find_col(keywords: tuple[str, ...]) -> int:
                         for idx, nc in enumerate(norm_cols):
@@ -267,22 +437,55 @@ class ExecutiveAnalyticsEngine:
 
                     i_first_name = next((idx for idx, nc in enumerate(norm_cols) if nc in ("نام", "first name", "name") and not is_banner_header_col(cols[idx])), -1)
                     i_last_name = next((idx for idx, nc in enumerate(norm_cols) if ("نام خانوادگی" in nc or "فامیل" in nc or nc == "last name") and not is_banner_header_col(cols[idx])), -1)
-                    i_person = find_col(("نام و نام خانوادگی", "نام خانوادگی", "شرکت کننده", "شرکت‌کننده", "طلبه", "ثبت نام کننده", "پاسخ دهنده", "full_name", "participant"))
-                    i_phone = find_col(("موبایل", "همراه", "تلفن", "شماره تماس", "phone", "mobile"))
-                    i_nid = find_col(("کد ملی", "کدملی", "شماره ملی", "national"))
+                    i_person = find_col(_PERSON_KWS)
+                    i_phone = find_col(_PHONE_KWS)
+                    i_nid = find_col(_ID_DOC_KWS)
                     i_level = find_col(("سطح", "پایه", "مقطع", "تحصیلات", "level"))
                     i_course = find_col(("عنوان دوره", "نام دوره", "موضوع", "عنوان برنامه", "رویداد", "دوره", "نشست", "course", "title"))
                     i_group = find_col(("کارگروه", "گروه موضوعی", "گروه علمی", "بخش", "حوزه موضوعی", "واحد", "group", "department"))
                     i_teacher = find_col(("استاد", "ارائه دهنده", "ارائه‌دهنده", "سخنران", "مدرس", "teacher", "speaker"))
-                    i_count = find_col(("مخاطب", "شرکت", "تعداد نفر", "حاضرین", "نفر", "ثبت نام", "attendance", "count", "students"))
+                    i_count = find_col(("دانش پژوه", "دانش‌پژوه", "مخاطب", "تعداد نفر", "حاضرین", "نفر", "ثبت نام", "attendance", "students"))
+                    if i_count == -1 and i_person == -1:
+                        i_count = find_col(("شرکت", "count"))
                     i_hours = find_col(("ساعت", "ساعات", "مدت", "hours", "duration"))
-                    i_sessions = find_col(("جلسه", "تعداد جلسات", "جلسات", "sessions"))
-                    i_cost = find_col(("مبلغ کل", "بدهکار", "برداشت", "مبلغ", "هزینه", "حق التدریس", "حق‌التدریس", "پرداختی", "پرداخت", "بستانکار", "تنخواه", "خرج", "تومان", "ریال", "فاکتور", "بهای", "جمع کل", "cost", "amount", "price"))
+                    i_sessions = find_col(("تعداد جلسات", "جلسات", "جلسه", "sessions"))
+                    i_cost = -1
+                    _COST_DESC_EXCL = ("شرح", "نوع", "عنوان", "بابت", "سرفصل", "دسته", "گروه", "شماره", "ردیف", "تاریخ", "کد", "موبایل", "تلفن", "مانده", "واحد", "فی")
+                    _COST_HINTS_PRIO = (
+                        "مبلغ کل", "جمع کل", "مبلغ هزینه", "مبلغ پرداختی", "بدهکار", "برداشت",
+                        "مبلغ", "تومان", "ریال", "بستانکار", "تنخواه", "پرداختی", "حق التدریس",
+                        "حق‌التدریس", "هزینه", "cost", "amount", "price",
+                    )
+                    for _ch in _COST_HINTS_PRIO:
+                        for _ci_k, _nc_k in enumerate(norm_cols):
+                            if is_banner_header_col(cols[_ci_k]) or len(_nc_k.split()) > 3:
+                                continue
+                            if any(ex_w in _nc_k for ex_w in _COST_DESC_EXCL):
+                                continue
+                            if _ch in _nc_k:
+                                i_cost = _ci_k
+                                break
+                        if i_cost != -1:
+                            break
+                    if i_cost == -1:
+                        for _ci_k, _nc_k in enumerate(norm_cols):
+                            if _nc_k in ("برداشت", "پرداخت", "خرج", "بها"):
+                                i_cost = _ci_k
+                                break
                     i_date = find_col(("تاریخ", "سال", "فصل", "ماه", "زمان", "date", "year"))
                     i_cost_cat = find_col(("شرح", "بابت", "سرفصل", "نوع هزینه", "عنوان", "موضوع"))
 
                     if (i_person != -1 or (i_first_name != -1 and i_last_name != -1)) and (i_phone != -1 or i_nid != -1 or i_level != -1):
                         roster_course, roster_teacher = extract_roster_banner_meta(banner_ctx, fn, sh)
+                        sh_num, sh_clean = _split_sheet_num(sh)
+                        base_course = roster_course or sh_clean or Path(fn).stem or "دوره آموزشی"
+                        base_ck = canon_key(sh_clean or base_course)
+                        if sh_num and roster_clean_counts.get(base_ck, 0) > 1:
+                            resolved_sheet_course = f"{base_course} (دوره {sh_num})"
+                        else:
+                            resolved_sheet_course = base_course
+                        mapped_wg = course_wg_map.get(base_ck) or course_wg_map.get(canon_key(base_course)) or ""
+
                         reserved_cols = {
                             c_i for c_i in (i_person, i_first_name, i_last_name, i_phone, i_nid, i_level, i_course, i_group, i_teacher, i_date, i_cost, i_count, i_hours, i_sessions)
                             if c_i != -1
@@ -291,6 +494,26 @@ class ExecutiveAnalyticsEngine:
                             reserved_cols.add(0)
                         session_cols = _detect_session_columns(cols, reserved_cols)
 
+                        numeric_course_max_sess = 0
+                        if not session_cols and i_sessions != -1:
+                            _pos_sess_vals: list[int] = []
+                            for r_s in rows:
+                                if i_sessions < len(r_s):
+                                    sv_s = parse_number_strict(r_s[i_sessions])
+                                    if sv_s is not None and 0 < sv_s <= 120:
+                                        _pos_sess_vals.append(int(round(sv_s)))
+                            if _pos_sess_vals:
+                                _mx_s = max(_pos_sess_vals)
+                                numeric_course_max_sess = _mx_s
+                                # Guard against single-row typo outlier (e.g. 42 rows = 1 session, 1 typo row = 2)
+                                if len(_pos_sess_vals) >= 10 and _pos_sess_vals.count(_mx_s) == 1:
+                                    _below_mx = [v for v in _pos_sess_vals if v < _mx_s]
+                                    if _below_mx:
+                                        _sec_mx = max(_below_mx)
+                                        if _below_mx.count(_sec_mx) >= len(_pos_sess_vals) * 0.5:
+                                            numeric_course_max_sess = _sec_mx
+
+                        sheet_seen_person: dict[tuple[str, str], int] = {}
                         for r_idx, r in enumerate(rows, start=1):
                             if is_blank_numbered_row(list(r)):
                                 continue
@@ -299,9 +522,9 @@ class ExecutiveAnalyticsEngine:
                             if i_first_name != -1 and i_last_name != -1 and i_first_name != i_last_name:
                                 fn_p = normalize_fa(r[i_first_name] if i_first_name < len(r) else "")
                                 ln_p = normalize_fa(r[i_last_name] if i_last_name < len(r) else "")
-                                nm = f"{fn_p} {ln_p}".strip()
+                                nm = clean_participant_name(f"{fn_p} {ln_p}")
                             else:
-                                nm = normalize_fa(r[i_person] if (i_person != -1 and i_person < len(r)) else "")
+                                nm = clean_participant_name(r[i_person] if (i_person != -1 and i_person < len(r)) else "")
                             if is_junk_label(nm) or len(nm) < 3:
                                 continue
                             dt_raw = normalize_fa(r[i_date]) if (i_date != -1 and i_date < len(r)) else ""
@@ -311,32 +534,59 @@ class ExecutiveAnalyticsEngine:
                                 t_cell = roster_teacher
 
                             sess_marks = []
-                            s_att = s_late = s_exc = s_abs = 0
-                            for sc_idx, sc_lbl in session_cols:
-                                raw_v = r[sc_idx] if sc_idx < len(r) else ""
-                                st_kind, st_lbl = _classify_session_cell(raw_v)
-                                sess_marks.append({"label": sc_lbl, "status": st_kind, "raw": st_lbl})
-                                if st_kind == "present":
-                                    s_att += 1
-                                elif st_kind == "late":
-                                    s_att += 1
-                                    s_late += 1
-                                elif st_kind == "excused":
-                                    s_exc += 1
-                                else:
-                                    s_abs += 1
+                            s_tot = s_att = s_late = s_exc = s_abs = 0
+                            if session_cols:
+                                s_tot = len(session_cols)
+                                for sc_idx, sc_lbl in session_cols:
+                                    raw_v = r[sc_idx] if sc_idx < len(r) else ""
+                                    st_kind, st_lbl = _classify_session_cell(raw_v)
+                                    sess_marks.append({"label": sc_lbl, "status": st_kind, "raw": st_lbl})
+                                    if st_kind == "present":
+                                        s_att += 1
+                                    elif st_kind == "late":
+                                        s_att += 1
+                                        s_late += 1
+                                    elif st_kind == "excused":
+                                        s_exc += 1
+                                    else:
+                                        s_abs += 1
+                            elif i_sessions != -1 and i_sessions < len(r):
+                                sv_num = parse_number_strict(r[i_sessions])
+                                if sv_num is not None and sv_num >= 0:
+                                    s_att = int(round(sv_num))
+                                    s_tot = max(numeric_course_max_sess, s_att)
+                                    s_abs = max(0, s_tot - s_att)
 
+                            ph_norm = normalize_phone(r[i_phone]) if (i_phone != -1 and i_phone < len(r)) else ""
+                            nid_norm = normalize_nid(r[i_nid]) if (i_nid != -1 and i_nid < len(r)) else ""
+                            c_row_title = normalize_fa(r[i_course]) if (i_course != -1 and i_course < len(r)) else resolved_sheet_course
+                            g_row = (
+                                normalize_fa(r[i_group])
+                                if (i_group != -1 and i_group < len(r))
+                                else (mapped_wg or detect_workgroup_unified(fn, sh, "", base_course, banner_ctx))
+                            )
+
+                            dup_k = (canon_key(nm), ph_norm or nid_norm)
+                            if dup_k[1] and dup_k in sheet_seen_person:
+                                prev_i = sheet_seen_person[dup_k]
+                                if s_att > persons[prev_i]["sessions_attended"]:
+                                    persons[prev_i]["sessions_attended"] = s_att
+                                    persons[prev_i]["sessions_total"] = max(persons[prev_i]["sessions_total"], s_tot)
+                                    persons[prev_i]["sessions_absent"] = max(0, persons[prev_i]["sessions_total"] - s_att)
+                                continue
+
+                            sheet_seen_person[dup_k] = len(persons)
                             persons.append({
-                                "name": nm, "phone": normalize_phone(r[i_phone]) if (i_phone != -1 and i_phone < len(r)) else "",
-                                "nid": normalize_nid(r[i_nid]) if (i_nid != -1 and i_nid < len(r)) else "",
+                                "name": nm, "phone": ph_norm,
+                                "nid": nid_norm,
                                 "level": normalize_fa(r[i_level]) if (i_level != -1 and i_level < len(r)) else "",
-                                "course": normalize_fa(r[i_course]) if (i_course != -1 and i_course < len(r)) else (roster_course or sh or Path(fn).stem or "دوره آموزشی"),
-                                "group": normalize_fa(r[i_group]) if (i_group != -1 and i_group < len(r)) else detect_workgroup_unified(fn, sh, "", roster_course or "", banner_ctx),
+                                "course": c_row_title,
+                                "group": g_row,
                                 "teacher": t_cell,
                                 "date": jd["canonical"] or dt_raw, "year": jd["year"] or "نامشخص",
                                 "month_idx": (jd["month"] - 1) if 1 <= jd["month"] <= 12 else -1,
                                 "season": jd["season"], "source": tname, "file_name": fn, "source_sheet": sh, "row_index": r_idx,
-                                "sessions_total": len(session_cols),
+                                "sessions_total": s_tot,
                                 "sessions_attended": s_att,
                                 "sessions_late": s_late,
                                 "sessions_excused": s_exc,
@@ -535,9 +785,14 @@ class ExecutiveAnalyticsEngine:
             "کارگروهفقه": "کارگروه فقه",
             "حدیث": "کارگروه حدیث",
             "کارگروهحدیث": "کارگروه حدیث",
+            "کارگروهکارگروهحدیث": "کارگروه حدیث",
             "تربیتمبلغ": "تربیت سخنران و مبلغ",
             "تربیتسخنران": "تربیت سخنران و مبلغ",
             "تربیتسخنرانومبلغ": "تربیت سخنران و مبلغ",
+            "کارگروهتربیتسخنرانومبلغ": "تربیت سخنران و مبلغ",
+            "انسباالکافی": "حدیث‌خوانی (انس با الکافی)",
+            "کارگروهانسباالکافی": "حدیث‌خوانی (انس با الکافی)",
+            "حدیثخوانیانسباالکافی": "حدیث‌خوانی (انس با الکافی)",
         }
 
         def _canon_wg(g: str) -> str:
@@ -590,7 +845,36 @@ class ExecutiveAnalyticsEngine:
                 "session_marks": list(p.get("session_marks") or []),
             })
 
-        existing_course_keys = {canon_key(c["title"]) for c in db_courses}
+        valid_p8_index: dict[str, list[tuple[str, set[str]]]] = defaultdict(list)
+        _vp_names: dict[str, set[str]] = defaultdict(set)
+        for p in all_persons:
+            ph = p.get("phone") or ""
+            if len(ph) == 11 and ph.startswith("09") and not ph.startswith("098"):
+                nk = re.sub(r"^(?:سید|سیده|شیخ)", "", canon_key(p.get("name") or ""))
+                if nk:
+                    _vp_names[ph].add(nk)
+        for ph, nks in _vp_names.items():
+            valid_p8_index[ph[1:9]].append((ph, nks))
+
+        _098_names: dict[str, set[str]] = defaultdict(set)
+        for p in all_persons:
+            ph = p.get("phone") or ""
+            if len(ph) == 11 and ph.startswith("0989"):
+                nk = re.sub(r"^(?:سید|سیده|شیخ)", "", canon_key(p.get("name") or ""))
+                if nk:
+                    _098_names[ph].add(nk)
+        phone_098_fix: dict[str, str] = {}
+        for ph098, nks098 in _098_names.items():
+            cands = valid_p8_index.get(ph098[3:], [])
+            for cand_ph, cand_nks in cands:
+                if (nks098 & cand_nks) or any(a in b or b in a for a in nks098 for b in cand_nks if len(a) >= 4 and len(b) >= 4):
+                    phone_098_fix[ph098] = cand_ph
+                    break
+        if phone_098_fix:
+            for p in all_persons:
+                if p.get("phone") in phone_098_fix:
+                    p["phone"] = phone_098_fix[p["phone"]]
+
         reg_by_course: dict[str, list[dict[str, Any]]] = defaultdict(list)
         for p in all_persons:
             reg_by_course[p["course"]].append(p)
@@ -603,19 +887,124 @@ class ExecutiveAnalyticsEngine:
             cc["holding_mode"], cc["teachers_resolved"] = mode, t_list
             all_courses.append(cc)
 
+        roster_match_inputs = [
+            {
+                "id": c_title,
+                "title": c_title,
+                "group": plist[0]["group"] if plist else "",
+                "attendance": len(plist),
+            }
+            for c_title, plist in reg_by_course.items()
+        ]
+        summary_match_inputs = [
+            {
+                "id": idx_c,
+                "title": cc.get("title") or "",
+                "group": cc.get("group") or "",
+                "attendance": int(cc["attendance"]) if (cc.get("attendance_valid") and int(cc.get("attendance") or 0) > 0) else None,
+            }
+            for idx_c, cc in enumerate(all_courses)
+        ]
+        roster_to_summary = match_roster_to_summary_courses(roster_match_inputs, summary_match_inputs, min_score=0.62)
+        source_discrepancies: list[dict[str, Any]] = []
+
         for c_title, plist in reg_by_course.items():
-            if canon_key(c_title) not in existing_course_keys:
+            max_roster_sess = max((int(x.get("sessions_total") or 0) for x in plist), default=0)
+            if c_title in roster_to_summary:
+                s_idx, match_sc = roster_to_summary[c_title]
+                sc_obj = all_courses[s_idx]
+                prev_sum_att = int(sc_obj.get("attendance") or 0) if sc_obj.get("attendance_valid") else 0
+                if not sc_obj.get("attendance_valid") or prev_sum_att <= 0:
+                    sc_obj["attendance"] = len(plist)
+                    sc_obj["attendance_valid"] = True
+                elif abs(prev_sum_att - len(plist)) >= 5:
+                    source_discrepancies.append({
+                        "course": sc_obj.get("title") or c_title,
+                        "roster_title": c_title,
+                        "group": sc_obj.get("group") or "",
+                        "summary_count": prev_sum_att,
+                        "roster_count": len(plist),
+                        "diff": prev_sum_att - len(plist),
+                        "confidence": round(match_sc * 100),
+                    })
+                if max_roster_sess > int(sc_obj.get("sessions") or 0):
+                    sc_obj["sessions"] = max_roster_sess
+                sc_obj["roster_attendance"] = len(plist)
+
+                s_title = sc_obj.get("title") or c_title
+                s_grp = sc_obj.get("group") or (plist[0]["group"] if plist else "دوره‌های عمومی")
+                s_tch = sc_obj.get("teacher") or ""
+                s_tlist = list(sc_obj.get("teachers_resolved") or [])
+                s_dt = sc_obj.get("date") or ""
+                s_yr = sc_obj.get("year") or "نامشخص"
+                s_mi = sc_obj.get("month_idx", -1)
+                for p_row in plist:
+                    if len(s_title) >= len(p_row.get("course") or ""):
+                        p_row["course"] = s_title
+                    if s_grp and s_grp != "دوره‌های عمومی":
+                        p_row["group"] = s_grp
+                    if (not p_row.get("teacher") or p_row["teacher"] == "نامشخص") and s_tch and s_tch != "نامشخص":
+                        p_row["teacher"] = s_tlist[0] if len(s_tlist) == 1 else s_tch
+                        p_row["teachers_list"] = list(s_tlist)
+                    if not p_row.get("date") and s_dt:
+                        p_row["date"] = s_dt
+                    if (not p_row.get("year") or p_row["year"] == "نامشخص") and s_yr and s_yr != "نامشخص":
+                        p_row["year"] = s_yr
+                    if p_row.get("month_idx", -1) < 0 <= s_mi:
+                        p_row["month_idx"] = s_mi
+            else:
                 sample = plist[0]
                 mode, t_list = _resolve_course_teachers(sample["teacher"])
                 all_courses.append({
-                    "course_uid": f"porsline#{canon_key(c_title)}", "title": c_title,
+                    "course_uid": f"roster#{canon_key(c_title)}", "title": c_title,
                     "group": sample["group"], "teacher": sample["teacher"],
                     "holding_mode": mode, "teachers_resolved": t_list,
                     "attendance": len(plist), "attendance_valid": True,
-                    "hours": 0.0, "sessions": 0, "cost": 0.0,
+                    "hours": 0.0, "sessions": max_roster_sess, "cost": 0.0,
                     "date": sample["date"], "year": sample["year"], "month_idx": sample["month_idx"],
-                    "season": "", "source": "porsline", "file_name": "ورودی پرس‌لاین", "source_sheet": "", "row_index": 0,
+                    "season": "", "source": sample.get("source") or "roster",
+                    "file_name": sample.get("file_name") or "فهرست دوره‌ها", "source_sheet": "", "row_index": 0,
                 })
+
+        if data_mode == "clean":
+            _tch_canon_disp: dict[str, str] = {}
+            for _cc in all_courses:
+                for _tn in (_cc.get("teachers_resolved") or []):
+                    _core = canonical_teacher_core(_tn)
+                    if not _core:
+                        continue
+                    _prev = _tch_canon_disp.get(_core)
+                    if not _prev or (len(_tn) > len(_prev) and "ئ" not in _tn) or ("ئ" in _prev and "ئ" not in _tn):
+                        _tch_canon_disp[_core] = _tn
+            if _tch_canon_disp:
+                for _cc in all_courses:
+                    if _cc.get("holding_mode") != "گروهی" and _cc.get("teachers_resolved"):
+                        _dedup_t: list[str] = []
+                        _seen_tc: set[str] = set()
+                        for _tn in _cc["teachers_resolved"]:
+                            _core = canonical_teacher_core(_tn)
+                            if _core and _core not in _seen_tc:
+                                _seen_tc.add(_core)
+                                _dedup_t.append(_tch_canon_disp.get(_core, _tn))
+                        _cc["teachers_resolved"] = _dedup_t
+                        if len(_dedup_t) == 1:
+                            _cc["teacher"] = _dedup_t[0]
+                        elif len(_dedup_t) > 1:
+                            _cc["teacher"] = " و ".join(_dedup_t)
+                for _pp in all_persons:
+                    if _pp.get("teachers_list"):
+                        _dedup_p: list[str] = []
+                        _seen_pc: set[str] = set()
+                        for _tn in _pp["teachers_list"]:
+                            _core = canonical_teacher_core(_tn)
+                            if _core and _core not in _seen_pc:
+                                _seen_pc.add(_core)
+                                _dedup_p.append(_tch_canon_disp.get(_core, _tn))
+                        _pp["teachers_list"] = _dedup_p
+                        if len(_dedup_p) == 1:
+                            _pp["teacher"] = _dedup_p[0]
+                        elif len(_dedup_p) > 1:
+                            _pp["teacher"] = " و ".join(_dedup_p)
 
         meta_groups = sorted({c["group"] for c in all_courses if c["group"]} | {p["group"] for p in all_persons if p["group"]})
         meta_teachers = sorted({tn for c in all_courses if c.get("holding_mode") != "گروهی" for tn in (c.get("teachers_resolved") or []) if tn and tn != "نامشخص"})
@@ -675,7 +1064,7 @@ class ExecutiveAnalyticsEngine:
                 if v not in dst["name_variants"]:
                     dst["name_variants"].append(v)
             for c_ck, c_obj in src["course_map"].items():
-                if c_ck not in dst["course_map"] or c_obj["sessions_total"] > dst["course_map"][c_ck]["sessions_total"]:
+                if c_ck not in dst["course_map"] or (c_obj["sessions_total"], c_obj["sessions_attended"]) > (dst["course_map"][c_ck]["sessions_total"], dst["course_map"][c_ck]["sessions_attended"]):
                     dst["course_map"][c_ck] = c_obj
             for g in src["groups"]:
                 if g not in dst["groups"]:
@@ -698,10 +1087,30 @@ class ExecutiveAnalyticsEngine:
             disp_nm = person_alias_map.get(nm_core, p["name"]) if nm_core else p["name"]
             nid, ph, ck = p.get("nid") or "", p["phone"], canon_key(disp_nm)
 
+            def _compatible_entity(existing_pid: str | None, name_only: bool = False) -> bool:
+                if not existing_pid or existing_pid not in person_entities:
+                    return False
+                e_cur = person_entities[existing_pid]
+                if nid and e_cur["nid"] and nid != e_cur["nid"]:
+                    return False
+                if ph and e_cur["phone"] and ph != e_cur["phone"]:
+                    return False
+                # Never merge solely by name when both records carry strong IDs (e.g., phone vs passport) with no shared ID!
+                if name_only and (ph or nid) and (e_cur["phone"] or e_cur["nid"]):
+                    return False
+                return True
+
             matched_pids = []
-            for m_pid in (nid_to_id.get(nid) if nid else None, phone_to_id.get(ph) if ph else None, name_to_id.get(ck)):
-                if m_pid and m_pid in person_entities and m_pid not in matched_pids:
-                    matched_pids.append(m_pid)
+            cand_nid = nid_to_id.get(nid) if nid else None
+            cand_ph = phone_to_id.get(ph) if ph else None
+            if _compatible_entity(cand_nid):
+                matched_pids.append(cand_nid)
+            if _compatible_entity(cand_ph) and cand_ph not in matched_pids:
+                matched_pids.append(cand_ph)
+            if not matched_pids:
+                cand_nm = name_to_id.get(ck) if ck else None
+                if _compatible_entity(cand_nm, name_only=True):
+                    matched_pids.append(cand_nm)
 
             if not matched_pids:
                 pid = f"p_{len(person_entities) + 1}"
@@ -737,7 +1146,8 @@ class ExecutiveAnalyticsEngine:
             ent["level"] = ent["level"] or p["level"]
 
             c_title = p["course"]
-            c_ck = canon_key(c_title)
+            _t_ck = canon_key(p.get("teacher") or "") if (p.get("teacher") and p.get("teacher") != "نامشخص") else ""
+            c_ck = f"{canon_key(c_title)}|{_t_ck}" if _t_ck else canon_key(c_title)
             s_tot = int(p.get("sessions_total") or 0)
             s_att = int(p.get("sessions_attended") or 0)
             c_rec = {
@@ -755,12 +1165,12 @@ class ExecutiveAnalyticsEngine:
                 "attendance_rate": round((s_att / s_tot) * 100, 1) if s_tot > 0 else None,
                 "session_marks": list(p.get("session_marks") or []),
             }
-            if c_ck not in ent["course_map"] or s_tot > ent["course_map"][c_ck]["sessions_total"]:
+            if c_ck not in ent["course_map"] or (s_tot, s_att) > (ent["course_map"][c_ck]["sessions_total"], ent["course_map"][c_ck]["sessions_attended"]):
                 ent["course_map"][c_ck] = c_rec
             if p["group"] and p["group"] not in ent["groups"]:
                 ent["groups"].append(p["group"])
             for tn in (p.get("teachers_list") or ([p["teacher"]] if p["teacher"] and p["teacher"] != "نامشخص" else [])):
-                if tn and tn != "نامشخص" and tn not in ent["teachers"]:
+                if tn and tn != "نامشخص" and tn not in ent["teachers"] and not any(k in tn for k in ("جمعی از", "گروهی از", "تعدادی از", "اساتید مدعو", "پنل تخصصی", "میزگرد", "ناشناس")):
                     ent["teachers"].append(tn)
             if p["year"] and p["year"] != "نامشخص" and p["year"] not in ent["years"]:
                 ent["years"].append(p["year"])
@@ -787,19 +1197,27 @@ class ExecutiveAnalyticsEngine:
                 ent["level"] = normalize_fa(meta["level"])
             ent["notes"] = str(meta.get("notes") or "").strip()
             ent["tags"] = [str(t).strip() for t in (meta.get("tags") or []) if str(t).strip()]
+            v_stat = str(meta.get("vetting_status") or "normal").strip().lower()
+            if v_stat not in ("normal", "approved", "graylist", "blacklist"):
+                v_stat = "normal"
+            ent["vetting_status"] = v_stat
+            ent["vetting_reason"] = str(meta.get("vetting_reason") or "").strip()
+            ent["vetting_updated_at"] = str(meta.get("vetting_updated_at") or "").strip()
             ent["profile_key"] = f"ph:{ent['phone']}" if ent["phone"] else (f"nid:{ent['nid']}" if ent["nid"] else f"nm:{canon_key(ent['name'])}")
 
             cnt = len(ent["courses"])
             if cnt >= 2:
                 repeat_users += 1
             if cnt <= 1:
-                loyalty, b, l_rank = "مخاطب جدید", "۱ دوره", 1
+                loyalty, b, l_rank = "جدیدالورود", "۱ دوره (جدیدالورود)", 1
             elif cnt == 2:
-                loyalty, b, l_rank = "مخاطب فعال", "۲ دوره", 2
+                loyalty, b, l_rank = "نیمه‌فعال", "۲ دوره (نیمه‌فعال)", 2
             elif cnt <= 4:
-                loyalty, b, l_rank = "مخاطب وفادار", "۳ تا ۴ دوره", 3
+                loyalty, b, l_rank = "فعال", "۳ تا ۴ دوره (فعال)", 3
+            elif cnt <= 7:
+                loyalty, b, l_rank = "مستمر", "۵ تا ۷ دوره (مستمر)", 4
             else:
-                loyalty, b, l_rank = "هسته اصلی", "۵+ دوره (هسته)", 4
+                loyalty, b, l_rank = "ثابت", "۸+ دوره (ثابت)", 5
             ret_buckets[b] += 1
 
             tot_s = sum(c["sessions_total"] for c in c_details)
@@ -826,6 +1244,19 @@ class ExecutiveAnalyticsEngine:
             ent["absent_sessions"] = abs_s
             ent["attendance_rate"] = att_rate
             ent["engagement_score"] = eng_score
+            zero_c_cnt = sum(1 for c in c_details if int(c.get("sessions_total") or 0) > 0 and int(c.get("sessions_attended") or 0) == 0)
+            ent["zero_courses_count"] = zero_c_cnt
+            # Refined smart auto-graylist hint: ONLY triggers when overall attendance is genuinely weak (never flags 70%+ active regulars!)
+            auto_gray_reason = ""
+            if ent["vetting_status"] == "normal":
+                if tot_s >= 4 and att_rate is not None and att_rate < 40.0:
+                    auto_gray_reason = f"غیبت بالا (نرخ حضور {round(att_rate)}٪ در {tot_s} جلسه)"
+                elif zero_c_cnt >= 2 and (att_rate is None or att_rate < 55.0):
+                    auto_gray_reason = f"{zero_c_cnt} دوره ثبت‌نام بدون حضور (نرخ حضور کل {round(att_rate) if att_rate is not None else 0}٪)"
+            ent["auto_graylist_reason"] = auto_gray_reason
+            id_t, id_clean = classify_identity_doc(ent.get("nid") or "")
+            ent["nid"] = id_clean or ent.get("nid") or ""
+            ent["id_type"] = id_t
             ent["last_year"] = sorted(ent["years"])[-1] if ent["years"] else ""
             ent["merged_variants"] = [v for v in ent["name_variants"] if v != ent["name"]]
             participants_list.append(ent)
@@ -897,18 +1328,27 @@ class ExecutiveAnalyticsEngine:
             })
         groups_out.sort(key=lambda x: (-x["attendance"], -x["courses"]))
 
-        aff_labels = [g["name"] for g in groups_out[:6]]
+        aff_labels = [g["name"] for g in groups_out[:8]]
         aff_matrix = [[0 for _ in aff_labels] for _ in aff_labels]
+        aff_active_matrix = [[0 for _ in aff_labels] for _ in aff_labels]
         cross_group_people = 0
         for ent in person_entities.values():
             if len(ent["groups"]) >= 2:
                 cross_group_people += 1
-            egs = [g for g in ent["groups"] if g in aff_labels]
+            egs = set(g for g in ent["groups"] if g in aff_labels)
+            act_egs = {
+                c.get("group") for c in (ent.get("course_details") or [])
+                if c.get("group") in aff_labels and int(c.get("sessions_attended") or 0) > 0
+            }
             for i_a, ga in enumerate(aff_labels):
                 if ga in egs:
                     for i_b, gb in enumerate(aff_labels):
                         if gb in egs:
                             aff_matrix[i_a][i_b] += 1
+                if ga in act_egs:
+                    for i_b, gb in enumerate(aff_labels):
+                        if gb in act_egs:
+                            aff_active_matrix[i_a][i_b] += 1
 
         tch_stats: dict[str, dict[str, Any]] = defaultdict(lambda: {"courses": 0, "independent_courses": 0, "joint_courses": 0, "attendance": 0, "adjusted_attendance": 0.0, "att_vals": [], "sessions": 0, "hours_independent": 0.0, "hours_joint": 0.0, "hours_effective": 0.0, "unique_ids": set(), "repeat_ids": set(), "groups": set(), "cost": 0.0, "source_refs": []})
         for c in courses:
@@ -1009,6 +1449,7 @@ class ExecutiveAnalyticsEngine:
         pareto_costs = [{"category": cname, "amount": round(amt)} for cname, amt in sorted(cost_cats.items(), key=lambda kv: -kv[1])[:7]]
 
         health = self._compute_data_health(participants_list, dup_files, missing_att_courses, total_courses)
+        health["source_discrepancies"] = sorted(source_discrepancies, key=lambda d: -abs(d["diff"]))
         events = suite.get("events") or []
         return {
             "ok": True, "data_mode": data_mode, "hours_policy": hours_policy, "has_person_level": has_person_level,
@@ -1027,8 +1468,8 @@ class ExecutiveAnalyticsEngine:
             },
             "filters_meta": {"groups": meta_groups, "teachers": meta_teachers, "years": meta_years},
             "timeline": timeline,
-            "retention": [{"label": lbl, "count": ret_buckets.get(lbl, 0)} for lbl in ("۱ دوره", "۲ دوره", "۳ تا ۴ دوره", "۵+ دوره (هسته)")],
-            "groups": groups_out, "affinity_matrix": {"labels": aff_labels, "matrix": aff_matrix},
+            "retention": [{"label": lbl, "count": ret_buckets.get(lbl, 0)} for lbl in ("۱ دوره (جدیدالورود)", "۲ دوره (نیمه‌فعال)", "۳ تا ۴ دوره (فعال)", "۵ تا ۷ دوره (مستمر)", "۸+ دوره (ثابت)")],
+            "groups": groups_out, "affinity_matrix": {"labels": aff_labels, "matrix": aff_matrix, "active_matrix": aff_active_matrix},
             "teachers": teachers_out, "heatmap": heatmap, "pareto_costs": pareto_costs,
             "participants": participants_list[:5000], "participants_total": len(participants_list), "cost_unit": cost_unit, "data_health": health,
             "filtered_courses": [
@@ -1082,37 +1523,53 @@ class ExecutiveAnalyticsEngine:
             if isinstance(pair, (list, tuple)) and len(pair) == 2:
                 rejected_pairs.add(tuple(sorted([canon_key(pair[0]), canon_key(pair[1])])))
 
-        duplicates, sample = [], participants[:200]
-        for i in range(len(sample)):
-            a, ka = sample[i], canon_key(sample[i]["name"])
+        duplicates: list[dict[str, Any]] = []
+        seen_dup_pairs: set[tuple[str, str]] = set()
+        buckets: dict[str, list[dict[str, Any]]] = defaultdict(list)
+        for p_item in participants:
+            ka = canon_key(p_item["name"])
             if len(ka) < 4:
                 continue
-            pa, na = (a.get("phone") or "").strip(), (a.get("nid") or "").strip()
-            wa = a["name"].split()
-            for j in range(i + 1, len(sample)):
-                b, kb = sample[j], canon_key(sample[j]["name"])
-                if abs(len(ka) - len(kb)) > 3:
-                    continue
-                if tuple(sorted([ka, kb])) in rejected_pairs:
-                    continue
-                pb, nb = (b.get("phone") or "").strip(), (b.get("nid") or "").strip()
-                # Never flag two people with distinct valid phone numbers or distinct NIDs as duplicates!
-                if pa and pb and pa != pb:
-                    continue
-                if na and nb and na != nb:
-                    continue
-                # If both have surname words, require surname similarity >= 0.72 so shared first names don't collide
-                wb = b["name"].split()
-                if len(wa) >= 2 and len(wb) >= 2:
-                    sur_sim = difflib.SequenceMatcher(None, canon_key(wa[-1]), canon_key(wb[-1])).ratio()
-                    if sur_sim < 0.72:
+            ws_p = p_item["name"].split()
+            sur_k = canon_key(ws_p[-1])[:3] if len(ws_p) >= 2 else ka[:3]
+            buckets[f"{ka[:2]}|{sur_k}"].append(p_item)
+            buckets[f"pre|{ka[:4]}"].append(p_item)
+
+        for b_list in buckets.values():
+            if len(b_list) < 2:
+                continue
+            for i in range(len(b_list)):
+                a = b_list[i]
+                ka = canon_key(a["name"])
+                pa, na = (a.get("phone") or "").strip(), (a.get("nid") or "").strip()
+                wa = a["name"].split()
+                for j in range(i + 1, len(b_list)):
+                    b = b_list[j]
+                    kb = canon_key(b["name"])
+                    if ka == kb or abs(len(ka) - len(kb)) > 3:
                         continue
-                sim = difflib.SequenceMatcher(None, ka, kb).ratio()
-                if sim >= 0.85:
-                    duplicates.append({"name_a": a["name"], "phone_a": pa or "—", "courses_a": a.get("courses_count", 1), "name_b": b["name"], "phone_b": pb or "—", "courses_b": b.get("courses_count", 1), "similarity": round(sim * 100)})
-                    if len(duplicates) >= 25:
-                        break
-            if len(duplicates) >= 25:
+                    pair_k = tuple(sorted([ka, kb]))
+                    if pair_k in rejected_pairs or pair_k in seen_dup_pairs:
+                        continue
+                    pb, nb = (b.get("phone") or "").strip(), (b.get("nid") or "").strip()
+                    if pa and pb and pa != pb:
+                        continue
+                    if na and nb and na != nb:
+                        continue
+                    wb = b["name"].split()
+                    if len(wa) >= 2 and len(wb) >= 2:
+                        sur_sim = difflib.SequenceMatcher(None, canon_key(wa[-1]), canon_key(wb[-1])).ratio()
+                        if sur_sim < 0.72:
+                            continue
+                    sim = difflib.SequenceMatcher(None, ka, kb).ratio()
+                    if sim >= 0.85:
+                        seen_dup_pairs.add(pair_k)
+                        duplicates.append({"name_a": a["name"], "phone_a": pa or "—", "courses_a": a.get("courses_count", 1), "name_b": b["name"], "phone_b": pb or "—", "courses_b": b.get("courses_count", 1), "similarity": round(sim * 100)})
+                        if len(duplicates) >= 40:
+                            break
+                if len(duplicates) >= 40:
+                    break
+            if len(duplicates) >= 40:
                 break
         dup_files = duplicate_files if duplicate_files is not None else detect_duplicate_files()
         penalty = (0.0 if total == 0 else ((missing_phone / total) * 18 + (missing_level / total) * 8 + min(24, len(duplicates) * 4)))
@@ -1154,9 +1611,17 @@ class ExecutiveAnalyticsEngine:
             pass
         return {"ok": True}
 
-    def get_teacher_profile(self, teacher_name: str) -> dict[str, Any]:
-        an = self.get_executive_analytics({"teacher": teacher_name})
-        t_info = next((t for t in an["teachers"] if canon_key(t["name"]) == canon_key(teacher_name)), None)
+    def get_teacher_profile(self, teacher_name: str, precomputed: dict[str, Any] | None = None) -> dict[str, Any]:
+        an = precomputed if (isinstance(precomputed, dict) and precomputed.get("ok")) else self.get_executive_analytics({"teacher": teacher_name})
+        t_core = canonical_teacher_core(teacher_name)
+        t_info = next(
+            (
+                t for t in an["teachers"]
+                if canon_key(t["name"]) == canon_key(teacher_name)
+                or (t_core and canonical_teacher_core(t["name"]) == t_core)
+            ),
+            None,
+        )
         meta = (self._ensure_suite_file().get("teacher_meta") or {}).get(canon_key(teacher_name)) or {}
         if not t_info:
             t_info = {"name": teacher_name, "courses": 0, "independent_courses": 0, "joint_courses": 0, "attendance": 0, "unique": 0, "avg_attendance": 0, "repeat_rate": 0, "groups": [], "cost": 0, "hours_effective": 0, "sessions": 0}
@@ -1169,24 +1634,26 @@ class ExecutiveAnalyticsEngine:
         self._save_suite(suite)
         return {"ok": True}
 
-    def get_participant_profile(self, person_key: str) -> dict[str, Any]:
-        an = self.get_executive_analytics()
+    def get_participant_profile(self, person_key: str, precomputed: dict[str, Any] | None = None) -> dict[str, Any]:
+        an = precomputed if (isinstance(precomputed, dict) and precomputed.get("ok")) else self.get_executive_analytics()
+        pk_s = str(person_key or "").strip()
         target = next(
             (
                 p for p in an["participants"]
-                if p["id"] == person_key
-                or p.get("profile_key") == person_key
-                or (p.get("phone") and p["phone"] == person_key)
-                or canon_key(p["name"]) == canon_key(person_key)
+                if (p.get("profile_key") and p["profile_key"] == pk_s)
+                or p["id"] == pk_s
+                or (p.get("phone") and p["phone"] == pk_s)
+                or (p.get("nid") and p["nid"] == pk_s)
+                or canon_key(p["name"]) == canon_key(pk_s)
             ),
             None,
         )
-        return {"ok": True, "participant": target} if target else {"ok": False, "error": "مخاطب مورد نظر یافت نشد."}
+        return {"ok": True, "participant": target} if target else {"ok": False, "error": "دانش‌پژوه مورد نظر یافت نشد."}
 
     def save_participant_meta(self, profile_key: str, meta: dict[str, Any]) -> dict[str, Any]:
         pk = str(profile_key or "").strip()
         if not pk:
-            return {"ok": False, "error": "شناسه مخاطب نامعتبر است."}
+            return {"ok": False, "error": "شناسه دانش‌پژوه نامعتبر است."}
         suite = self._ensure_suite_file()
         store = dict(suite.get("participant_meta") or {})
         raw_tags = meta.get("tags") or []
@@ -1197,13 +1664,23 @@ class ExecutiveAnalyticsEngine:
             ts = normalize_fa(t)
             if ts and ts not in clean_tags:
                 clean_tags.append(ts)
+        prev_m = dict(store.get(pk) or {})
+        v_stat = str(meta.get("vetting_status") if "vetting_status" in meta else prev_m.get("vetting_status") or "normal").strip().lower()
+        if v_stat not in ("normal", "approved", "graylist", "blacklist"):
+            v_stat = "normal"
+        v_reason = str(meta.get("vetting_reason") if "vetting_reason" in meta else prev_m.get("vetting_reason") or "").strip()[:400]
+        now_ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+        v_changed = (v_stat != prev_m.get("vetting_status")) or (v_reason != prev_m.get("vetting_reason"))
         store[pk] = {
-            "phone": normalize_phone(meta.get("phone") or ""),
-            "nid": normalize_nid(meta.get("nid") or ""),
-            "level": normalize_fa(meta.get("level") or ""),
-            "tags": clean_tags[:12],
-            "notes": str(meta.get("notes") or "").strip()[:1500],
-            "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "phone": normalize_phone(meta.get("phone") if "phone" in meta else prev_m.get("phone") or ""),
+            "nid": normalize_nid(meta.get("nid") if "nid" in meta else prev_m.get("nid") or ""),
+            "level": normalize_fa(meta.get("level") if "level" in meta else prev_m.get("level") or ""),
+            "tags": clean_tags[:12] if "tags" in meta else list(prev_m.get("tags") or []),
+            "notes": str(meta.get("notes") if "notes" in meta else prev_m.get("notes") or "").strip()[:1500],
+            "vetting_status": v_stat,
+            "vetting_reason": v_reason,
+            "vetting_updated_at": now_ts if v_changed else str(prev_m.get("vetting_updated_at") or now_ts),
+            "updated_at": now_ts,
         }
         suite["participant_meta"] = store
         self._save_suite(suite)
@@ -1257,33 +1734,49 @@ class ExecutiveAnalyticsEngine:
 
         i_phone = pick(("موبایل", "همراه", "تلفن", "تماس", "phone", "mobile"))
         i_level = pick(("سطح", "پایه", "مقطع", "تحصیلات", "level"))
-        i_nid = pick(("کد ملی", "کدملی", "شماره ملی", "national"))
+        i_nid = pick(("کد ملی", "کدملی", "شماره ملی", "گذرنامه", "پاسپورت", "شماره گذرنامه", "شماره پاسپورت", "کد فراگیر", "کد یکتا", "کد اتباع", "فیدا", "آمایش", "national", "passport", "fida", "cnic"))
+        i_sess_num = pick(("تعداد جلسات", "جلسات حضور", "جلسات", "sessions"))
 
         existing_an = self.get_executive_analytics()
+        known_nids = {x["nid"]: x for x in existing_an["participants"] if x.get("nid")}
         known_phones = {x["phone"]: x for x in existing_an["participants"] if x.get("phone")}
         known_names = {canon_key(x["name"]): x for x in existing_an["participants"]}
+        meta_store_pl = dict(self._ensure_suite_file().get("participant_meta") or {})
 
-        reserved_p = {idx for idx in (i_full, i_first, i_last, i_phone, i_level, i_nid) if idx != -1}
+        reserved_p = {idx for idx in (i_full, i_first, i_last, i_phone, i_level, i_nid, i_sess_num) if idx != -1}
         if norm_h and any(k in norm_h[0] for k in ("ردیف", "شماره", "no", "id")):
             reserved_p.add(0)
         p_sess_cols = _detect_session_columns(headers, reserved_p)
 
-        parsed, new_cnt, ret_cnt = [], 0, 0
+        parsed, new_cnt, ret_cnt, black_cnt, gray_cnt = [], 0, 0, 0, 0
         for r in rows:
             if is_blank_numbered_row(list(r)) or is_summary_row_smart(list(r)):
                 continue
             if i_full != -1 and i_full < len(r):
-                name = normalize_fa(r[i_full])
+                name = clean_participant_name(r[i_full])
             else:
                 fn_p = normalize_fa(r[i_first]) if (i_first != -1 and i_first < len(r)) else ""
                 ln_p = normalize_fa(r[i_last]) if (i_last != -1 and i_last < len(r)) else ""
-                name = f"{fn_p} {ln_p}".strip()
+                name = clean_participant_name(f"{fn_p} {ln_p}")
             if len(name) < 3 or is_junk_label(name):
                 continue
             ph = normalize_phone(r[i_phone]) if (i_phone != -1 and i_phone < len(r)) else ""
             lvl = normalize_fa(r[i_level]) if (i_level != -1 and i_level < len(r)) else ""
             nid = normalize_nid(r[i_nid]) if (i_nid != -1 and i_nid < len(r)) else ""
-            prev = (known_phones.get(ph) if ph else None) or known_names.get(canon_key(name))
+            prev = (known_nids.get(nid) if nid else None) or (known_phones.get(ph) if ph else None) or known_names.get(canon_key(name))
+            direct_meta = (
+                (meta_store_pl.get(f"ph:{ph}") if ph else None)
+                or (meta_store_pl.get(f"nid:{nid}") if nid else None)
+                or meta_store_pl.get(f"nm:{canon_key(name)}")
+                or {}
+            )
+            v_stat_p = (prev.get("vetting_status") if prev else None) or str(direct_meta.get("vetting_status") or "normal")
+            v_reason_p = (prev.get("vetting_reason") if prev else "") or str(direct_meta.get("vetting_reason") or "")
+            auto_gray_p = (prev.get("auto_graylist_reason") if prev else "") or ""
+            if v_stat_p == "blacklist":
+                black_cnt += 1
+            elif v_stat_p == "graylist" or auto_gray_p:
+                gray_cnt += 1
             is_new = prev is None
             new_cnt += int(is_new)
             ret_cnt += int(not is_new)
@@ -1304,10 +1797,22 @@ class ExecutiveAnalyticsEngine:
                 else:
                     s_abs += 1
 
+            s_tot_row = len(p_sess_cols)
+            if not p_sess_cols and i_sess_num != -1 and i_sess_num < len(r):
+                sv_p = parse_number_strict(r[i_sess_num])
+                if sv_p is not None and sv_p >= 0:
+                    s_att = int(round(sv_p))
+                    s_tot_row = max(s_att, 1 if s_att > 0 else 0)
             parsed.append({
                 "name": name, "phone": ph, "nid": nid, "level": lvl,
                 "is_new": is_new, "prev_courses": prev["courses_count"] if prev else 0,
-                "sessions_total": len(p_sess_cols), "sessions_attended": s_att,
+                "prev_attendance_rate": prev.get("attendance_rate") if prev else None,
+                "vetting_status": v_stat_p,
+                "vetting_reason": v_reason_p,
+                "auto_graylist_reason": auto_gray_p,
+                "default_approved": v_stat_p != "blacklist",
+                "profile_key": (prev.get("profile_key") if prev else "") or (f"ph:{ph}" if ph else (f"nid:{nid}" if nid else f"nm:{canon_key(name)}")),
+                "sessions_total": s_tot_row, "sessions_attended": s_att,
                 "sessions_late": s_late, "sessions_excused": s_exc, "sessions_absent": s_abs,
                 "session_marks": s_marks,
             })
@@ -1319,8 +1824,11 @@ class ExecutiveAnalyticsEngine:
             "suggested_course": sug_course,
             "suggested_teacher": sug_teacher,
             "total": len(parsed),
+            "total_cleaned": len(parsed),
             "new_count": new_cnt,
             "returning_count": ret_cnt,
+            "blacklisted_count": black_cnt,
+            "graylisted_count": gray_cnt,
             "participants": parsed,
         }
 

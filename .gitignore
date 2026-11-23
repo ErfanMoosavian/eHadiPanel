@@ -1,46 +1,50 @@
-# کلیدهای محرمانه و تنظیمات محیطی
-.env
-.env.*
-
-# محیط مجازی و کش پایتون
-venv/
-.venv/
+# Python & Virtual Environments
 __pycache__/
 *.py[cod]
 *$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+pip-wheel-metadata/
 
-# داده‌های محلی، دیتابیس‌ها، اسناد و بکاپ‌ها
+# Secrets & Local Environment Variables
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# Runtime Databases, Vector Stores, Uploaded Docs, Logs & Backups
 data/
+storage/
+backups/
+logs/
+*.duckdb
+*.duckdb.wal
+*.sqlite
+*.sqlite3
+*.lance/
 
-# خروجی‌های ساخت فایل نصبی
-build/
+# PyInstaller & Release Build Artifacts
 dist/
+build/*.iss
+build/eHadiPanel/
+*.spec.bak
 
-# فایل‌های لاگ، موقت و پشتیبان
-*.log
-*.bak*
-*.tmp
-audit_step*.txt
+# Personal / Temporary Archives & Local Spreadsheets
+*.zip
+*.7z
+*.rar
+~$*.xlsx
+~$*.docx
+~$*.pptx
 
-# فایل‌های سیستم‌عامل و ادیتور
-.DS_Store
-Thumbs.db
+# IDEs & OS Files
 .vscode/
 .idea/
-
-# Secrets & Environment
-.env
-venv/
-__pycache__/
-*.pyc
-*.bak
-*.bak*
-
-# Institutional Data & Databases (Sensitive)
-data/
-
-# Build Outputs & Archives
-dist/
-build/eHadiPanel/
-*.exe
-*.zip
+.DS_Store
+Thumbs.db
+desktop.ini

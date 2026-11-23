@@ -21,7 +21,7 @@ except ImportError:
     pyodbc = None
 
 
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".pptx", ".xlsx", ".xls", ".accdb", ".mdb"}
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".pptx", ".xlsx", ".xls", ".csv", ".accdb", ".mdb"}
 
 
 class DocumentIngestionEngine:
@@ -165,21 +165,39 @@ class DocumentIngestionEngine:
                     })
         return chunks
 
-    def _parse_docx(self, path: Path) -> list[dict[str, Any]]:
+    def _parse_docx(
+        self, path: Path, con: duckdb.DuckDBPyConnection | None = None
+    ) -> tuple[list[dict[str, Any]], int, int]:
         doc = DocxDocument(path)
         blocks = []
+        tables_count = 0
+        total_rows = 0
         for p in doc.paragraphs:
             if p.text.strip():
                 blocks.append(p.text.strip())
 
         for t_idx, table in enumerate(doc.tables, start=1):
+            raw_rows = []
             rows_text = []
             for row in table.rows:
                 cells = [c.text.strip().replace("\n", " ") for c in row.cells]
                 if any(cells):
+                    raw_rows.append(cells)
                     rows_text.append(" | ".join(cells))
             if rows_text:
                 blocks.append(f"[جدول {t_idx}]\n" + "\n".join(rows_text))
+            if con is not None and len(raw_rows) >= 2 and len(raw_rows[0]) >= 2:
+                try:
+                    raw_df = pd.DataFrame(raw_rows)
+                    df, _ = self._normalize_excel_sheet_header(raw_df)
+                    tbl_name, r_cnt, _ = self._save_dataframe_to_duckdb(
+                        con, df, path.name, f"جدول {t_idx}"
+                    )
+                    if tbl_name:
+                        tables_count += 1
+                        total_rows += r_cnt
+                except Exception:
+                    pass
 
         full_text = "\n".join(blocks)
         chunks = []
@@ -192,7 +210,7 @@ class DocumentIngestionEngine:
                 "location": f"بخش {idx}",
                 "content": part,
             })
-        return chunks
+        return chunks, tables_count, total_rows
 
     def _parse_pptx(
         self, path: Path, con: duckdb.DuckDBPyConnection
@@ -268,7 +286,11 @@ class DocumentIngestionEngine:
         cleaned_rows = []
         phone_col_idxs = {
             ci for ci, cn in enumerate(final_cols)
-            if any(k in normalize_persian(cn).lower() for k in ("موبایل", "همراه", "تلفن", "phone", "mobile"))
+            if any(k in normalize_persian(cn).lower() for k in ("موبایل", "همراه", "تلفن", "شماره تماس", "phone", "mobile"))
+        }
+        id_col_idxs = {
+            ci for ci, cn in enumerate(final_cols)
+            if any(k in normalize_persian(cn).lower() for k in ("کد ملی", "کدملی", "شماره ملی", "گذرنامه", "پاسپورت", "فراگیر", "فیدا", "آمایش", "passport", "national", "fida", "cnic"))
         }
         for r in final_rows:
             if is_blank_numbered_row(list(r)):
@@ -276,12 +298,18 @@ class DocumentIngestionEngine:
             r_list = list(r)
             for ci in phone_col_idxs:
                 if ci < len(r_list) and r_list[ci] != "":
-                    sv = re.sub(r"\.0$", "", str(r_list[ci]).strip())
-                    digits = re.sub(r"\D", "", normalize_persian(sv))
-                    if len(digits) == 10 and digits.startswith("9"):
-                        r_list[ci] = "0" + digits
-                    else:
+                    sv = re.sub(r"\.0+$", "", str(r_list[ci]).strip())
+                    if sv.startswith("+"):
                         r_list[ci] = sv
+                    else:
+                        digits = re.sub(r"\D", "", normalize_persian(sv))
+                        if len(digits) == 10 and digits.startswith("9"):
+                            r_list[ci] = "0" + digits
+                        else:
+                            r_list[ci] = sv
+            for ci in id_col_idxs:
+                if ci < len(r_list) and r_list[ci] != "":
+                    r_list[ci] = re.sub(r"\.0+$", "", str(r_list[ci]).strip())
             cleaned_rows.append(tuple(r_list))
         if not cleaned_rows:
             return pd.DataFrame(columns=final_cols), banner_ctx
@@ -291,36 +319,70 @@ class DocumentIngestionEngine:
     def _parse_excel(
         self, path: Path, con: duckdb.DuckDBPyConnection
     ) -> tuple[list[dict[str, Any]], int, int]:
-        sheets = pd.read_excel(path, sheet_name=None, header=None)
+        sheets = pd.read_excel(path, sheet_name=None, header=None, dtype=str)
         chunks = []
         tables_count = 0
         total_rows = 0
 
         for sheet_name, raw_df in sheets.items():
-            df, banner_ctx = self._normalize_excel_sheet_header(raw_df)
-            table_name, rows_count, cols = self._save_dataframe_to_duckdb(
-                con, df, path.name, str(sheet_name)
-            )
-            if not table_name:
+            try:
+                df, banner_ctx = self._normalize_excel_sheet_header(raw_df)
+                table_name, rows_count, cols = self._save_dataframe_to_duckdb(
+                    con, df, path.name, str(sheet_name)
+                )
+                if not table_name:
+                    continue
+                tables_count += 1
+                total_rows += rows_count
+                preview_text = df.head(8).fillna("").to_string(index=False)
+                banner_line = f"عنوان/توضیح بالای جدول: {banner_ctx} | " if banner_ctx else ""
+                summary = (
+                    f"فایل اکسل: {path.name} | شیت: {sheet_name} | {banner_line}نام جدول در دیتابیس: {table_name} | "
+                    f"تعداد ردیف: {rows_count} | ستون‌ها: {', '.join(cols)}\nنمونه داده‌ها:\n{preview_text}"
+                )
+                chunks.append({
+                    "chunk_id": f"{path.name}_{table_name}",
+                    "file_name": path.name,
+                    "file_path": str(path),
+                    "file_type": "EXCEL",
+                    "location": f"شیت «{sheet_name}»",
+                    "content": summary,
+                })
+            except Exception:
                 continue
-            tables_count += 1
-            total_rows += rows_count
-            preview_text = df.head(8).fillna("").to_string(index=False)
-            banner_line = f"عنوان/توضیح بالای جدول: {banner_ctx} | " if banner_ctx else ""
-            summary = (
-                f"فایل اکسل: {path.name} | شیت: {sheet_name} | {banner_line}نام جدول در دیتابیس: {table_name} | "
-                f"تعداد ردیف: {rows_count} | ستون‌ها: {', '.join(cols)}\nنمونه داده‌ها:\n{preview_text}"
-            )
-            chunks.append({
-                "chunk_id": f"{path.name}_{table_name}",
-                "file_name": path.name,
-                "file_path": str(path),
-                "file_type": "EXCEL",
-                "location": f"شیت «{sheet_name}»",
-                "content": summary,
-            })
 
         return chunks, tables_count, total_rows
+
+    def _parse_csv(
+        self, path: Path, con: duckdb.DuckDBPyConnection
+    ) -> tuple[list[dict[str, Any]], int, int]:
+        raw_df = None
+        for enc in ("utf-8-sig", "utf-8", "cp1256", "latin1"):
+            try:
+                raw_df = pd.read_csv(path, header=None, dtype=str, encoding=enc, on_bad_lines="skip")
+                break
+            except Exception:
+                continue
+        if raw_df is None or raw_df.empty:
+            return [], 0, 0
+        df, banner_ctx = self._normalize_excel_sheet_header(raw_df)
+        table_name, rows_count, cols = self._save_dataframe_to_duckdb(con, df, path.name, path.stem)
+        if not table_name:
+            return [], 0, 0
+        preview_text = df.head(8).fillna("").to_string(index=False)
+        banner_line = f"عنوان/توضیح بالای جدول: {banner_ctx} | " if banner_ctx else ""
+        summary = (
+            f"فایل CSV: {path.name} | {banner_line}نام جدول در دیتابیس: {table_name} | "
+            f"تعداد ردیف: {rows_count} | ستون‌ها: {', '.join(cols)}\nنمونه داده‌ها:\n{preview_text}"
+        )
+        return [{
+            "chunk_id": f"{path.name}_{table_name}",
+            "file_name": path.name,
+            "file_path": str(path),
+            "file_type": "CSV",
+            "location": "جدول CSV",
+            "content": summary,
+        }], 1, rows_count
 
     def _parse_access(
         self, path: Path, con: duckdb.DuckDBPyConnection
@@ -471,7 +533,7 @@ class DocumentIngestionEngine:
                         all_chunks.extend(c)
                         chunks_count = len(c)
                     elif ext == ".docx":
-                        c = self._parse_docx(path)
+                        c, tables_count, rows_count = self._parse_docx(path, con)
                         all_chunks.extend(c)
                         chunks_count = len(c)
                     elif ext == ".pptx":
@@ -480,6 +542,10 @@ class DocumentIngestionEngine:
                         chunks_count = len(c)
                     elif ext in {".xlsx", ".xls"}:
                         c, tables_count, rows_count = self._parse_excel(path, con)
+                        all_chunks.extend(c)
+                        chunks_count = len(c)
+                    elif ext == ".csv":
+                        c, tables_count, rows_count = self._parse_csv(path, con)
                         all_chunks.extend(c)
                         chunks_count = len(c)
                     elif ext in {".accdb", ".mdb"}:
