@@ -97,6 +97,12 @@ METHOD_PERMS: dict[str, str] = {
     "add_files_dialog": "documents.manage",
     "select_logo_dialog": "settings.edit",
     "select_font_dialog": "settings.edit",
+    # taxonomy (web-only services, see services.py)
+    "get_taxonomy": "courses.view",
+    "save_workgroup": "courses.edit",
+    "delete_workgroup": "courses.edit",
+    "save_subgroup": "courses.edit",
+    "delete_subgroup": "courses.edit",
     # events
     "save_event_pipeline": "courses.edit",
     "delete_event_pipeline": "courses.edit",

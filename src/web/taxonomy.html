@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ساختار کارگروه‌ها — پنل مدیریت مؤسسه امام هادی</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#050811;color:#e8edf7;font:14px/1.7 Vazirmatn,Tahoma,sans-serif}
+  main{max-width:880px;margin:0 auto;padding:20px 16px 60px}
+  header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  h1{font-size:19px;margin:6px 0}
+  a{color:#7fa4ff;text-decoration:none}
+  .hint{color:#9fb0cf;font-size:13px;margin:4px 0 16px}
+  .card{background:#0d1426;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:14px 16px;margin:12px 0}
+  .wg{font-weight:600;font-size:15px;display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .sub{margin:8px 14px 0 0;padding:8px 12px;border-radius:10px;border:1px dashed rgba(255,255,255,.18)}
+  .sub b{color:#9ec0ff}
+  .meta{color:#9fb0cf;font-size:12px}
+  button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:5px 12px;background:#2a3550;color:#fff}
+  button.primary{background:#3b6df0}
+  button.danger{background:#7a2b36}
+  form{display:grid;gap:8px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));align-items:end}
+  label{display:block;font-size:12px;color:#aab6cf;margin-bottom:4px}
+  input,select{width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#080d1b;color:inherit;font:inherit}
+  #msg{min-height:22px;color:#ffd27f;font-size:13px}
+  .ro form,.ro .actions{display:none}
+</style>
+</head>
+<body>
+<main id="app">
+  <header>
+    <h1>ساختار کارگروه‌ها و زیرگروه‌ها</h1>
+    <a href="/">← بازگشت به پنل</a>
+  </header>
+  <p class="hint">هر دوره به یک زیرگروه یا مستقیم به یک کارگروه وصل می‌شود. در آمار، زیرگروه‌ها (مثل حدیث‌خوانی) به‌صورت پیش‌فرض داخل کارگروه خودشان شمرده می‌شوند؛ نمایش جداگانه از «هسته حافظه ← تنظیمات داده» قابل تغییر است.
+    «نام‌های دیگر» عنوان‌هایی است که در فایل‌های اکسل برای همین بخش آمده، و «کلیدواژه‌ی دوره» عبارتی است که اگر در عنوان دوره باشد، آن دوره به این زیرگروه می‌رود.</p>
+  <div id="msg" role="status"></div>
+  <div id="tree"></div>
+
+  <div class="card" id="formsWrap">
+    <form id="wgForm">
+      <div><label>نام کارگروه</label><input id="wgName" required></div>
+      <div><label>نام‌های دیگر (با کاما)</label><input id="wgAliases"></div>
+      <div><button class="primary" type="submit" id="wgBtn">افزودن کارگروه</button></div>
+    </form>
+  </div>
+  <div class="card" id="subWrap">
+    <form id="subForm">
+      <div><label>کارگروه</label><select id="subWg" required></select></div>
+      <div><label>نام زیرگروه</label><input id="subName" required></div>
+      <div><label>عنوان در آمار (اختیاری)</label><input id="subLabel"></div>
+      <div><label>نام‌های دیگر (با کاما)</label><input id="subAliases"></div>
+      <div><label>کلیدواژه‌ی دوره (با کاما)</label><input id="subKw"></div>
+      <div><button class="primary" type="submit" id="subBtn">افزودن زیرگروه</button></div>
+    </form>
+  </div>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var oldWg = '', oldSub = '', canEdit = false;
+  function rpc(method) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return fetch('/rpc/' + method, { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ args: args }) })
+      .then(function (r) { if (r.status === 401) { location.href = '/login'; return new Promise(function () {}); } return r.json(); });
+  }
+  function say(t) { $('msg').textContent = t || ''; }
+  function csv(v) { return v.split(/[,،\n]/).map(function (x) { return x.trim(); }).filter(Boolean); }
+  function el(tag, text, cls) { var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+  function btn(text, cls, fn) { var b = el('button', text, cls); b.type = 'button'; b.onclick = fn; return b; }
+
+  function render(d) {
+    var tree = $('tree'); tree.textContent = '';
+    var sel = $('subWg'); sel.textContent = '';
+    d.workgroups.forEach(function (w) {
+      var o = el('option', w.name); o.value = w.name; sel.appendChild(o);
+      var card = el('div', null, 'card'), head = el('div', null, 'wg');
+      head.appendChild(el('span', w.name));
+      var act = el('span', null, 'actions');
+      act.appendChild(btn('ویرایش', '', function () { oldWg = w.name; $('wgName').value = w.name; $('wgAliases').value = (w.aliases || []).join('، '); $('wgBtn').textContent = 'ذخیره کارگروه'; $('wgName').focus(); }));
+      act.appendChild(document.createTextNode(' '));
+      act.appendChild(btn('حذف', 'danger', function () {
+        if (!confirm('کارگروه «' + w.name + '» حذف شود؟')) return;
+        rpc('delete_workgroup', w.name).then(function (r) { say(r.ok ? 'حذف شد.' : r.error); load(); });
+      }));
+      head.appendChild(act); card.appendChild(head);
+      if ((w.aliases || []).length) card.appendChild(el('div', 'نام‌های دیگر: ' + w.aliases.join('، '), 'meta'));
+      d.subgroups.filter(function (s) { return s.workgroup === w.name; }).forEach(function (s) {
+        var row = el('div', null, 'sub'), h = el('div', null, 'wg');
+        var t = el('span'); t.appendChild(el('b', 'زیرگروه: ')); t.appendChild(document.createTextNode(s.name)); h.appendChild(t);
+        var a2 = el('span', null, 'actions');
+        a2.appendChild(btn('ویرایش', '', function () {
+          oldSub = s.name; $('subWg').value = s.workgroup; $('subName').value = s.name; $('subLabel').value = s.label || '';
+          $('subAliases').value = (s.aliases || []).join('، '); $('subKw').value = (s.course_keywords || []).join('، ');
+          $('subBtn').textContent = 'ذخیره زیرگروه'; $('subName').focus();
+        }));
+        a2.appendChild(document.createTextNode(' '));
+        a2.appendChild(btn('حذف', 'danger', function () {
+          if (!confirm('زیرگروه «' + s.name + '» حذف شود؟')) return;
+          rpc('delete_subgroup', s.name).then(function (r) { say(r.ok ? 'حذف شد.' : r.error); load(); });
+        }));
+        h.appendChild(a2); row.appendChild(h);
+        row.appendChild(el('div', 'عنوان در آمار: ' + (s.label || s.name), 'meta'));
+        if ((s.aliases || []).length) row.appendChild(el('div', 'نام‌های دیگر: ' + s.aliases.join('، '), 'meta'));
+        if ((s.course_keywords || []).length) row.appendChild(el('div', 'کلیدواژه‌ی دوره: ' + s.course_keywords.join('، '), 'meta'));
+        card.appendChild(row);
+      });
+      tree.appendChild(card);
+    });
+    $('app').classList.toggle('ro', !canEdit);
+  }
+  function load() { rpc('get_taxonomy').then(function (d) { if (d && d.ok) render(d); else say((d && d.error) || 'دسترسی ندارید.'); }); }
+
+  $('wgForm').onsubmit = function (e) {
+    e.preventDefault();
+    rpc('save_workgroup', $('wgName').value, csv($('wgAliases').value), oldWg).then(function (r) {
+      say(r.ok ? 'ذخیره شد.' : r.error);
+      if (r.ok) { oldWg = ''; $('wgForm').reset(); $('wgBtn').textContent = 'افزودن کارگروه'; load(); }
+    });
+  };
+  $('subForm').onsubmit = function (e) {
+    e.preventDefault();
+    rpc('save_subgroup', $('subName').value, $('subWg').value, csv($('subAliases').value), csv($('subKw').value), $('subLabel').value, oldSub).then(function (r) {
+      say(r.ok ? 'ذخیره شد.' : r.error);
+      if (r.ok) { oldSub = ''; $('subName').value = $('subLabel').value = $('subAliases').value = $('subKw').value = ''; $('subBtn').textContent = 'افزودن زیرگروه'; load(); }
+    });
+  };
+  fetch('/api/me', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (me) {
+    canEdit = !!me && me.ok && (me.permissions.indexOf('*') >= 0 || me.permissions.indexOf('courses.edit') >= 0);
+    load();
+  });
+})();
+</script>
+</body>
+</html>

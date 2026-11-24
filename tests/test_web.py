@@ -15,7 +15,9 @@ import uvicorn
 
 from src.web import permissions as P
 from src.web.auth import MAX_FAILS, AuthStore
+from src.core.taxonomy import Taxonomy
 from src.web.server import create_app
+from src.web.services import TaxonomyService
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -39,6 +41,11 @@ def test_admin_has_everything_and_roles_differ():
     assert P.role_has("alumni_affairs", "registration.review")
     assert not P.role_has("executive", "attendance.edit")
     assert not P.role_has("nonexistent", "dashboard.view")
+
+
+def test_every_service_method_is_classified():
+    public = {n for n in dir(TaxonomyService) if not n.startswith("_") and callable(getattr(TaxonomyService, n))}
+    assert public - set(P.METHOD_PERMS) == set()
 
 
 def test_audit_log_cannot_be_cleared():
@@ -95,6 +102,12 @@ class FakeAPI:
 
     def set_window(self, w):
         self.window = w
+
+    def get_brain_config(self):
+        return {"ok": True, "config": {"split_subgroups": False}}
+
+    def _invalidate_caches(self):
+        self.calls.append("invalidated")
 
     def get_dashboard_data(self):
         return {"ok": True, "n": float("nan")}
@@ -181,9 +194,11 @@ def srv(tmp_path):
     auth.create_user("boss2", "مدیر دوم", "admin", "boss2-password")
     auth.create_user("exec", "اجرایی", "executive", "exec-password")
     auth.create_user("alumni", "دانش‌آموختگان", "alumni_affairs", "alumni-password")
+    auth.create_user("designer", "طراح", "course_designer", "designer-password")
     api = FakeAPI()
     audit_log: list[tuple] = []
-    app = create_app(api, auth, audit=lambda *a: audit_log.append(a), work_dir=tmp_path / "work", max_upload_mb=1)
+    app = create_app(api, auth, audit=lambda *a: audit_log.append(a), work_dir=tmp_path / "work", max_upload_mb=1,
+                     services=[TaxonomyService(api, Taxonomy(tmp_path / "tax.json"))])
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error"))
     t = threading.Thread(target=server.run, daemon=True)
     t.start()
@@ -370,3 +385,28 @@ def test_upload_rules(srv):
     assert Client(base).up("a.xlsx", b"1")[0] == 401
     s, b, _ = c.req("/rpc/get_dashboard_data", {"args": [], "staged": [up["id"]]})   # staged only for upload methods
     assert s == 400
+
+
+# --------------------------------------------------------------------------- taxonomy service
+def test_taxonomy_permissions_and_cache_invalidation(srv):
+    base, api, _ = srv
+    ex, de = Client(base), Client(base)
+    ex.login("exec", "exec-password")
+    de.login("designer", "designer-password")
+    s, tree = ex.rpc("get_taxonomy")
+    assert s == 200 and any(w["name"] == "کارگروه حدیث" for w in tree["workgroups"]) and tree["split_subgroups"] is False
+    assert ex.rpc("save_workgroup", "کارگروه جدید")[0] == 403                       # executive may only view
+    assert de.rpc("save_workgroup", "کارگروه جدید", ["جدید"])[1]["ok"] is True
+    assert "invalidated" in api.calls                                                # cached statistics are dropped
+    assert de.rpc("save_subgroup", "ریز", "کارگروه جدید", [], ["کلید"])[1]["ok"] is True
+    assert de.rpc("delete_workgroup", "کارگروه جدید")[1]["ok"] is False             # has a subgroup
+    assert any(g["name"] == "ریز" for g in de.rpc("get_taxonomy")[1]["subgroups"])
+
+
+def test_taxonomy_page_needs_login(srv):
+    base, _, _ = srv
+    c = Client(base)
+    assert c.req("/taxonomy")[0] == 303
+    c.login("designer", "designer-password")
+    s, html, _ = c.req("/taxonomy")
+    assert s == 200 and "ساختار کارگروه" in html

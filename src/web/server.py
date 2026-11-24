@@ -33,6 +33,7 @@ from src.web.auth import AuthStore, User
 WEB_DIR = Path(__file__).resolve().parent.parent / "ui" / "web"
 SHIM = Path(__file__).resolve().parent / "web_shim.js"
 LOGIN = Path(__file__).resolve().parent / "login.html"
+TAXONOMY_PAGE = Path(__file__).resolve().parent / "taxonomy.html"
 COOKIE = "ehadi_session"
 MAX_BODY = 12 * 1024 * 1024
 DESKTOP_MSG = "این قابلیت در نسخه وب هنوز فعال نیست (نیاز به دیالوگ فایل یا سیستم‌عامل دارد)."
@@ -149,7 +150,8 @@ class WebWindow:
 
 
 def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Callable[..., None] | None = None,
-               work_dir: Path | str | None = None, max_upload_mb: int | None = None) -> Starlette:
+               work_dir: Path | str | None = None, max_upload_mb: int | None = None,
+               services: list[Any] | tuple[Any, ...] = ()) -> Starlette:
     hub = StreamHub()
     work = Path(work_dir) if work_dir else Path(tempfile.mkdtemp(prefix="ehadi_web_"))
     (work / "staging").mkdir(parents=True, exist_ok=True)
@@ -197,6 +199,12 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
 
     async def login_page(request: Request) -> Response:
         return HTMLResponse(LOGIN.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
+
+    async def taxonomy_page(request: Request) -> Response:
+        if not current(request):
+            return RedirectResponse("/login", status_code=303)
+        html = TAXONOMY_PAGE.read_text(encoding="utf-8")
+        return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
     async def shim(request: Request) -> Response:
         return FileResponse(SHIM, media_type="application/javascript", headers={"Cache-Control": "no-store"})
@@ -262,6 +270,9 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
 
     def _call(user: User, token: str, method: str, args: list, staged: list[Path]) -> Any:
         fn = getattr(api, method, None)
+        for svc in services:  # web-only services extend the desktop API
+            if not callable(fn):
+                fn = getattr(svc, method, None)
         if not callable(fn):
             return {"ok": False, "error": "متد وجود ندارد."}
         if method == "ask_ai_stream" and args:
@@ -401,6 +412,7 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
     routes = [
         Route("/", index), Route("/index.html", index),
         Route("/login", login_page),
+        Route("/taxonomy", taxonomy_page),
         Route("/__web/web_shim.js", shim),
         Route("/api/login", api_login, methods=["POST"]),
         Route("/api/logout", api_logout, methods=["POST"]),

@@ -129,7 +129,10 @@
       b.onclick = function () {
         fetch('/api/logout', { method: 'POST', credentials: 'same-origin' }).then(function () { window.location.href = '/login'; });
       };
-      box.appendChild(t); box.appendChild(b); document.body.appendChild(box);
+      var lnk = document.createElement('a');
+      lnk.href = '/taxonomy'; lnk.textContent = 'ساختار کارگروه‌ها';
+      lnk.style.cssText = 'color:#9ec0ff;text-decoration:none';
+      box.appendChild(t); box.appendChild(lnk); box.appendChild(b); document.body.appendChild(box);
     }).catch(function () {});
   }
 
