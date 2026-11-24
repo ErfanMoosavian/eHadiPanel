@@ -85,6 +85,18 @@ METHOD_PERMS: dict[str, str] = {
     "get_audit_rows": "dashboard.view",
     # registration (Porsline)
     "commit_porsline_import": "registration.review",
+    "select_and_preview_porsline": "registration.review",   # file comes from a browser upload
+    # exports: the server writes into a temp folder and the browser downloads the file
+    "export_table_excel": "dashboard.view",
+    "export_report_docx": "dashboard.view",
+    "export_report_pdf": "dashboard.view",
+    "export_executive_report": "dashboard.view",
+    "export_attendance_sheet": "attendance.view",
+    "export_filtered_participants_excel": "students.view",
+    # pickers replaced by browser uploads
+    "add_files_dialog": "documents.manage",
+    "select_logo_dialog": "settings.edit",
+    "select_font_dialog": "settings.edit",
     # events
     "save_event_pipeline": "courses.edit",
     "delete_event_pipeline": "courses.edit",
@@ -131,11 +143,22 @@ CLIENT_SIDE = {
 # Need a native file dialog / local OS or microphone. Replaced by upload/download
 # endpoints in later commits; until then they answer with a clear message.
 DESKTOP_ONLY = {
-    "open_raw_docs_folder", "open_file_path", "open_registered_file", "add_files_dialog",
-    "select_logo_dialog", "select_font_dialog", "select_and_preview_porsline",
-    "export_table_excel", "export_report_docx", "export_report_pdf", "export_attendance_sheet",
-    "export_executive_report", "export_filtered_participants_excel",
+    "open_raw_docs_folder", "open_file_path", "open_registered_file",
     "listen_voice_command", "stop_voice_recording", "process_voice",
 }
 
 ALLOWED_UPLOAD_EXT = {".xlsx", ".xls", ".csv", ".docx", ".pptx", ".pdf", ".txt", ".accdb", ".mdb"}
+
+# Methods whose native "open file" dialog is replaced by a browser upload, with the extensions each accepts.
+UPLOAD_METHODS: dict[str, set[str]] = {
+    "add_files_dialog": {".pdf", ".docx", ".pptx", ".xlsx", ".xls", ".csv", ".accdb", ".mdb"},
+    "select_logo_dialog": {".png", ".jpg", ".jpeg", ".webp"},
+    "select_font_dialog": {".ttf", ".otf", ".woff2"},
+    "select_and_preview_porsline": {".xlsx", ".xls", ".csv"},
+}
+# Methods whose native "save file" dialog is replaced by a temp folder + browser download.
+DOWNLOAD_METHODS = {
+    "export_table_excel", "export_report_docx", "export_report_pdf", "export_executive_report",
+    "export_attendance_sheet", "export_filtered_participants_excel",
+}
+UPLOAD_ANY_EXT = ALLOWED_UPLOAD_EXT | {e for v in UPLOAD_METHODS.values() for e in v}

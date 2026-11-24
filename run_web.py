@@ -27,7 +27,7 @@ def main() -> int:
     from src.core.config import Config
     from src.core.safety import log_audit
     from src.web.auth import AuthStore
-    from src.web.server import create_app
+    from src.web.server import create_app, disable_desktop_side_effects
 
     auth = AuthStore(Config.DATA_DIR / "web_auth.sqlite3")
     if not auth.list_users():
@@ -38,7 +38,9 @@ def main() -> int:
     import uvicorn
     import main as desktop  # AppAPI lives here; EHADI_WEB keeps its desktop side effects off
 
-    app = create_app(desktop.AppAPI(), auth, secure_cookie=os.environ.get("EHADI_WEB_SECURE") == "1", audit=log_audit)
+    disable_desktop_side_effects()  # exports are downloaded by the browser, not opened on the server
+    app = create_app(desktop.AppAPI(), auth, secure_cookie=os.environ.get("EHADI_WEB_SECURE") == "1", audit=log_audit,
+                     work_dir=Config.DATA_DIR / "web_tmp")
     if args.lan:
         print("هشدار: دسترسی شبکه‌ای بدون HTTPS است؛ فقط در شبکه‌ی داخلی مطمئن استفاده کنید.")
     url = f"http://{'127.0.0.1' if host in ('0.0.0.0', '127.0.0.1') else host}:{args.port}"

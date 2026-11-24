@@ -7,12 +7,17 @@ current front-end keeps working without a rewrite.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import math
 import os
 import queue
 import re
+import secrets
+import shutil
+import tempfile
 import threading
+import time
 from pathlib import Path
 from typing import Any, Callable
 
@@ -32,6 +37,11 @@ COOKIE = "ehadi_session"
 MAX_BODY = 12 * 1024 * 1024
 DESKTOP_MSG = "این قابلیت در نسخه وب هنوز فعال نیست (نیاز به دیالوگ فایل یا سیستم‌عامل دارد)."
 _STREAM_ID_RX = re.compile(r'"stream_id"\s*:\s*"([^"]{1,80})"')
+_ID_RX = re.compile(r"^[0-9a-f]{16}$")
+_BAD_NAME_RX = re.compile(r'[\\/:*?"<>|\x00-\x1f]')
+DOWNLOAD_TTL = 15 * 60
+STAGING_TTL = 3600
+_ctx = threading.local()  # per-RPC-call file context (see WebWindow.create_file_dialog)
 _SAFE_TABLE_RX = re.compile(r'^[^"\';\\\x00-\x1f]{1,160}$')
 
 
@@ -50,6 +60,22 @@ def _clean(o: Any) -> Any:
 
 def _json(data: Any, status: int = 200) -> Response:
     return Response(json.dumps(_clean(data), ensure_ascii=False), status_code=status, media_type="application/json")
+
+
+def safe_name(name: str, default: str = "file") -> str:
+    base = Path(str(name or "").replace("\\", "/")).name
+    base = _BAD_NAME_RX.sub("_", base).strip(" .")[:150]
+    return base or default
+
+
+class CallFiles:
+    def __init__(self, out_dir: Path, staged: list[Path]) -> None:
+        self.out_dir, self.staged = out_dir, staged
+
+
+def disable_desktop_side_effects() -> None:
+    """The desktop code calls os.startfile() after exporting; in the web edition the browser downloads instead."""
+    os.startfile = lambda *a, **k: None  # type: ignore[attr-defined]
 
 
 class StreamHub:
@@ -103,12 +129,50 @@ class WebWindow:
         if sid:
             self.hub.publish(sid, packet)
 
+    def create_file_dialog(self, dialog_type: Any = None, directory: str = "", allow_multiple: bool = False,
+                           save_filename: str = "", file_types: Any = ()) -> Any:
+        """Web replacement for the native dialogs.
+
+        SAVE (recognised by ``save_filename``): hand back a path inside this call's temp folder; the
+        file is then offered to the browser as a download.
+        OPEN: hand back the files the browser uploaded for this call, or None (= cancelled).
+        """
+        files = getattr(_ctx, "files", None)
+        if files is None:
+            return None
+        if save_filename:
+            return (str(files.out_dir / safe_name(save_filename)),)
+        return tuple(str(p) for p in files.staged) or None
+
     def __getattr__(self, name: str) -> Callable[..., None]:  # minimize(), destroy(), ...
         return lambda *a, **k: None
 
 
-def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Callable[..., None] | None = None) -> Starlette:
+def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Callable[..., None] | None = None,
+               work_dir: Path | str | None = None, max_upload_mb: int | None = None) -> Starlette:
     hub = StreamHub()
+    work = Path(work_dir) if work_dir else Path(tempfile.mkdtemp(prefix="ehadi_web_"))
+    (work / "staging").mkdir(parents=True, exist_ok=True)
+    (work / "out").mkdir(parents=True, exist_ok=True)
+    max_upload = (max_upload_mb or int(os.environ.get("EHADI_MAX_UPLOAD_MB", "1024"))) * 1024 * 1024
+    downloads: dict[str, dict] = {}
+    dl_lock = threading.Lock()
+
+    def sweep() -> None:
+        now = time.time()
+        with dl_lock:
+            for k in [k for k, v in downloads.items() if v["expires"] < now]:
+                shutil.rmtree(downloads.pop(k)["dir"], ignore_errors=True)
+        for root in ((work / "staging").glob("*/*"), (work / "out").glob("*")):
+            for d in root:
+                try:
+                    if d.is_dir() and now - d.stat().st_mtime > STAGING_TTL:
+                        shutil.rmtree(d, ignore_errors=True)
+                except OSError:
+                    pass
+
+    def staging_root(token: str) -> Path:
+        return work / "staging" / hashlib.sha256(token.encode()).hexdigest()[:16]
     if hasattr(api, "set_window"):
         api.set_window(WebWindow(hub))
 
@@ -181,7 +245,22 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
                 return "نوع فایل مجاز نیست."
         return None
 
-    def _call(user: User, token: str, method: str, args: list) -> Any:
+    def _register_downloads(token: str, out_dir: Path, result: Any) -> Any:
+        files = sorted(p for p in out_dir.iterdir() if p.is_file()) if out_dir.exists() else []
+        if not files:
+            shutil.rmtree(out_dir, ignore_errors=True)
+            return result
+        items = []
+        with dl_lock:
+            for f in files:
+                did = secrets.token_hex(8)
+                downloads[did] = {"path": f, "name": f.name, "token": token, "dir": out_dir, "expires": time.time() + DOWNLOAD_TTL}
+                items.append({"url": f"/api/download/{did}", "name": f.name})
+        if isinstance(result, dict) and result.get("ok", True) is not False:
+            result = {**result, "downloads": items, "download_url": items[0]["url"], "path": items[0]["name"]}
+        return result
+
+    def _call(user: User, token: str, method: str, args: list, staged: list[Path]) -> Any:
         fn = getattr(api, method, None)
         if not callable(fn):
             return {"ok": False, "error": "متد وجود ندارد."}
@@ -195,6 +274,18 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
         if method == "save_settings" and len(args) >= 2 and not str(args[0] or "").strip():
             from src.core.config import Config  # blank key = keep the stored one
             args = [Config.GEMINI_API_KEY, *args[1:]]
+        if method in P.DOWNLOAD_METHODS or method in P.UPLOAD_METHODS:
+            sweep()
+            out_dir = work / "out" / secrets.token_hex(8)
+            out_dir.mkdir(parents=True)
+            _ctx.files = CallFiles(out_dir, staged)
+            try:
+                result = fn(*args)
+            finally:
+                _ctx.files = None
+                for p in staged:  # staged uploads are one-shot
+                    shutil.rmtree(p.parent, ignore_errors=True)
+            return _register_downloads(token, out_dir, result)
         return fn(*args)
 
     async def rpc(request: Request) -> Response:
@@ -217,22 +308,75 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
         if int(request.headers.get("content-length", "0") or 0) > MAX_BODY:
             return _json({"ok": False, "error": "حجم درخواست زیاد است."}, 413)
         try:
-            args = (await request.json()).get("args", [])
-            if not isinstance(args, list):
+            body = await request.json()
+            args, staged_ids = body.get("args", []), body.get("staged", [])
+            if not isinstance(args, list) or not isinstance(staged_ids, list):
                 raise ValueError
         except Exception:
             return _json({"ok": False, "error": "آرگومان‌ها نامعتبرند."}, 400)
         bad = _check_args(method, args)
         if bad:
             return _json({"ok": False, "error": bad}, 400)
+        token = request.cookies.get(COOKIE, "")
+        staged: list[Path] = []
+        if staged_ids:
+            allowed = P.UPLOAD_METHODS.get(method)
+            if allowed is None:
+                return _json({"ok": False, "error": "این متد فایل نمی‌پذیرد."}, 400)
+            for sid in staged_ids[:50]:
+                found = list((staging_root(token) / str(sid)).glob("*")) if _ID_RX.match(str(sid)) else []
+                if len(found) != 1 or found[0].suffix.lower() not in allowed:
+                    return _json({"ok": False, "error": "فایل بارگذاری‌شده نامعتبر یا نوع آن مجاز نیست."}, 400)
+                staged.append(found[0])
         try:
-            result = await asyncio.to_thread(_call, user, request.cookies.get(COOKIE, ""), method, args)
+            result = await asyncio.to_thread(_call, user, token, method, args, staged)
         except Exception as exc:  # keep internals out of the browser
             log(f"rpc:{method}", "error", user, error=str(exc)[:200])
             return _json({"ok": False, "error": "خطای داخلی در اجرای عملیات."}, 500)
         if not method.startswith("get_"):
             log(f"rpc:{method}", "ok", user)
         return _json(result)
+
+    async def upload(request: Request) -> Response:
+        user = current(request)
+        if not user:
+            return _json({"ok": False, "error": "نیاز به ورود."}, 401)
+        token = request.cookies.get(COOKIE, "")
+        name = safe_name(request.query_params.get("name", ""))
+        if Path(name).suffix.lower() not in P.UPLOAD_ANY_EXT:
+            return _json({"ok": False, "error": "نوع فایل مجاز نیست."}, 400)
+        if int(request.headers.get("content-length", "0") or 0) > max_upload:
+            return _json({"ok": False, "error": "حجم فایل بیشتر از حد مجاز است."}, 413)
+        sweep()
+        fid = secrets.token_hex(8)
+        d = staging_root(token) / fid
+        d.mkdir(parents=True)
+        size = 0
+        try:
+            with open(d / name, "wb") as fh:
+                async for chunk in request.stream():
+                    size += len(chunk)
+                    if size > max_upload:
+                        raise OverflowError
+                    fh.write(chunk)
+        except OverflowError:
+            shutil.rmtree(d, ignore_errors=True)
+            return _json({"ok": False, "error": "حجم فایل بیشتر از حد مجاز است."}, 413)
+        except Exception:
+            shutil.rmtree(d, ignore_errors=True)
+            return _json({"ok": False, "error": "بارگذاری ناقص ماند."}, 400)
+        log("upload", "ok", user, name=name, bytes=size)
+        return _json({"ok": True, "id": fid, "name": name, "size": size})
+
+    async def download(request: Request) -> Response:
+        user = current(request)
+        if not user:
+            return _json({"ok": False, "error": "نیاز به ورود."}, 401)
+        with dl_lock:
+            item = downloads.get(request.path_params["did"])
+        if not item or item["token"] != request.cookies.get(COOKIE, "") or not Path(item["path"]).exists():
+            return _json({"ok": False, "error": "فایل پیدا نشد یا منقضی شده است."}, 404)
+        return FileResponse(item["path"], filename=item["name"], headers={"Cache-Control": "no-store"})
 
     async def events(request: Request) -> Response:
         token = request.cookies.get(COOKIE, "")
@@ -263,6 +407,8 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
         Route("/api/me", api_me),
         Route("/api/events", events),
         Route("/rpc/{method}", rpc, methods=["POST"]),
+        Route("/api/upload", upload, methods=["POST"]),
+        Route("/api/download/{did}", download),
         Mount("/", app=StaticFiles(directory=str(WEB_DIR))),
     ]
     return Starlette(routes=routes)

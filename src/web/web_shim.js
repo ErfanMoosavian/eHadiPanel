@@ -16,15 +16,84 @@
     }
   };
 
-  function call(method, args) {
-    if (CLIENT_SIDE[method]) return Promise.resolve(local[method] ? local[method]() : { ok: true });
+  // Methods that used a native "open file" dialog: pick files in the browser, upload, then call the RPC.
+  var PICK = {
+    add_files_dialog: { accept: '.pdf,.docx,.pptx,.xlsx,.xls,.csv,.accdb,.mdb', multiple: true, cancel: { copied: 0 } },
+    select_logo_dialog: { accept: '.png,.jpg,.jpeg,.webp', multiple: false, cancel: { ok: false, cancelled: true } },
+    select_font_dialog: { accept: '.ttf,.otf,.woff2', multiple: false, cancel: { ok: false, cancelled: true } },
+    select_and_preview_porsline: { accept: '.xlsx,.xls,.csv', multiple: false, cancel: { ok: false, cancelled: true } }
+  };
+
+  var chip = null;
+  function status(text) {
+    if (!text) { if (chip) { chip.remove(); chip = null; } return; }
+    if (!chip) {
+      chip = document.createElement('div');
+      chip.style.cssText = 'position:fixed;bottom:10px;right:10px;z-index:99999;padding:8px 12px;border-radius:10px;' +
+        'font:12px Vazirmatn,Tahoma,sans-serif;color:#fff;background:rgba(59,109,240,.92);direction:rtl';
+      document.body.appendChild(chip);
+    }
+    chip.textContent = text;
+  }
+
+  function pickFiles(spec) {
+    return new Promise(function (resolve) {
+      var input = document.createElement('input');
+      input.type = 'file'; input.accept = spec.accept; input.multiple = !!spec.multiple; input.style.display = 'none';
+      var done = function (files) { input.remove(); resolve(files); };
+      input.onchange = function () { done(Array.prototype.slice.call(input.files || [])); };
+      input.oncancel = function () { done([]); };
+      document.body.appendChild(input);
+      input.click();
+    });
+  }
+
+  function uploadAll(files) {
+    var ids = [], chain = Promise.resolve();
+    files.forEach(function (f, i) {
+      chain = chain.then(function () {
+        status('در حال بارگذاری ' + (i + 1) + ' از ' + files.length + ': ' + f.name);
+        return fetch('/api/upload?name=' + encodeURIComponent(f.name), { method: 'POST', credentials: 'same-origin', body: f })
+          .then(function (r) {
+            if (r.status === 401) { window.location.href = '/login'; return new Promise(function () {}); }
+            return r.json();
+          })
+          .then(function (d) { if (!d.ok) throw new Error(d.error || 'upload failed'); ids.push(d.id); });
+      });
+    });
+    return chain.then(function () { return ids; });
+  }
+
+  function triggerDownload(url, name) {
+    var a = document.createElement('a');
+    a.href = url; a.download = name || ''; a.style.display = 'none';
+    document.body.appendChild(a); a.click(); a.remove();
+  }
+
+  function rpc(method, args, staged) {
+    var payload = { args: args };
+    if (staged && staged.length) payload.staged = staged;
     return fetch('/rpc/' + encodeURIComponent(method), {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ args: args })
+      body: JSON.stringify(payload)
     }).then(function (r) {
       if (r.status === 401) { window.location.href = '/login'; return new Promise(function () {}); }
       return r.json().catch(function () { return { ok: false, error: 'HTTP ' + r.status }; });
+    }).then(function (data) {
+      if (data && data.download_url) triggerDownload(data.download_url, data.path);
+      return data;
+    });
+  }
+
+  function call(method, args) {
+    if (CLIENT_SIDE[method]) return Promise.resolve(local[method] ? local[method]() : { ok: true });
+    var spec = PICK[method];
+    if (!spec) return rpc(method, args);
+    return pickFiles(spec).then(function (files) {
+      if (!files.length) return spec.cancel;
+      return uploadAll(files).then(function (ids) { status(''); return rpc(method, args, ids); })
+        .catch(function (e) { status(''); return { ok: false, error: String(e && e.message || e) }; });
     });
   }
 

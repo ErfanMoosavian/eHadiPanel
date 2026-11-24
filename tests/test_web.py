@@ -109,6 +109,18 @@ class FakeAPI:
         self.calls.append("save_dropped_chunk")
         return {"ok": True}
 
+    def export_table_excel(self, payload):
+        sel = self.window.create_file_dialog(30, save_filename=payload.get("name", "گزارش.xlsx"), file_types=("x",))
+        Path(sel[0]).write_bytes(b"XLSXDATA")
+        return {"ok": True, "path": sel[0]}
+
+    def add_files_dialog(self):
+        sel = self.window.create_file_dialog(10, allow_multiple=True)
+        if not sel:
+            return {"copied": 0}
+        self.calls.append("added:" + ",".join(sorted(Path(p).name + "=" + Path(p).read_text() for p in sel)))
+        return {"copied": len(sel)}
+
     def clear_audit_logs(self):
         self.calls.append("clear_audit_logs")
         return {"ok": True}
@@ -143,6 +155,16 @@ class Client:
         s, b, _ = self.req(f"/rpc/{method}", {"args": list(args)}, **kw)
         return s, (json.loads(b) if b.startswith("{") else b)
 
+    def up(self, name, data: bytes):
+        from urllib.parse import quote
+        r = urllib.request.Request(self.base + "/api/upload?name=" + quote(name), data=data, method="POST")
+        r.add_header("Content-Type", "application/octet-stream")
+        try:
+            with self.op.open(r, timeout=10) as resp:
+                return resp.status, json.loads(resp.read().decode())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read().decode())
+
     def login(self, u, p):
         return self.req("/api/login", {"username": u, "password": p})[0]
 
@@ -161,7 +183,7 @@ def srv(tmp_path):
     auth.create_user("alumni", "دانش‌آموختگان", "alumni_affairs", "alumni-password")
     api = FakeAPI()
     audit_log: list[tuple] = []
-    app = create_app(api, auth, audit=lambda *a: audit_log.append(a))
+    app = create_app(api, auth, audit=lambda *a: audit_log.append(a), work_dir=tmp_path / "work", max_upload_mb=1)
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error"))
     t = threading.Thread(target=server.run, daemon=True)
     t.start()
@@ -289,3 +311,62 @@ def test_static_assets_served_and_no_traversal(srv):
     assert s in (400, 404) and "AppAPI" not in body
     s, body, _ = c.req("/%2e%2e/%2e%2e/main.py")
     assert s in (400, 404) and "AppAPI" not in body
+
+
+# --------------------------------------------------------------------------- upload / download
+def test_export_is_downloaded_by_the_owner_only(srv):
+    base, _, _ = srv
+    a, b = Client(base), Client(base)
+    a.login("boss", "boss-password")
+    b.login("boss2", "boss2-password")
+    s, res = a.rpc("export_table_excel", {"name": "گزارش دانش‌پژوهان.xlsx"})
+    assert s == 200 and res["ok"] and res["path"] == "گزارش دانش‌پژوهان.xlsx"       # no server path leaks
+    assert "tmp" not in json.dumps(res) and res["download_url"].startswith("/api/download/")
+    st, body, h = a.req(res["download_url"])
+    assert st == 200 and body == "XLSXDATA" and "attachment" in h["content-disposition"]
+    assert b.req(res["download_url"])[0] == 404                                       # another user's session
+    assert Client(base).req(res["download_url"])[0] == 401
+
+
+def test_export_name_cannot_escape_the_temp_folder(srv):
+    base, _, _ = srv
+    a = Client(base)
+    a.login("boss", "boss-password")
+    s, res = a.rpc("export_table_excel", {"name": "../../evil.xlsx"})
+    assert s == 200 and res["path"] == "evil.xlsx"
+
+
+def test_browser_upload_feeds_the_open_dialog(srv):
+    base, api, _ = srv
+    c = Client(base)
+    c.login("alumni", "alumni-password")
+    s, up = c.up("فهرست.xlsx", "hello".encode())
+    assert s == 200 and up["ok"]
+    s, b, _ = c.req("/rpc/add_files_dialog", {"args": [], "staged": [up["id"]]})
+    assert s == 200 and json.loads(b)["copied"] == 1
+    assert api.calls[-1] == "added:فهرست.xlsx=hello"
+    # staged files are one-shot
+    assert json.loads(c.req("/rpc/add_files_dialog", {"args": [], "staged": [up["id"]]})[1])["ok"] is False
+    # no upload = the user cancelled the picker
+    assert c.rpc("add_files_dialog")[1] == {"copied": 0}
+
+
+def test_upload_rules(srv):
+    base, _, _ = srv
+    c, other = Client(base), Client(base)
+    c.login("alumni", "alumni-password")
+    other.login("boss", "boss-password")
+    assert c.up("virus.exe", b"x")[0] == 400
+    try:  # rejected from Content-Length before the body is read; the client may see a reset instead of the 413
+        assert c.up("big.xlsx", b"x" * (2 * 1024 * 1024))[0] == 413
+    except urllib.error.URLError:
+        pass
+    assert c.up("ok.xlsx", b"x" * 1000)[0] == 200                      # the server is still healthy afterwards
+    s, up = c.up("a.xlsx", b"1")
+    # another user cannot use my staged file, and a font cannot be fed to the documents importer
+    assert json.loads(other.req("/rpc/add_files_dialog", {"args": [], "staged": [up["id"]]})[1])["ok"] is False
+    s, fnt = c.up("f.ttf", b"1")
+    assert json.loads(c.req("/rpc/add_files_dialog", {"args": [], "staged": [fnt["id"]]})[1])["ok"] is False
+    assert Client(base).up("a.xlsx", b"1")[0] == 401
+    s, b, _ = c.req("/rpc/get_dashboard_data", {"args": [], "staged": [up["id"]]})   # staged only for upload methods
+    assert s == 400
