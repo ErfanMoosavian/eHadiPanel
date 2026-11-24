@@ -1,0 +1,52 @@
+/* Web-local overrides: hide Windows frameless chrome & desktop-only controls */
+body.eh-web-mode header.titlebar,
+body.eh-web-mode .titlebar,
+body.eh-web-mode .win-controls,
+body.eh-web-mode .win-btn {
+  display: none !important;
+  height: 0 !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+}
+
+/* ??? ???? ? ??????? ????? ?????? ??????? ????? ??????? */
+body.eh-web-mode .win-resize-handle,
+body.eh-web-mode .eh-win-resize-edge,
+body.eh-web-mode [data-resize],
+body.eh-web-mode [data-resize-dir],
+body.eh-web-mode [class*="win-resize"],
+body.eh-web-mode [class*="edge-resize"] {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+/* ????? ?????? ?? ?????? ????????? (??? calc(100vh - 36px) ?? luxury_glass_v46.css) */
+body.eh-web-mode > header.titlebar + *,
+body.eh-web-mode .app-shell,
+body.eh-web-mode .app-container,
+body.eh-web-mode .app-layout,
+body.eh-web-mode .workspace {
+  height: 100vh !important;
+  max-height: 100vh !important;
+}
+
+/* ??????? ???? ????? ??? ????? ?????? */
+body.eh-web-mode,
+body.eh-web-mode * {
+  -webkit-app-region: no-drag !important;
+}
+
+/* ???? ???? ???????? ?????? ?? ?????????? ???? ? ?????? ???? */
+body.eh-web-mode [onclick*="openFolder"],
+body.eh-web-mode [onclick*="open_raw_docs_folder"],
+body.eh-web-mode [onclick*="open_file_path"],
+body.eh-web-mode [onclick*="open_registered_file"],
+body.eh-web-mode [onclick*="listen_voice"],
+body.eh-web-mode [onclick*="process_voice"],
+body.eh-web-mode [id*="voice-copilot"],
+body.eh-web-mode [class*="voice-copilot"],
+body.eh-web-mode .eh-web-hidden {
+  display: none !important;
+}

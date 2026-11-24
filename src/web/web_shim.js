@@ -136,8 +136,24 @@
     }).catch(function () {});
   }
 
+  function cleanDesktopUI() {
+    if (!document.body) return;
+    document.body.classList.add('eh-web-mode', 'eh-win-maximized');
+    document.querySelectorAll('.win-resize-handle, .eh-win-resize-edge').forEach(function (el) { el.remove(); });
+    document.querySelectorAll('[onclick]').forEach(function (el) {
+      var oc = el.getAttribute('onclick') || '';
+      if (/openFolder|open_raw_docs_folder|open_file_path|open_registered_file|listen_voice|process_voice/i.test(oc)) {
+        el.classList.add('eh-web-hidden');
+      }
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', cleanDesktopUI);
   window.addEventListener('load', function () {
-    startEvents(); userChip();
-    setTimeout(function () { window.dispatchEvent(new Event('pywebviewready')); }, 0);
+    cleanDesktopUI(); startEvents(); userChip();
+    setTimeout(function () {
+      window.dispatchEvent(new Event('pywebviewready'));
+      window.dispatchEvent(new Event('resize'));
+    }, 0);
   });
 })();

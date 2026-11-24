@@ -34,6 +34,8 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "ui" / "web"
 SHIM = Path(__file__).resolve().parent / "web_shim.js"
 LOGIN = Path(__file__).resolve().parent / "login.html"
 TAXONOMY_PAGE = Path(__file__).resolve().parent / "taxonomy.html"
+OVERRIDES_CSS = Path(__file__).resolve().parent / "web_overrides.css"
+_VOICE_SCRIPT_RX = re.compile(r'<script[^>]+voice_copilot\.js[^>]*>\s*</script>', re.I)
 COOKIE = "ehadi_session"
 MAX_BODY = 12 * 1024 * 1024
 DESKTOP_MSG = "این قابلیت در نسخه وب هنوز فعال نیست (نیاز به دیالوگ فایل یا سیستم‌عامل دارد)."
@@ -194,7 +196,10 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
             return RedirectResponse("/login", status_code=303)
         html = (WEB_DIR / "index.html").read_text(encoding="utf-8")
         shim_tag = '<script src="/__web/web_shim.js"></script>'
+        css_tag = '<link rel="stylesheet" href="/__web/web_overrides.css">'
         html = html.replace("<head>", "<head>" + shim_tag, 1) if "<head>" in html else shim_tag + html
+        html = html.replace("</head>", css_tag + "</head>", 1) if "</head>" in html else html + css_tag
+        html = _VOICE_SCRIPT_RX.sub("", html)
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
     async def login_page(request: Request) -> Response:
@@ -208,6 +213,9 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
 
     async def shim(request: Request) -> Response:
         return FileResponse(SHIM, media_type="application/javascript", headers={"Cache-Control": "no-store"})
+
+    async def overrides_css(request: Request) -> Response:
+        return FileResponse(OVERRIDES_CSS, media_type="text/css", headers={"Cache-Control": "no-store"})
 
     # ---- auth API --------------------------------------------------------
     async def api_login(request: Request) -> Response:
@@ -414,6 +422,7 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
         Route("/login", login_page),
         Route("/taxonomy", taxonomy_page),
         Route("/__web/web_shim.js", shim),
+        Route("/__web/web_overrides.css", overrides_css),
         Route("/api/login", api_login, methods=["POST"]),
         Route("/api/logout", api_logout, methods=["POST"]),
         Route("/api/me", api_me),
