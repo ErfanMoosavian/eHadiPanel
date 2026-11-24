@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from src.core.config import Config
+from src.core.taxonomy import get_taxonomy
 from src.core.db_manager import (
     INTERNAL_TABLES,
     JALALI_MONTHS,
@@ -762,6 +763,9 @@ class ExecutiveAnalyticsEngine:
         hours_policy = str(flt.get("hours_policy") or brain_cfg.get("hours_policy") or "equal")
         if hours_policy not in ("equal", "full", "split"):
             hours_policy = "equal"
+        # Subgroups (e.g. حدیث‌خوانی) are counted inside their workgroup unless split is requested.
+        split_sub = bool(flt["split_subgroups"]) if "split_subgroups" in flt else bool(brain_cfg.get("split_subgroups"))
+        taxonomy = get_taxonomy()
 
         teacher_alias_map = resolve_canonical_map("teacher") if data_mode == "clean" else {}
         wg_alias_map = resolve_canonical_map("workgroup") if data_mode == "clean" else {}
@@ -795,7 +799,7 @@ class ExecutiveAnalyticsEngine:
             "حدیثخوانیانسباالکافی": "حدیث‌خوانی (انس با الکافی)",
         }
 
-        def _canon_wg(g: str) -> str:
+        def _canon_wg_base(g: str) -> str:
             gn = normalize_fa(g or "دوره‌های عمومی")
             ck = canon_key(gn)
             if ck in _WG_CANON_MAP:
@@ -805,6 +809,9 @@ class ExecutiveAnalyticsEngine:
                 if c in wg_alias_map:
                     return wg_alias_map[c]
             return gn
+
+        def _canon_wg(g: str, course: str = "") -> str:
+            return taxonomy.display_group(_canon_wg_base(g), course, split_sub)
 
         def _resolve_course_teachers(raw_t: str) -> tuple[str, list[str]]:
             if not raw_t or raw_t == "نامشخص":
@@ -821,7 +828,7 @@ class ExecutiveAnalyticsEngine:
             nm = self._resolve_alias(p.get("name") or "", merges)
             if not nm or is_junk_label(nm):
                 continue
-            grp = _canon_wg(p.get("group") or "دوره‌های عمومی")
+            grp = _canon_wg(p.get("group") or "دوره‌های عمومی", p.get("course") or "")
             if is_junk_label(grp):
                 grp = "دوره‌های عمومی"
             tch_raw = normalize_fa(p.get("teacher") or "نامشخص")
@@ -882,7 +889,7 @@ class ExecutiveAnalyticsEngine:
         all_courses: list[dict[str, Any]] = []
         for c in db_courses:
             cc = dict(c)
-            cc["group"] = _canon_wg(cc.get("group") or "دوره‌های عمومی")
+            cc["group"] = _canon_wg(cc.get("group") or "دوره‌های عمومی", cc.get("title") or "")
             mode, t_list = _resolve_course_teachers(cc.get("teacher") or "")
             cc["holding_mode"], cc["teachers_resolved"] = mode, t_list
             all_courses.append(cc)

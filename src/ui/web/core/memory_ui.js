@@ -204,6 +204,7 @@
       const overrides = cfg.entity_type_overrides || {};
       const hoursPol = cfg.hours_policy || 'equal';
       const dataMode = cfg.data_mode || 'clean';
+      const splitSub = !!cfg.split_subgroups;
 
       const cmpChips = compounds.length
         ? compounds.map(c => `<span class="eh-mem-tag-chip">${escHtml(c)} <button type="button" class="eh-mem-tag-x" data-cmp="${escHtml(c)}">×</button></span>`).join('')
@@ -237,6 +238,13 @@
               <div class="eh-mem-seg-group" id="ehMemModeGroup">
                 <button type="button" class="eh-mem-seg ${dataMode === 'clean' ? 'active' : ''}" data-mode="clean">داده‌های تمیزشده</button>
                 <button type="button" class="eh-mem-seg ${dataMode === 'raw' ? 'active' : ''}" data-mode="raw">داده‌های خام</button>
+              </div>
+            </div>
+            <div>
+              <label class="eh-mem-mini-lbl">نمایش زیرگروه‌ها (مثل حدیث‌خوانی) در آمار:</label>
+              <div class="eh-mem-seg-group" id="ehMemSplitGroup">
+                <button type="button" class="eh-mem-seg ${!splitSub ? 'active' : ''}" data-split="0">داخل کارگروه</button>
+                <button type="button" class="eh-mem-seg ${splitSub ? 'active' : ''}" data-split="1">جدا از کارگروه</button>
               </div>
             </div>
           </div>
@@ -287,6 +295,13 @@
         b.addEventListener('click', async () => {
           const res = await window.pywebview.api.save_brain_config({ data_mode: b.dataset.mode });
           if (res && res.ok) { toast('حالت محاسبه داده‌ها بروزرسانی شد.', 'healthy'); await refreshMemoryState(); }
+        });
+      });
+
+      body.querySelectorAll('#ehMemSplitGroup .eh-mem-seg').forEach(b => {
+        b.addEventListener('click', async () => {
+          const res = await window.pywebview.api.save_brain_config({ split_subgroups: b.dataset.split === '1' });
+          if (res && res.ok) { toast('نحوه نمایش زیرگروه‌ها بروزرسانی شد.', 'healthy'); await refreshMemoryState(); }
         });
       });
 

@@ -106,6 +106,7 @@ DEFAULT_BRAIN_CONFIG: dict[str, Any] = {
     "finance_category_rules": {},      # {course_key: {teacher_canonical: hours_float}}
     "entity_type_overrides": {},      # {normalized_raw: "individual" | "collective"}
     "data_mode": "clean",             # "clean" | "raw"
+    "split_subgroups": False,         # True: show subgroups (e.g. حدیث‌خوانی) apart from their workgroup
 }
 
 PLURAL_PREFIX_RX = re.compile(
@@ -240,6 +241,8 @@ def save_brain_config(payload: dict[str, Any], db_path: Path | str | None = None
         new_cfg["hours_policy"] = payload["hours_policy"]
     if "data_mode" in payload and payload["data_mode"] in ("clean", "raw"):
         new_cfg["data_mode"] = payload["data_mode"]
+    if "split_subgroups" in payload:
+        new_cfg["split_subgroups"] = bool(payload["split_subgroups"])
     if "course_hour_overrides" in payload and isinstance(payload["course_hour_overrides"], dict):
         new_cfg["course_hour_overrides"] = payload["course_hour_overrides"]
     if "finance_category_rules" in payload and isinstance(payload["finance_category_rules"], dict):

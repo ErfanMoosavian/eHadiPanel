@@ -700,6 +700,7 @@ class AppAPI:
                 "year": str(f_raw.get("year") or ""),
                 "data_mode": str(f_raw.get("data_mode") or ""),
                 "hours_policy": str(f_raw.get("hours_policy") or ""),
+                "split_subgroups": str(f_raw.get("split_subgroups", "")),
             },
             sort_keys=True,
             ensure_ascii=False,
