@@ -1,0 +1,3 @@
+# Extra dependencies of the local web edition (the desktop requirements stay as they are)
+starlette>=0.37
+uvicorn>=0.30

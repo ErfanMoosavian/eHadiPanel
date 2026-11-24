@@ -89,7 +89,8 @@ def _launch_ehadi_splash_proc() -> None:
     except Exception:
         _SPLASH_SPAWNED = False
 
-_launch_ehadi_splash_proc()
+if not _os.environ.get("EHADI_WEB"):  # web edition: no desktop splash
+    _launch_ehadi_splash_proc()
 
 # _EH_DIAGNOSTICS_V43_HOOK
 try:
@@ -158,7 +159,8 @@ def _apply_win32_taskbar_icon():
     except Exception:
         pass
 
-_threading.Thread(target=_apply_win32_taskbar_icon, daemon=True).start()
+if not _os.environ.get("EHADI_WEB"):
+    _threading.Thread(target=_apply_win32_taskbar_icon, daemon=True).start()
 
 import ctypes
 import base64
