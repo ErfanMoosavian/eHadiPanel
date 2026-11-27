@@ -21,7 +21,7 @@ from src.web.permissions import ROLES
 SESSION_TTL = 12 * 3600
 MAX_FAILS = 5
 LOCK_SECONDS = 300
-MIN_PASSWORD_LEN = 8
+MIN_PASSWORD_LEN = 1  # TEMPORARY (local testing). Set back to 8+ before any real hosting.
 
 _SCRYPT = dict(n=2**14, r=8, p=1, dklen=32)
 

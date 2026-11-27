@@ -1,7 +1,7 @@
-"""Run the local web edition:  python run_web.py   ->  http://127.0.0.1:8000
+"""Run the local web edition:  python run_web.py   ->  http://127.0.0.1:8765
 
   --lan        listen on the local network (0.0.0.0). No HTTPS: use only on a trusted LAN.
-  --port N     port (default 8000)
+  --port N     port (default 8765)
   --no-browser don't open the browser
 """
 from __future__ import annotations
@@ -18,7 +18,7 @@ os.environ["EHADI_WEB"] = "1"  # tells main.py not to start the desktop splash/w
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--host", default="127.0.0.1")
-    ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--lan", action="store_true")
     ap.add_argument("--no-browser", action="store_true")
     args = ap.parse_args()

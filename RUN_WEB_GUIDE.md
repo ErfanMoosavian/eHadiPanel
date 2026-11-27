@@ -26,7 +26,7 @@ Set-ExecutionPolicy -Scope Process Bypass
 ```powershell
 .\setup_web.ps1 -AddAdmin
 ```
-رمز حداقل ۸ کاراکتر. کاربران دیگر:
+رمز هر طولی (موقت). کاربران دیگر:
 ```powershell
 .\venv\Scripts\python manage_users.py roles
 .\venv\Scripts\python manage_users.py add kamandi "علی کمندی" alumni_affairs
@@ -37,13 +37,13 @@ Set-ExecutionPolicy -Scope Process Bypass
 
 ## ۵) اجرا
 ```powershell
-.\setup_web.ps1 -Run              # http://127.0.0.1:8000
+.\setup_web.ps1 -Run              # http://127.0.0.1:8765
 .\setup_web.ps1 -Run -Port 9000
 .\setup_web.ps1 -Run -Lan         # دسترسی از شبکه داخلی (بدون HTTPS)
 ```
 برای دسترسی از سیستم‌های دیگر در LAN، فایروال ویندوز پورت را باید اجازه دهد:
 ```powershell
-New-NetFirewallRule -DisplayName ehadi -Direction Inbound -LocalPort 8000 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName ehadi -Direction Inbound -LocalPort 8765 -Protocol TCP -Action Allow
 ```
 
 ## ۶) تست

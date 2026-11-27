@@ -3,7 +3,7 @@
 #   .\setup_web.ps1 -Run             install if needed, then start the server
 #   .\setup_web.ps1 -AddAdmin        create the first admin (asks for password)
 #   .\setup_web.ps1 -Run -Lan        run reachable on the local network
-param([switch]$Run, [switch]$AddAdmin, [switch]$Lan, [int]$Port = 8000, [switch]$Test)
+param([switch]$Run, [switch]$AddAdmin, [switch]$Lan, [int]$Port = 8765, [switch]$Test)
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
