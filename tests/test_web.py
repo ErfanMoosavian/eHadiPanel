@@ -85,8 +85,8 @@ def test_disable_and_password_change_end_sessions(auth):
 
 
 def test_validation(auth):
-    with pytest.raises(ValueError):
-        auth.create_user("x", "X", "admin", "short")
+    with pytest.raises(ValueError):  # empty password is always rejected (min length is temporarily 1)
+        auth.create_user("x", "X", "admin", "")
     with pytest.raises(ValueError):
         auth.create_user("x", "X", "no_such_role", "long-enough-pw")
     auth.create_user("x", "X", "admin", "long-enough-pw")
