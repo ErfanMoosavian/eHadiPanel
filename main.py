@@ -172,7 +172,13 @@ import threading
 import time
 from datetime import datetime
 from pathlib import Path
-import webview
+try:
+    import webview
+except ImportError:  # the web edition does not need pywebview (the native dialogs are replaced by uploads)
+    if not os.environ.get("EHADI_WEB"):
+        raise
+    from types import SimpleNamespace as _NS
+    webview = _NS(FileDialog=_NS(OPEN=10, SAVE=30, FOLDER=20), OPEN_DIALOG=10, SAVE_DIALOG=30)
 os.environ.setdefault(
     "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
     "--force-high-performance-gpu --enable-gpu-rasterization --enable-zero-copy --ignore-gpu-blocklist",

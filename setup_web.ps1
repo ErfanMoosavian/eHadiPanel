@@ -7,6 +7,8 @@ param([switch]$Run, [switch]$AddAdmin, [switch]$Lan, [int]$Port = 8000, [switch]
 $ErrorActionPreference = "Stop"
 Set-Location $PSScriptRoot
 [Console]::OutputEncoding = [Text.Encoding]::UTF8
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
 
 function Find-Python {
     foreach ($c in @(@("py","-3"), @("python"), @("python3"))) {
