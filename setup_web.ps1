@@ -39,12 +39,15 @@ if (-not (Test-Path $marker) -or (Get-Content $marker) -ne $reqHash) {
     Write-Host "[2/3] Installing packages (first time takes a few minutes)..." -ForegroundColor Cyan
     & $venvPy -m pip install --upgrade pip
     & $venvPy -m pip install --prefer-binary -r requirements.txt
-    if ($Test) { & $venvPy -m pip install pytest }
     $reqHash | Set-Content $marker
 }
-& $venvPy -c "import duckdb, lancedb, pandas, openpyxl, docx, pptx, fitz, starlette, uvicorn; print('imports OK')"
+& $venvPy -c "import duckdb, lancedb, pandas, openpyxl, docx, pptx, pymupdf, starlette, uvicorn; print('imports OK')"
 
-if ($Test) { & $venvPy -m pytest -q tests; exit $LASTEXITCODE }
+if ($Test) {
+    & $venvPy -m pip install -q -r requirements-dev.txt
+    & $venvPy -m pytest -q tests
+    exit $LASTEXITCODE
+}
 if ($AddAdmin) {
     $u = Read-Host "admin username"
     $n = Read-Host "display name"
