@@ -374,7 +374,7 @@ def test_upload_rules(srv):
     assert c.up("virus.exe", b"x")[0] == 400
     try:  # rejected from Content-Length before the body is read; the client may see a reset instead of the 413
         assert c.up("big.xlsx", b"x" * (2 * 1024 * 1024))[0] == 413
-    except urllib.error.URLError:
+    except (urllib.error.URLError, ConnectionError):
         pass
     assert c.up("ok.xlsx", b"x" * 1000)[0] == 200                      # the server is still healthy afterwards
     s, up = c.up("a.xlsx", b"1")
