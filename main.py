@@ -188,7 +188,14 @@ os.environ.setdefault(
 from src.ai.agent import InstitutionalAIAgent
 from src.analytics.bi_engine import BIDashboardEngine
 from src.analytics.executive_engine import ExecutiveAnalyticsEngine
-from src.voice.voice_copilot import listen_and_execute_voice, process_voice_command, stop_active_recording
+try:
+    from src.voice.voice_copilot import listen_and_execute_voice, process_voice_command, stop_active_recording
+except ImportError:  # voice packages are optional (requirements-voice.txt); the web edition blocks voice methods anyway
+    if not os.environ.get("EHADI_WEB"):
+        raise
+    def _no_voice(*a, **k):
+        return {"ok": False, "error": "voice packages are not installed"}
+    listen_and_execute_voice = process_voice_command = stop_active_recording = _no_voice
 from src.reports.report_studio import (
     export_analytics_excel,
     export_attendance_sheet_pdf,
