@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>خلاصه جلسات — پنل مدیریت مؤسسه امام هادی</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;background:#050811;color:#e8edf7;font:14px/1.7 Vazirmatn,Tahoma,sans-serif}
+  main{max-width:980px;margin:0 auto;padding:20px 16px 60px}
+  header{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  h1{font-size:19px;margin:6px 0} h2{font-size:15px;margin:0 0 8px}
+  a{color:#7fa4ff;text-decoration:none}
+  .tabs{display:flex;gap:6px;margin:12px 0}
+  .tabs button{background:#16203a} .tabs button.on{background:#3b6df0}
+  .card{background:#0d1426;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:14px 16px;margin:12px 0}
+  .meta{color:#9fb0cf;font-size:12px}
+  button{font:inherit;cursor:pointer;border:0;border-radius:8px;padding:5px 12px;background:#2a3550;color:#fff}
+  button.primary{background:#3b6df0} button.danger{background:#7a2b36}
+  .grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+  label{display:block;font-size:12px;color:#aab6cf;margin-bottom:4px}
+  input,select,textarea{width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#080d1b;color:inherit;font:inherit}
+  textarea{min-height:90px;resize:vertical}
+  .wide{grid-column:1/-1}
+  #msg{min-height:22px;color:#ffd27f;font-size:13px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,.08);text-align:right;vertical-align:top}
+  th{color:#9fb0cf;font-weight:500}
+  .bar{display:inline-block;height:8px;border-radius:4px;background:#3b6df0;vertical-align:middle}
+  .tag{display:inline-block;padding:0 8px;border-radius:10px;background:#16203a;font-size:12px}
+  .tag.final{background:#1d4d33} .tag.warn{background:#6b4a14}
+  .item{border-top:1px solid rgba(255,255,255,.08);padding:10px 0}
+  .ro .editonly{display:none}
+  .hide{display:none}
+</style>
+</head>
+<body>
+<main id="app">
+  <header>
+    <h1>خلاصه جلسات دوره‌ها</h1>
+    <a href="/">← بازگشت به پنل</a>
+  </header>
+  <div id="msg" role="status"></div>
+  <div class="tabs">
+    <button data-t="list" class="on">فهرست</button>
+    <button data-t="form" class="editonly">ثبت / ویرایش خلاصه</button>
+    <button data-t="stats">آمار و تحلیل</button>
+  </div>
+
+  <section id="t-list">
+    <div class="card"><div class="grid">
+      <div><label>جستجو</label><input id="fq" placeholder="موضوع، مدرس، متن…"></div>
+      <div><label>دوره</label><select id="fcourse"><option value="">همه</option></select></div>
+      <div><label>مدرس</label><select id="fteacher"><option value="">همه</option></select></div>
+      <div><label>کارگروه</label><select id="fgroup"><option value="">همه</option></select></div>
+      <div><label>وضعیت</label><select id="fstatus"><option value="">همه</option><option value="final">نهایی</option><option value="draft">پیش‌نویس</option></select></div>
+    </div></div>
+    <div class="card" id="items"></div>
+  </section>
+
+  <section id="t-form" class="hide editonly">
+    <form class="card" id="f">
+      <input type="hidden" id="id">
+      <div class="grid">
+        <div><label>نام دوره *</label><input id="course" list="courseList" required></div>
+        <div><label>کارگروه (اگر خالی باشد از روی نام دوره حدس زده می‌شود)</label><input id="workgroup" list="wgList"></div>
+        <div><label>شماره جلسه</label><input id="session_no" type="number" min="1" value="1"></div>
+        <div><label>تاریخ جلسه (مثل ۱۴۰۵/۰۸/۲۰)</label><input id="session_date"></div>
+        <div><label>مدرس</label><input id="teacher" list="teacherList"></div>
+        <div><label>موضوع جلسه</label><input id="topic"></div>
+        <div><label>تعداد ثبت‌نامی</label><input id="registered" type="number" min="0"></div>
+        <div><label>تعداد حاضر</label><input id="present" type="number" min="0"></div>
+        <div><label>امتیاز مدرس (۱ تا ۵)</label><select id="teacher_rating"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div>
+        <div><label>امتیاز محتوا (۱ تا ۵)</label><select id="content_rating"><option value="">—</option><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></div>
+        <div class="wide"><label>خلاصه جلسه</label><textarea id="summary"></textarea></div>
+        <div class="wide"><label>نکات کلیدی (هر خط یک نکته)</label><textarea id="key_points"></textarea></div>
+        <div class="wide"><label>تکلیف / منابع معرفی‌شده</label><textarea id="homework"></textarea></div>
+        <div class="wide"><label>مشکلات و یادداشت مدیریتی</label><textarea id="notes"></textarea></div>
+        <div><label>وضعیت</label><select id="status"><option value="draft">پیش‌نویس</option><option value="final">نهایی</option></select></div>
+      </div>
+      <p><button class="primary" type="submit">ذخیره</button> <button type="button" id="reset">فرم جدید</button></p>
+    </form>
+    <datalist id="courseList"></datalist><datalist id="wgList"></datalist><datalist id="teacherList"></datalist>
+  </section>
+
+  <section id="t-stats" class="hide"><div id="stats"></div></section>
+</main>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var canEdit = false;
+  var FIELDS = ['course','workgroup','session_no','session_date','teacher','topic','registered','present','teacher_rating','content_rating','summary','homework','notes','status'];
+  function rpc(method) {
+    var args = Array.prototype.slice.call(arguments, 1);
+    return fetch('/rpc/' + method, { method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ args: args }) })
+      .then(function (r) { if (r.status === 401) { location.href = '/login'; return new Promise(function () {}); } return r.json(); });
+  }
+  function say(t) { $('msg').textContent = t || ''; }
+  function el(tag, text, cls) { var e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
+  function fa(n, d) { return n == null ? '—' : String(n); }
+
+  function tab(name) {
+    ['list','form','stats'].forEach(function (t) { $('t-' + t).classList.toggle('hide', t !== name); });
+    document.querySelectorAll('.tabs button').forEach(function (b) { b.classList.toggle('on', b.dataset.t === name); });
+    if (name === 'stats') loadStats(); if (name === 'list') loadList();
+  }
+  document.querySelectorAll('.tabs button').forEach(function (b) { b.onclick = function () { tab(b.dataset.t); }; });
+
+  function fill(sel, vals, keep) {
+    var cur = sel.value; sel.textContent = ''; var o = el('option', 'همه'); o.value = ''; sel.appendChild(o);
+    vals.forEach(function (v) { var x = el('option', v); x.value = v; sel.appendChild(x); }); sel.value = cur;
+  }
+  function loadOptions() {
+    rpc('summary_options').then(function (d) {
+      if (!d || !d.ok) return;
+      fill($('fcourse'), d.courses); fill($('fteacher'), d.teachers); fill($('fgroup'), d.workgroups);
+      [['courseList', d.courses], ['teacherList', d.teachers], ['wgList', d.workgroups]].forEach(function (p) {
+        $(p[0]).textContent = ''; p[1].forEach(function (v) { var o = el('option'); o.value = v; $(p[0]).appendChild(o); });
+      });
+    });
+  }
+
+  function loadList() {
+    rpc('list_summaries', $('fcourse').value, $('fgroup').value, $('fteacher').value, $('fq').value, $('fstatus').value).then(function (d) {
+      var box = $('items'); box.textContent = '';
+      if (!d || !d.ok) { say((d && d.error) || 'دسترسی ندارید.'); return; }
+      box.appendChild(el('div', d.total + ' خلاصه', 'meta'));
+      d.items.forEach(function (s) {
+        var it = el('div', null, 'item'), h = el('div');
+        h.appendChild(el('b', s.course + ' — جلسه ' + s.session_no));
+        h.appendChild(document.createTextNode(' '));
+        h.appendChild(el('span', s.status === 'final' ? 'نهایی' : 'پیش‌نویس', 'tag ' + (s.status === 'final' ? 'final' : 'warn')));
+        it.appendChild(h);
+        it.appendChild(el('div', [s.group, s.teacher && ('مدرس: ' + s.teacher), s.session_date, s.topic].filter(Boolean).join(' · '), 'meta'));
+        var stat = [];
+        if (s.attendance_rate != null) stat.push('حضور: ' + s.present + ' از ' + s.registered + ' (' + s.attendance_rate + '٪)');
+        if (s.teacher_rating) stat.push('امتیاز مدرس: ' + s.teacher_rating);
+        if (s.content_rating) stat.push('امتیاز محتوا: ' + s.content_rating);
+        if (stat.length) it.appendChild(el('div', stat.join(' · '), 'meta'));
+        if (s.summary) it.appendChild(el('div', s.summary.length > 300 ? s.summary.slice(0, 300) + '…' : s.summary));
+        if (s.key_points.length) { var ul = el('ul'); s.key_points.forEach(function (k) { ul.appendChild(el('li', k)); }); it.appendChild(ul); }
+        it.appendChild(el('div', 'ثبت‌کننده: ' + (s.author_name || s.author || '—'), 'meta'));
+        if (canEdit) {
+          var act = el('div');
+          var e = el('button', 'ویرایش'); e.onclick = function () { edit(s); };
+          var x = el('button', 'حذف', 'danger'); x.onclick = function () {
+            if (!confirm('این خلاصه حذف شود؟')) return;
+            rpc('delete_summary', s.id).then(function (r) { say(r.ok ? 'حذف شد.' : r.error); loadList(); loadOptions(); });
+          };
+          act.appendChild(e); act.appendChild(document.createTextNode(' ')); act.appendChild(x); it.appendChild(act);
+        }
+        box.appendChild(it);
+      });
+    });
+  }
+  ['fq','fcourse','fteacher','fgroup','fstatus'].forEach(function (id) { $(id).oninput = loadList; });
+
+  function edit(s) {
+    $('id').value = s.id;
+    FIELDS.forEach(function (f) { $(f).value = s[f] == null ? '' : s[f]; });
+    $('workgroup').value = s.workgroup || '';
+    $('key_points').value = (s.key_points || []).join('\n');
+    tab('form');
+  }
+  $('reset').onclick = function () { $('f').reset(); $('id').value = ''; };
+  $('f').onsubmit = function (e) {
+    e.preventDefault();
+    var data = { id: $('id').value || null, key_points: $('key_points').value.split('\n').map(function (x) { return x.trim(); }).filter(Boolean) };
+    FIELDS.forEach(function (f) { data[f] = $(f).value; });
+    rpc('save_summary', data).then(function (r) {
+      say(r.ok ? 'ذخیره شد.' : r.error);
+      if (r.ok) { $('f').reset(); $('id').value = ''; loadOptions(); tab('list'); }
+    });
+  };
+
+  function table(head, rows) {
+    var t = el('table'), tr = el('tr');
+    head.forEach(function (h) { tr.appendChild(el('th', h)); }); t.appendChild(tr);
+    rows.forEach(function (r) { var x = el('tr'); r.forEach(function (c) { var td = el('td'); if (c && c.nodeType) td.appendChild(c); else td.textContent = c == null ? '—' : c; x.appendChild(td); }); t.appendChild(x); });
+    return t;
+  }
+  function bar(p) { var b = el('span', null, 'bar'); b.style.width = Math.max(2, Math.min(100, p || 0)) * 1.2 + 'px'; return b; }
+  function curveCell(curve) {
+    var s = el('span'); curve.forEach(function (c) { if (c.attendance != null) { var b = bar(c.attendance); b.title = 'جلسه ' + c.session_no + ': ' + c.attendance + '٪'; b.style.width = '10px'; b.style.height = Math.max(3, c.attendance * 0.3) + 'px'; b.style.marginLeft = '2px'; s.appendChild(b); } });
+    return s;
+  }
+  function loadStats() {
+    rpc('summary_stats').then(function (d) {
+      var box = $('stats'); box.textContent = '';
+      if (!d || !d.ok) { say((d && d.error) || 'دسترسی ندارید.'); return; }
+      var o = d.overall, c = el('div', null, 'card');
+      c.appendChild(el('h2', 'خلاصه کلی'));
+      c.appendChild(el('div', d.total + ' جلسه ثبت‌شده، ' + o.final + ' نهایی، ' + d.drafts + ' پیش‌نویس · میانگین حضور: ' + fa(o.avg_attendance) + '٪ · امتیاز مدرس: ' + fa(o.avg_teacher_rating) + ' · امتیاز محتوا: ' + fa(o.avg_content_rating)));
+      box.appendChild(c);
+      if (d.low_attendance.length) {
+        var w = el('div', null, 'card'); w.appendChild(el('h2', 'دوره‌های با حضور پایین (کمتر از ۶۰٪)'));
+        w.appendChild(table(['دوره', 'میانگین حضور'], d.low_attendance.map(function (x) { return [x.course, x.avg_attendance + '٪']; }))); box.appendChild(w);
+      }
+      var c2 = el('div', null, 'card'); c2.appendChild(el('h2', 'به تفکیک دوره (نمودار ستونی = حضور هر جلسه)'));
+      c2.appendChild(table(['دوره', 'کارگروه', 'جلسات', 'میانگین حضور', 'افت از اول به آخر', 'روند حضور', 'جلسه‌های ثبت‌نشده'],
+        d.courses.map(function (x) { return [x.course, x.group, x.sessions, x.avg_attendance == null ? null : x.avg_attendance + '٪', x.drop_from_first == null ? null : x.drop_from_first + ' واحد', curveCell(x.curve), x.missing_sessions.join('، ') || '—']; })));
+      box.appendChild(c2);
+      var c3 = el('div', null, 'card'); c3.appendChild(el('h2', 'به تفکیک کارگروه'));
+      c3.appendChild(table(['کارگروه', 'جلسات', 'میانگین حضور', 'امتیاز مدرس', 'امتیاز محتوا'], d.groups.map(function (x) { return [x.group, x.sessions, x.avg_attendance == null ? null : x.avg_attendance + '٪', x.avg_teacher_rating, x.avg_content_rating]; })));
+      box.appendChild(c3);
+      var c4 = el('div', null, 'card'); c4.appendChild(el('h2', 'به تفکیک مدرس'));
+      c4.appendChild(table(['مدرس', 'جلسات', 'میانگین حضور', 'امتیاز مدرس', 'امتیاز محتوا'], d.teachers.map(function (x) { return [x.teacher, x.sessions, x.avg_attendance == null ? null : x.avg_attendance + '٪', x.avg_teacher_rating, x.avg_content_rating]; })));
+      box.appendChild(c4);
+    });
+  }
+
+  fetch('/api/me', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (me) {
+    canEdit = !!me && me.ok && (me.permissions.indexOf('*') >= 0 || me.permissions.indexOf('summaries.edit') >= 0);
+    $('app').classList.toggle('ro', !canEdit);
+    loadOptions(); loadList();
+  });
+})();
+</script>
+</body>
+</html>

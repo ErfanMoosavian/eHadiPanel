@@ -69,3 +69,6 @@ Compress-Archive -Path data -DestinationPath ("backups\data-{0:yyyyMMdd-HHmm}.zi
 - `Python not found`: پنجره PowerShell جدید باز کنید.
 - پورت اشغال: `-Port 9000`.
 - وارد نمی‌شود پس از ۵ رمز غلط: ۵ دقیقه صبر کنید.
+
+## خلاصه جلسات
+بعد از ورود، لینک «خلاصه جلسات» پایین صفحه است (یا `/summaries`). طراح آموزشی و مدیر می‌توانند ثبت و ویرایش کنند؛ بقیه فقط می‌بینند. داده‌ها در `data/session_summaries.sqlite3` ذخیره می‌شوند و در بکاپ پوشهٔ `data` می‌آیند.

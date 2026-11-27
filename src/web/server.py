@@ -34,6 +34,7 @@ WEB_DIR = Path(__file__).resolve().parent.parent / "ui" / "web"
 SHIM = Path(__file__).resolve().parent / "web_shim.js"
 LOGIN = Path(__file__).resolve().parent / "login.html"
 TAXONOMY_PAGE = Path(__file__).resolve().parent / "taxonomy.html"
+SUMMARIES_PAGE = Path(__file__).resolve().parent / "summaries.html"
 OVERRIDES_CSS = Path(__file__).resolve().parent / "web_overrides.css"
 _VOICE_SCRIPT_RX = re.compile(r'<script[^>]+voice_copilot\.js[^>]*>\s*</script>', re.I)
 COOKIE = "ehadi_session"
@@ -211,6 +212,11 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
         html = TAXONOMY_PAGE.read_text(encoding="utf-8")
         return HTMLResponse(html, headers={"Cache-Control": "no-store"})
 
+    async def summaries_page(request: Request) -> Response:
+        if not current(request):
+            return RedirectResponse("/login", status_code=303)
+        return HTMLResponse(SUMMARIES_PAGE.read_text(encoding="utf-8"), headers={"Cache-Control": "no-store"})
+
     async def shim(request: Request) -> Response:
         return FileResponse(SHIM, media_type="application/javascript", headers={"Cache-Control": "no-store"})
 
@@ -283,6 +289,7 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
                 fn = getattr(svc, method, None)
         if not callable(fn):
             return {"ok": False, "error": "متد وجود ندارد."}
+        _ctx.user = user  # services read the caller (e.g. as the author of a summary)
         if method == "ask_ai_stream" and args:
             hub.claim(str(args[0]), token)
         if method == "get_settings":  # never send the API key to the browser
@@ -421,6 +428,7 @@ def create_app(api: Any, auth: AuthStore, secure_cookie: bool = False, audit: Ca
         Route("/", index), Route("/index.html", index),
         Route("/login", login_page),
         Route("/taxonomy", taxonomy_page),
+        Route("/summaries", summaries_page),
         Route("/__web/web_shim.js", shim),
         Route("/__web/web_overrides.css", overrides_css),
         Route("/api/login", api_login, methods=["POST"]),

@@ -18,6 +18,7 @@ from src.web.auth import MAX_FAILS, AuthStore
 from src.core.taxonomy import Taxonomy
 from src.web.server import create_app
 from src.web.services import TaxonomyService
+from src.web.summaries import SummaryService, SummaryStore
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -44,7 +45,7 @@ def test_admin_has_everything_and_roles_differ():
 
 
 def test_every_service_method_is_classified():
-    public = {n for n in dir(TaxonomyService) if not n.startswith("_") and callable(getattr(TaxonomyService, n))}
+    public = {n for svc in (TaxonomyService, SummaryService) for n in dir(svc) if not n.startswith("_") and callable(getattr(svc, n))}
     assert public - set(P.METHOD_PERMS) == set()
 
 
@@ -198,7 +199,8 @@ def srv(tmp_path):
     api = FakeAPI()
     audit_log: list[tuple] = []
     app = create_app(api, auth, audit=lambda *a: audit_log.append(a), work_dir=tmp_path / "work", max_upload_mb=1,
-                     services=[TaxonomyService(api, Taxonomy(tmp_path / "tax.json"))])
+                     services=[TaxonomyService(api, Taxonomy(tmp_path / "tax.json")),
+                              SummaryService(SummaryStore(tmp_path / "sum.sqlite3"), Taxonomy(tmp_path / "tax2.json"), api)])
     server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=0, log_level="error"))
     t = threading.Thread(target=server.run, daemon=True)
     t.start()
@@ -410,3 +412,20 @@ def test_taxonomy_page_needs_login(srv):
     c.login("designer", "designer-password")
     s, html, _ = c.req("/taxonomy")
     assert s == 200 and "ساختار کارگروه" in html
+
+
+def test_summaries_over_http_author_and_permissions(srv):
+    base, _, _ = srv
+    designer, boss, ex = Client(base), Client(base), Client(base)
+    designer.login("designer", "designer-password"); boss.login("boss", "boss-password"); ex.login("exec", "exec-password")
+    data = {"course": "انس با الکافی ۱", "session_no": 1, "teacher": "استاد الف", "registered": 40, "present": 30,
+            "teacher_rating": 4, "key_points": ["نکته ۱"], "status": "final"}
+    s, res = designer.rpc("save_summary", data)
+    assert s == 200 and res["ok"] and res["id"]
+    got = boss.rpc("get_summary", res["id"])[1]["summary"]
+    assert got["author"] == "designer" and got["attendance_rate"] == 75.0 and got["subgroup"] == "حدیث‌خوانی"
+    assert ex.rpc("save_summary", data)[0] == 403                  # executive can read but not write
+    assert ex.rpc("summary_stats")[1]["total"] == 1
+    assert ex.rpc("delete_summary", res["id"])[0] == 403
+    assert Client(base).req("/summaries")[0] in (302, 303)         # page needs a login
+    assert designer.req("/summaries")[0] == 200

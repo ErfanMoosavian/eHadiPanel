@@ -132,7 +132,10 @@
       var lnk = document.createElement('a');
       lnk.href = '/taxonomy'; lnk.textContent = 'ساختار کارگروه‌ها';
       lnk.style.cssText = 'color:#9ec0ff;text-decoration:none';
-      box.appendChild(t); box.appendChild(lnk); box.appendChild(b); document.body.appendChild(box);
+      var lnk2 = document.createElement('a');
+      lnk2.href = '/summaries'; lnk2.textContent = 'خلاصه جلسات';
+      lnk2.style.cssText = 'color:#9ec0ff;text-decoration:none';
+      box.appendChild(t); box.appendChild(lnk2); box.appendChild(lnk); box.appendChild(b); document.body.appendChild(box);
     }).catch(function () {});
   }
 

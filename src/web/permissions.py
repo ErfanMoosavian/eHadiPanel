@@ -13,27 +13,27 @@ ROLES: dict[str, dict] = {
     "admin": {"label": "مدیر ارشد (مدیرعامل / مدیر)", "perms": {ALL}},
     "office_head": {
         "label": "مسئول دفتر",
-        "perms": {"dashboard.view", "students.view", "courses.view", "attendance.view", "registration.view", "decisions.view"},
+        "perms": {"dashboard.view", "students.view", "courses.view", "attendance.view", "registration.view", "decisions.view", "summaries.view"},
     },
     "alumni_affairs": {
         "label": "مسئول امور دانش‌آموختگان",
         "perms": {
             "dashboard.view", "students.view", "students.edit", "attendance.view", "attendance.edit",
             "registration.view", "registration.review", "blacklist.view", "blacklist.edit",
-            "courses.view", "documents.manage",
+            "courses.view", "documents.manage", "summaries.view",
         },
     },
     "course_designer": {
         "label": "مسئول خلاصه دوره‌ها و طراحی آموزشی",
-        "perms": {"dashboard.view", "students.view", "attendance.view", "courses.view", "courses.edit", "documents.manage"},
+        "perms": {"dashboard.view", "students.view", "attendance.view", "courses.view", "courses.edit", "documents.manage", "summaries.view", "summaries.edit"},
     },
     "executive": {
         "label": "مسئول اجرایی",
-        "perms": {"dashboard.view", "students.view", "attendance.view", "courses.view"},
+        "perms": {"dashboard.view", "students.view", "attendance.view", "courses.view", "summaries.view"},
     },
     "speech_flag": {
         "label": "مسئول دوره خطابه و پرچمداران (موقت)",
-        "perms": {"dashboard.view", "students.view", "attendance.view", "courses.view"},
+        "perms": {"dashboard.view", "students.view", "attendance.view", "courses.view", "summaries.view"},
     },
 }
 
@@ -99,6 +99,12 @@ METHOD_PERMS: dict[str, str] = {
     "select_font_dialog": "settings.edit",
     # taxonomy (web-only services, see services.py)
     "get_taxonomy": "courses.view",
+    "save_summary": "summaries.edit",
+    "delete_summary": "summaries.edit",
+    "get_summary": "summaries.view",
+    "list_summaries": "summaries.view",
+    "summary_options": "summaries.view",
+    "summary_stats": "summaries.view",
     "save_workgroup": "courses.edit",
     "delete_workgroup": "courses.edit",
     "save_subgroup": "courses.edit",
