@@ -1,0 +1,5 @@
+# Only for the old Windows desktop window (main.py)
+-r requirements.txt
+pywebview>=5.3
+pythonnet>=3.0.3
+Pillow>=10.4.0         # splash/build scripts only

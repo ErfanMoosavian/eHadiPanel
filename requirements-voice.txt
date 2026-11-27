@@ -1,0 +1,5 @@
+# Optional: voice copilot (desktop only, not used by the web edition)
+-r requirements.txt
+sounddevice>=0.4.7
+faster-whisper>=1.0.3
+edge-tts>=6.1.0
